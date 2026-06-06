@@ -126,6 +126,7 @@ describe("schemas", () => {
     const similarArtist = SimilarArtistSchema.parse({
       name: "Local Band",
       url: null,
+      spotifyId: null,
       source: "mock",
       reason: "Shares genre and city with the artist profile.",
       confidence: 0.7,
@@ -135,7 +136,11 @@ describe("schemas", () => {
       artistTier: "small",
       estimatedFollowers: 1000,
       estimatedPopularity: 18,
-      relevanceToUserArtist: "Shares genre and city with the artist profile.",
+      genreRelevance: 90,
+      sizeRelevance: 80,
+      sceneRelevance: 90,
+      totalRelevance: 86,
+      relevanceToUserArtist: 82,
       possibleUse: "co_bill",
       estimatedLevel: "emerging"
     });
@@ -148,6 +153,7 @@ describe("schemas", () => {
       SimilarArtistSchema.parse({
         name: "Local Band",
         url: "site officiel",
+        spotifyId: null,
         source: "mock",
         reason: "Shares genre and city with the artist profile.",
         confidence: 0.7,
@@ -157,7 +163,11 @@ describe("schemas", () => {
         artistTier: "unknown",
         estimatedFollowers: null,
         estimatedPopularity: null,
-        relevanceToUserArtist: "Shares genre and city with the artist profile.",
+        genreRelevance: 90,
+        sizeRelevance: 35,
+        sceneRelevance: 45,
+        totalRelevance: 60,
+        relevanceToUserArtist: 82,
         possibleUse: "unknown",
         estimatedLevel: null
       })

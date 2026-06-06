@@ -3,6 +3,7 @@ import { z } from "zod";
 export const ModeSchema = z.enum(["booking", "promo"]);
 export const EstimatedArtistLevelSchema = z.enum(["unknown", "emerging", "developing", "established"]);
 export const ArtistTierSchema = z.enum(["small", "medium", "large", "unknown"]);
+export const SimilarArtistSourceSchema = z.enum(["spotify_related", "spotify_search", "mock", "user"]);
 export const SimilarArtistPossibleUseSchema = z.enum([
   "co_bill",
   "support_target",
@@ -25,6 +26,7 @@ export const PlatformStatsSchema = z.object({
   spotifyPopularity: z.number().int().min(0).max(100).nullable().optional(),
   youtubeSubscribers: z.number().int().nonnegative().nullable().optional(),
   youtubeTotalViews: z.number().int().nonnegative().nullable().optional(),
+  youtubeVideoCount: z.number().int().nonnegative().nullable().optional(),
   instagramFollowers: z.number().int().nonnegative().nullable().optional()
 });
 
@@ -49,6 +51,8 @@ export const ArtistProfileSchema = z.object({
   genres: z.array(z.string().trim().min(1)).default([]),
   spotifyArtistName: z.string().trim().min(1).nullable().optional(),
   spotifyGenres: z.array(z.string().trim().min(1)).default([]),
+  youtubeChannelId: z.string().trim().min(1).nullable().optional(),
+  youtubeTitle: z.string().trim().min(1).nullable().optional(),
   socialLinks: SocialLinksSchema.default({}),
   platformStats: PlatformStatsSchema.default({}),
   estimatedLevel: EstimatedArtistLevelSchema.default("unknown"),
@@ -56,21 +60,62 @@ export const ArtistProfileSchema = z.object({
   notes: z.array(z.string().trim().min(1)).default([])
 });
 
+export const LineupStatusSchema = z.enum([
+  "single_headliner_listed",
+  "support_not_announced",
+  "full_lineup_announced",
+  "unknown"
+]);
+
+export const EventCandidateSchema = z.object({
+  name: z.string().trim().min(1),
+  date: z.string().trim().min(1).nullable(),
+  venueName: z.string().trim().min(1).nullable(),
+  city: z.string().trim().min(1).nullable(),
+  country: z.string().trim().min(1).nullable(),
+  region: z.string().trim().min(1).nullable(),
+  lineup: z.array(z.string().trim().min(1)).default([]),
+  lineupStatus: LineupStatusSchema,
+  sourceUrl: z.string().trim().url().nullable(),
+  ticketUrl: z.string().trim().url().nullable(),
+  description: z.string().trim().min(1),
+  confidence: ConfidenceScoreSchema
+});
+
+export const VenueCandidateSchema = z.object({
+  name: z.string().trim().min(1),
+  city: z.string().trim().min(1).nullable(),
+  country: z.string().trim().min(1).nullable(),
+  type: z.string().trim().min(1),
+  estimatedCapacityTier: z.string().trim().min(1),
+  genres: z.array(z.string().trim().min(1)).default([]),
+  sourceUrl: z.string().trim().url().nullable(),
+  contact: z.string().trim().min(1).nullable(),
+  confidence: ConfidenceScoreSchema
+});
+
 export const SimilarArtistSchema = z.object({
   name: z.string().trim().min(1),
   url: z.string().trim().url().nullable(),
+  spotifyId: z.string().trim().min(1).nullable(),
   genres: z.array(z.string().trim().min(1)).default([]),
   city: z.string().trim().min(1).nullable(),
   country: z.string().trim().min(1).nullable(),
-  source: z.string().trim().min(1),
+  source: SimilarArtistSourceSchema,
   reason: z.string().trim().min(1),
   confidence: ConfidenceScoreSchema,
   artistTier: ArtistTierSchema,
   estimatedFollowers: z.number().int().nonnegative().nullable(),
   estimatedPopularity: z.number().int().min(0).max(100).nullable(),
-  relevanceToUserArtist: z.string().trim().min(1),
+  genreRelevance: z.number().int().min(0).max(100),
+  sizeRelevance: z.number().int().min(0).max(100),
+  sceneRelevance: z.number().int().min(0).max(100),
+  totalRelevance: z.number().int().min(0).max(100),
+  relevanceToUserArtist: z.number().int().min(0).max(100),
   possibleUse: SimilarArtistPossibleUseSchema,
-  estimatedLevel: EstimatedArtistLevelSchema.nullable()
+  estimatedLevel: EstimatedArtistLevelSchema.nullable(),
+  matchedQuery: z.string().trim().min(1).nullable().optional(),
+  searchRelevanceBoost: z.number().int().min(0).max(100).optional()
 });
 
 export const OpportunitySchema = z.object({
@@ -91,12 +136,16 @@ export const OpportunitySearchResultSchema = z.object({
 
 export type Mode = z.infer<typeof ModeSchema>;
 export type EstimatedArtistLevel = z.infer<typeof EstimatedArtistLevelSchema>;
+export type LineupStatus = z.infer<typeof LineupStatusSchema>;
 export type ArtistTier = z.infer<typeof ArtistTierSchema>;
+export type SimilarArtistSource = z.infer<typeof SimilarArtistSourceSchema>;
 export type SimilarArtistPossibleUse = z.infer<typeof SimilarArtistPossibleUseSchema>;
 export type SocialLinks = z.infer<typeof SocialLinksSchema>;
 export type PlatformStats = z.infer<typeof PlatformStatsSchema>;
 export type ArtistProfile = z.infer<typeof ArtistProfileSchema>;
 export type ArtistInput = z.infer<typeof ArtistInputSchema>;
+export type EventCandidate = z.infer<typeof EventCandidateSchema>;
+export type VenueCandidate = z.infer<typeof VenueCandidateSchema>;
 export type SimilarArtist = z.infer<typeof SimilarArtistSchema>;
 export type Opportunity = z.infer<typeof OpportunitySchema>;
 export type OpportunitySearchResult = z.infer<typeof OpportunitySearchResultSchema>;

@@ -1,3 +1,5 @@
+import { debugLog, warnLog } from "../utils/logger.js";
+
 export interface SpotifyArtistProfile {
   id: string;
   name: string;
@@ -22,6 +24,16 @@ interface SpotifyArtistApiResponse {
   external_urls?: {
     spotify?: string;
   };
+}
+
+interface SpotifySearchArtistsResponse {
+  artists?: {
+    items?: SpotifyArtistApiResponse[];
+  };
+}
+
+interface SpotifyRelatedArtistsResponse {
+  artists?: SpotifyArtistApiResponse[];
 }
 
 interface SpotifyEnv {
@@ -60,6 +72,7 @@ export async function getSpotifyArtistProfile(
   }
 
   const artistId = extractSpotifyArtistId(spotifyUrl);
+  debugLog("spotify", "extracted Spotify artist ID", { spotifyUrlPresent: true, artistId: artistId ?? null });
   if (!artistId) {
     return null;
   }
@@ -76,12 +89,20 @@ export async function getSpotifyArtistProfile(
   }
 
   if (!env.SPOTIFY_CLIENT_ID || !env.SPOTIFY_CLIENT_SECRET) {
+    debugLog("spotify", "Spotify credentials presence", {
+      spotifyClientIdPresent: Boolean(env.SPOTIFY_CLIENT_ID),
+      spotifyClientSecretPresent: Boolean(env.SPOTIFY_CLIENT_SECRET)
+    });
     return null;
   }
 
   try {
     const token = await fetchSpotifyAccessToken(env.SPOTIFY_CLIENT_ID, env.SPOTIFY_CLIENT_SECRET, fetchImpl);
     if (!token) {
+      warnLog("spotify", "Spotify artist profile skipped: could not obtain an access token.", {
+        spotifyClientIdPresent: true,
+        spotifyClientSecretPresent: true
+      });
       return null;
     }
 
@@ -90,8 +111,13 @@ export async function getSpotifyArtistProfile(
         Authorization: `Bearer ${token}`
       }
     });
+    debugLog("spotify", "get artist request status", { status: response.status, artistId });
 
     if (!response.ok) {
+      warnLog("spotify", "Spotify artist profile request failed.", {
+        artistId,
+        status: response.status
+      });
       return null;
     }
 
@@ -100,7 +126,15 @@ export async function getSpotifyArtistProfile(
       return null;
     }
 
-    return {
+    debugLog("spotify", "raw artist response summary", {
+      hasFollowersObject: Boolean(artist.followers),
+      followersTotalType: typeof artist.followers?.total,
+      popularityType: typeof artist.popularity,
+      genresIsArray: Array.isArray(artist.genres),
+      rawGenresCount: Array.isArray(artist.genres) ? artist.genres.length : 0
+    });
+
+    const profile = {
       id: artist.id,
       name: artist.name,
       followers: typeof artist.followers?.total === "number" ? artist.followers.total : null,
@@ -108,9 +142,143 @@ export async function getSpotifyArtistProfile(
       genres: Array.isArray(artist.genres) ? artist.genres : [],
       spotifyUrl: artist.external_urls?.spotify ?? spotifyUrl
     };
+    debugLog("spotify", "Spotify artist profile normalized", {
+      artistName: profile.name,
+      followersCount: profile.followers,
+      popularity: profile.popularity,
+      genresCount: profile.genres.length
+    });
+    return profile;
   } catch {
+    warnLog("spotify", "Spotify artist profile request failed.", { artistId });
     return null;
   }
+}
+
+export async function searchSpotifyArtists(
+  query: string,
+  limit = 10,
+  env: SpotifyEnv = process.env,
+  fetchImpl: FetchLike = fetch
+): Promise<SpotifyArtistProfile[]> {
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) {
+    return [];
+  }
+
+  if (!env.SPOTIFY_CLIENT_ID || !env.SPOTIFY_CLIENT_SECRET) {
+    return [];
+  }
+
+  try {
+    debugLog("spotify", "Spotify artist search query", { query: trimmedQuery, limit });
+    const token = await fetchSpotifyAccessToken(env.SPOTIFY_CLIENT_ID, env.SPOTIFY_CLIENT_SECRET, fetchImpl);
+    if (!token) {
+      warnLog("spotify", "Spotify artist search skipped: could not obtain an access token.", {
+        spotifyClientIdPresent: true,
+        spotifyClientSecretPresent: true
+      });
+      return [];
+    }
+
+    const params = new URLSearchParams({
+      q: trimmedQuery,
+      type: "artist",
+      limit: String(Math.max(1, Math.min(limit, 50)))
+    });
+    const response = await fetchImpl(`https://api.spotify.com/v1/search?${params.toString()}`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    debugLog("spotify", "Spotify artist search status", { query: trimmedQuery, status: response.status });
+
+    if (!response.ok) {
+      warnLog("spotify", "Spotify artist search failed.", {
+        query: trimmedQuery,
+        status: response.status
+      });
+      return [];
+    }
+
+    const data = (await response.json()) as SpotifySearchArtistsResponse;
+    const artists = (data.artists?.items ?? []).map(mapSpotifyArtistApiResponse).filter((artist) => artist !== null);
+    debugLog("spotify", "Spotify artist search result count", { query: trimmedQuery, resultCount: artists.length });
+    return artists;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warnLog("spotify", "Spotify artist search failed.", {
+      query: trimmedQuery,
+      error: message
+    });
+    return [];
+  }
+}
+
+export async function getSpotifyRelatedArtists(
+  spotifyArtistId: string,
+  env: SpotifyEnv = process.env,
+  fetchImpl: FetchLike = fetch
+): Promise<SpotifyArtistProfile[]> {
+  const artistId = spotifyArtistId.trim();
+  if (!artistId) {
+    return [];
+  }
+
+  if (!env.SPOTIFY_CLIENT_ID || !env.SPOTIFY_CLIENT_SECRET) {
+    return [];
+  }
+
+  try {
+    debugLog("spotify", "Spotify related artists request", { artistId });
+    const token = await fetchSpotifyAccessToken(env.SPOTIFY_CLIENT_ID, env.SPOTIFY_CLIENT_SECRET, fetchImpl);
+    if (!token) {
+      warnLog("spotify", "Spotify related artists skipped: could not obtain an access token.", {
+        spotifyClientIdPresent: true,
+        spotifyClientSecretPresent: true
+      });
+      return [];
+    }
+
+    const response = await fetchImpl(`https://api.spotify.com/v1/artists/${encodeURIComponent(artistId)}/related-artists`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    debugLog("spotify", "Spotify related artists status", { artistId, status: response.status });
+
+    if (!response.ok) {
+      logRelatedArtistsUnavailable(artistId, response.status);
+      return [];
+    }
+
+    const data = (await response.json()) as SpotifyRelatedArtistsResponse;
+    const artists = (data.artists ?? []).map(mapSpotifyArtistApiResponse).filter((artist) => artist !== null);
+    debugLog("spotify", "Spotify related artists result count", { artistId, resultCount: artists.length });
+    return artists;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warnLog("spotify", "Spotify related artists unavailable.", {
+      artistId,
+      error: message
+    });
+    return [];
+  }
+}
+
+function mapSpotifyArtistApiResponse(artist: SpotifyArtistApiResponse): SpotifyArtistProfile | null {
+  if (!artist.id || !artist.name) {
+    return null;
+  }
+
+  return {
+    id: artist.id,
+    name: artist.name,
+    followers: typeof artist.followers?.total === "number" ? artist.followers.total : null,
+    popularity: typeof artist.popularity === "number" ? artist.popularity : null,
+    genres: Array.isArray(artist.genres) ? artist.genres : [],
+    spotifyUrl: artist.external_urls?.spotify ?? `https://open.spotify.com/artist/${artist.id}`
+  };
 }
 
 async function fetchSpotifyAccessToken(
@@ -118,6 +286,10 @@ async function fetchSpotifyAccessToken(
   clientSecret: string,
   fetchImpl: FetchLike
 ): Promise<string | null> {
+  debugLog("spotify", "Spotify token request", {
+    spotifyClientIdPresent: Boolean(clientId),
+    spotifyClientSecretPresent: Boolean(clientSecret)
+  });
   const response = await fetchImpl("https://accounts.spotify.com/api/token", {
     method: "POST",
     headers: {
@@ -128,9 +300,26 @@ async function fetchSpotifyAccessToken(
   });
 
   if (!response.ok) {
+    debugLog("spotify", "Spotify token request failed", { status: response.status });
     return null;
   }
 
   const data = (await response.json()) as SpotifyTokenResponse;
+  debugLog("spotify", "Spotify token request success", { status: response.status });
   return data.access_token ?? null;
+}
+
+function logRelatedArtistsUnavailable(artistId: string, status: number): void {
+  const payload = {
+    artistId,
+    status,
+    unavailableReason: status === 403 ? "forbidden" : status === 404 ? "not_found" : status === 429 ? "rate_limited" : "request_failed"
+  };
+
+  if (status === 403 || status === 404 || status === 429) {
+    debugLog("spotify", "Spotify related artists unavailable.", payload);
+    return;
+  }
+
+  warnLog("spotify", "Spotify related artists unavailable.", payload);
 }

@@ -66,6 +66,7 @@ function addOpportunityCommand(mode: Mode, description: string): void {
       console.log(`JSON: ${paths.jsonPath}`);
       console.log(`Opportunities CSV: ${paths.opportunitiesCsvPath}`);
       console.log(`Similar artists CSV: ${paths.similarArtistsCsvPath}`);
+      console.log(`Events CSV: ${paths.eventsCsvPath}`);
     });
 }
 

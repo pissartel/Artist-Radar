@@ -74,11 +74,27 @@ describe("profileCollector", () => {
     });
 
     expect(profile.spotifyArtistName).toBe("Mock Spotify Artist");
+    expect(profile.youtubeChannelId).toBeNull();
     expect(profile.platformStats.spotifyFollowers).toBe(1200);
     expect(profile.platformStats.spotifyPopularity).toBe(18);
     expect(profile.spotifyGenres).toEqual(["metalcore", "hardcore"]);
     expect(profile.genres).toEqual(["metalcore", "hardcore"]);
     expect(profile.estimatedLevel).toBe("emerging");
+  });
+
+  it("enriches the artist profile with deterministic YouTube stats in mock mode", async () => {
+    vi.stubEnv("MOCK_AI", "true");
+
+    const profile = await collectArtistProfile({
+      ...baseInput,
+      youtubeUrl: "https://www.youtube.com/@TUESDAYFALL"
+    });
+
+    expect(profile.youtubeChannelId).toBe("mock-youtube-channel");
+    expect(profile.youtubeTitle).toBe("Tuesday Fall");
+    expect(profile.platformStats.youtubeSubscribers).toBe(2400);
+    expect(profile.platformStats.youtubeTotalViews).toBe(185000);
+    expect(profile.platformStats.youtubeVideoCount).toBe(24);
   });
 
   it("infers a basic level from provided mock stats", async () => {
@@ -104,5 +120,17 @@ describe("profileCollector", () => {
   it("does not mark an artist established from one borderline Spotify signal", () => {
     expect(estimateArtistLevel({ spotifyFollowers: 1000, spotifyPopularity: 46 })).toBe("developing");
     expect(estimateArtistLevel({ spotifyFollowers: 51000, spotifyPopularity: 10 })).toBe("developing");
+  });
+
+  it("uses YouTube metrics as supporting evidence without over-promoting weak signals", () => {
+    expect(estimateArtistLevel({ youtubeSubscribers: 7000, youtubeTotalViews: 120000, youtubeVideoCount: 10 })).toBe(
+      "developing"
+    );
+    expect(estimateArtistLevel({ youtubeSubscribers: 60000, youtubeTotalViews: 200000, youtubeVideoCount: 8 })).toBe(
+      "developing"
+    );
+    expect(
+      estimateArtistLevel({ youtubeSubscribers: 120000, youtubeTotalViews: 6_000_000, youtubeVideoCount: 40 })
+    ).toBe("established");
   });
 });

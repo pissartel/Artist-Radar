@@ -141,3 +141,70 @@ Acceptance criteria:
 - Existing booking and promo pipeline paths keep working with injected generators
 - npm test passes
 - npm run build passes
+
+## Task 10 — Spotify Similar Artists Search
+
+Status: done
+
+Requirements:
+- Add searchSpotifyArtists(query, limit) using Spotify Web API artist search
+- Return [] without crashing when Spotify credentials are missing
+- Return [] and warn clearly when Spotify search fails
+- Use Spotify artist search in SimilarArtistsFinder real mode
+- Build genre and market queries from genre, city, target and profile genres
+- Deduplicate Spotify artists and exclude the user artist
+- Map Spotify artist results into SimilarArtist objects
+- Keep MOCK_AI deterministic behavior
+
+Acceptance criteria:
+- Real mode can return non-empty similarArtists when Spotify search returns results
+- similarArtistsByTier is computed from real-mode Spotify results
+- No YouTube API, Instagram API, Chartmetric, scraping, frontend, database or auth added
+- npm test passes
+- npm run build passes
+
+## Task 11 — Spotify Related Artists Provider Strategy
+
+Status: done
+
+Requirements:
+- Add getSpotifyRelatedArtists(spotifyArtistId)
+- Prefer Spotify Related Artists before search fallback
+- Return [] and warn clearly when Related Artists is unavailable
+- Keep fallback search queries genre-agnostic and derived from ArtistProfile/input genres
+- Add generic genre relevance, size relevance and scene relevance scoring
+- Filter very low genre relevance candidates
+- Keep large mainstream artists in large/reference use cases
+
+Acceptance criteria:
+- Related Artists success path is tested
+- Related Artists unavailable fallback is tested
+- Generic genre scoring is tested across multiple genres
+- Broad rock candidates are filtered for pop punk profiles when genre relevance is weak
+- npm test passes
+- npm run build passes
+
+## Task 12 — YouTube Enrichment And Event Provider Architecture
+
+Status: done
+
+Requirements:
+- Add YouTube URL parsing for handles, channel IDs, custom URLs and user URLs
+- Add getYouTubeChannelStats() using YouTube Data API v3 and `YOUTUBE_API_KEY`
+- Return null without crashing when YouTube API key is missing or requests fail
+- Support deterministic mock YouTube stats in `MOCK_AI=true`
+- Enrich ArtistProfile with YouTube channel ID, title, subscribers, total views and video count
+- Use YouTube metrics as supporting artist-level evidence
+- Add EventCandidate and VenueCandidate schemas
+- Add EventProvider and VenueProvider interfaces
+- Add mock venue/event candidates in `MOCK_AI=true`
+- Keep Bandsintown out of the general provider stack unless explicitly authorized
+
+Acceptance criteria:
+- Existing booking and promo commands keep working
+- JSON result can include venueCandidates and eventCandidates
+- Opportunities and similar artists CSV exports keep working
+- Events CSV export is available
+- No Bandsintown, Chartmetric, Soundcharts, Viberate, scraping, frontend, database or auth added
+- npm test passes
+- npm run build passes

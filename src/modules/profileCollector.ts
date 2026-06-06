@@ -8,6 +8,8 @@ import {
   type SocialLinks
 } from "../schemas.js";
 import { getSpotifyArtistProfile, type SpotifyArtistProfile } from "../services/spotifyService.js";
+import { getYouTubeChannelStats, type YouTubeChannelStats } from "../services/youtubeService.js";
+import { debugLog } from "../utils/logger.js";
 
 export interface ArtistLevelThresholds {
   developingMinPopularity: number;
@@ -33,13 +35,28 @@ export const DEFAULT_ARTIST_LEVEL_THRESHOLDS: ArtistLevelThresholds = {
 export async function collectArtistProfile(rawInput: ArtistInput): Promise<ArtistProfile> {
   const input = ArtistInputSchema.parse(rawInput);
   const socialLinks = extractSocialLinks(input);
+  debugLog("profile", "normalized profile inputs", {
+    artistName: input.artist,
+    city: input.city,
+    genre: input.genre,
+    spotifyUrlPresent: Boolean(socialLinks.spotifyUrl),
+    youtubeUrlPresent: Boolean(socialLinks.youtubeUrl),
+    instagramUrlPresent: Boolean(socialLinks.instagramUrl)
+  });
   const spotifyProfile = await getSpotifyArtistProfile(socialLinks.spotifyUrl);
-  const platformStats = mergePlatformStats(input.platformStats ?? {}, spotifyProfile);
+  const youtubeStats = await getYouTubeChannelStats(socialLinks.youtubeUrl);
+  const platformStats = mergePlatformStats(input.platformStats ?? {}, spotifyProfile, youtubeStats);
   const spotifyGenres = spotifyProfile?.genres ?? [];
   const genres = mergeGenres([input.genre], spotifyGenres);
   const estimatedLevel = estimateArtistLevel(platformStats);
   const confidence = calculateConfidence(socialLinks, platformStats, estimatedLevel);
   const notes = buildNotes(socialLinks, platformStats, estimatedLevel, spotifyProfile);
+  debugLog("profile", "artist enrichment results", {
+    spotifyEnrichmentSucceeded: Boolean(spotifyProfile),
+    youtubeEnrichmentSucceeded: Boolean(youtubeStats),
+    estimatedArtistLevel: estimatedLevel,
+    confidence
+  });
 
   return ArtistProfileSchema.parse({
     artistName: input.artist,
@@ -48,6 +65,8 @@ export async function collectArtistProfile(rawInput: ArtistInput): Promise<Artis
     genres,
     spotifyArtistName: spotifyProfile?.name ?? null,
     spotifyGenres,
+    youtubeChannelId: youtubeStats?.youtubeChannelId ?? null,
+    youtubeTitle: youtubeStats?.youtubeTitle ?? null,
     socialLinks,
     platformStats,
     estimatedLevel,
@@ -104,9 +123,10 @@ export function estimateArtistLevel(
   const spotifyPopularity = stats.spotifyPopularity ?? null;
   const youtubeSubscribers = stats.youtubeSubscribers ?? 0;
   const youtubeTotalViews = stats.youtubeTotalViews ?? 0;
+  const youtubeVideoCount = stats.youtubeVideoCount ?? 0;
   const instagramFollowers = stats.instagramFollowers ?? 0;
   const hasSpotifyMetrics = spotifyFollowers !== null || spotifyPopularity !== null;
-  const hasOtherMetrics = youtubeSubscribers > 0 || youtubeTotalViews > 0 || instagramFollowers > 0;
+  const hasOtherMetrics = youtubeSubscribers > 0 || youtubeTotalViews > 0 || youtubeVideoCount > 0 || instagramFollowers > 0;
 
   if (!hasSpotifyMetrics && !hasOtherMetrics) {
     return "unknown";
@@ -122,8 +142,7 @@ export function estimateArtistLevel(
   if (
     hasStrongEstablishedSignal ||
     hasSupportedEstablishedSignal ||
-    youtubeSubscribers >= 50000 ||
-    youtubeTotalViews >= 5_000_000 ||
+    (youtubeSubscribers >= 100000 && youtubeTotalViews >= 5_000_000) ||
     instagramFollowers >= 50000
   ) {
     return "established";
@@ -134,6 +153,7 @@ export function estimateArtistLevel(
     popularity >= thresholds.developingMinPopularity ||
     youtubeSubscribers >= 5000 ||
     youtubeTotalViews >= 500_000 ||
+    (youtubeVideoCount >= 50 && youtubeTotalViews >= 250_000) ||
     instagramFollowers >= 5000
   ) {
     return "developing";
@@ -144,6 +164,7 @@ export function estimateArtistLevel(
     popularity > 0 ||
     youtubeSubscribers > 0 ||
     youtubeTotalViews > 0 ||
+    youtubeVideoCount > 0 ||
     instagramFollowers > 0
   ) {
     return "emerging";
@@ -152,11 +173,18 @@ export function estimateArtistLevel(
   return "unknown";
 }
 
-function mergePlatformStats(stats: PlatformStats, spotifyProfile: SpotifyArtistProfile | null): PlatformStats {
+function mergePlatformStats(
+  stats: PlatformStats,
+  spotifyProfile: SpotifyArtistProfile | null,
+  youtubeStats: YouTubeChannelStats | null
+): PlatformStats {
   return {
     ...stats,
     spotifyFollowers: spotifyProfile?.followers ?? stats.spotifyFollowers,
-    spotifyPopularity: spotifyProfile?.popularity ?? stats.spotifyPopularity
+    spotifyPopularity: spotifyProfile?.popularity ?? stats.spotifyPopularity,
+    youtubeSubscribers: youtubeStats?.youtubeSubscribers ?? stats.youtubeSubscribers,
+    youtubeTotalViews: youtubeStats?.youtubeTotalViews ?? stats.youtubeTotalViews,
+    youtubeVideoCount: youtubeStats?.youtubeVideoCount ?? stats.youtubeVideoCount
   };
 }
 

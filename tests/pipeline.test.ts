@@ -116,11 +116,53 @@ describe("runOpportunitySearch", () => {
       { generator: generatorReturning(validResult) }
     );
 
-    expect(result.similarArtists).toHaveLength(3);
-    expect(result.similarArtistsByTier.small).toHaveLength(1);
-    expect(result.similarArtistsByTier.medium).toHaveLength(1);
-    expect(result.similarArtistsByTier.large).toHaveLength(1);
+    expect(result.similarArtists).toHaveLength(9);
+    expect(result.similarArtistsByTier.small).toHaveLength(3);
+    expect(result.similarArtistsByTier.medium).toHaveLength(3);
+    expect(result.similarArtistsByTier.large).toHaveLength(3);
+    expect(result.similarArtistsByTier.unknown).toEqual([]);
+    expect(result.venueCandidates.length).toBeGreaterThan(0);
+    expect(result.eventCandidates.length).toBeGreaterThan(0);
+    expect(result.eventCandidates[0]?.lineupStatus).toBe("support_not_announced");
     expect(result.artistProfile.estimatedLevel).toBe("emerging");
+  });
+
+  it("includes real-mode Spotify similar artists when search returns results", async () => {
+    vi.stubEnv("MOCK_AI", "false");
+    vi.stubEnv("SPOTIFY_CLIENT_ID", "");
+    vi.stubEnv("SPOTIFY_CLIENT_SECRET", "");
+
+    const result = await runOpportunitySearch(
+      {
+        ...input,
+        artist: "Tuesday Fall",
+        city: "Paris",
+        genre: "pop punk",
+        target: "France",
+        spotifyUrl: "https://open.spotify.com/artist/example",
+        platformStats: {
+          spotifyFollowers: 1200,
+          spotifyPopularity: 18
+        }
+      },
+      {
+        generator: generatorReturning(validResult),
+        spotifyRelatedArtists: async () => [
+          {
+            id: "small",
+            name: "Small Spotify Band",
+            followers: 1000,
+            popularity: 18,
+            genres: ["pop punk"],
+            spotifyUrl: "https://open.spotify.com/artist/small"
+          }
+        ]
+      }
+    );
+
+    expect(result.similarArtists).toHaveLength(1);
+    expect(result.similarArtistsByTier.small).toHaveLength(1);
+    expect(result.similarArtists[0]?.source).toBe("spotify_related");
   });
 
   it("keeps promo mode working with the enriched result shape", async () => {

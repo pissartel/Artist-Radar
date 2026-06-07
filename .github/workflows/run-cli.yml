@@ -3,26 +3,65 @@ name: Run Artist Radar CLI
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: "Mode"
+        required: true
+        default: "booking"
+        type: choice
+        options:
+          - booking
+          - promo
+
       artist:
         description: "Artist name"
         required: true
         default: "Tuesday Fall"
         type: string
 
+      city:
+        description: "Artist city"
+        required: true
+        default: "Paris"
+        type: string
+
       genre:
-        description: "Main genre"
+        description: "Artist genre"
         required: true
         default: "pop punk"
         type: string
 
-      links:
-        description: "Artist links, separated by spaces"
-        required: false
-        default: ""
+      target:
+        description: "Target region or country"
+        required: true
+        default: "grandes villes françaises"
         type: string
 
-      extra_args:
-        description: "Extra CLI args"
+      limit:
+        description: "Maximum number of opportunities"
+        required: true
+        default: "10"
+        type: string
+
+      spotify_url:
+        description: "Spotify artist URL"
+        required: false
+        default: "https://open.spotify.com/intl-fr/artist/2RO6dHJK11CKcEg1G7XYps?si=V7yX1-_LQQidabHNXS67HA"
+        type: string
+
+      youtube_url:
+        description: "YouTube channel or artist URL"
+        required: false
+        default: "https://www.youtube.com/@TUESDAYFALL"
+        type: string
+
+      instagram_url:
+        description: "Instagram profile URL"
+        required: false
+        default: "https://www.instagram.com/tuesdayfall/"
+        type: string
+
+      links:
+        description: "Comma-separated extra artist links"
         required: false
         default: ""
         type: string
@@ -31,6 +70,9 @@ jobs:
   run-cli:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout repository
@@ -48,38 +90,63 @@ jobs:
       - name: Prepare outputs
         run: mkdir -p outputs
 
-      - name: Run Artist Radar command
+      - name: Run Artist Radar CLI
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          MODE: ${{ github.event.inputs.mode }}
+          ARTIST: ${{ github.event.inputs.artist }}
+          CITY: ${{ github.event.inputs.city }}
+          GENRE: ${{ github.event.inputs.genre }}
+          TARGET: ${{ github.event.inputs.target }}
+          LIMIT: ${{ github.event.inputs.limit }}
+          SPOTIFY_URL: ${{ github.event.inputs.spotify_url }}
+          YOUTUBE_URL: ${{ github.event.inputs.youtube_url }}
+          INSTAGRAM_URL: ${{ github.event.inputs.instagram_url }}
+          LINKS: ${{ github.event.inputs.links }}
         run: |
           set -o pipefail
 
-          npm run dev -- \
-            --artist "${{ github.event.inputs.artist }}" \
-            --genre "${{ github.event.inputs.genre }}" \
-            --links "${{ github.event.inputs.links }}" \
-            --output "outputs/result.json" \
-            ${{ github.event.inputs.extra_args }} \
-            2>&1 | tee outputs/logs.txt
+          CMD=(npm run dev -- "$MODE"
+            --artist "$ARTIST"
+            --city "$CITY"
+            --genre "$GENRE"
+            --target "$TARGET"
+            --limit "$LIMIT"
+          )
 
-      - name: Show logs preview
-        if: always()
-        run: |
-          echo "===== LAST LOGS ====="
-          tail -n 150 outputs/logs.txt || true
+          if [ -n "$SPOTIFY_URL" ]; then
+            CMD+=(--spotify-url "$SPOTIFY_URL")
+          fi
 
-          echo "===== RESULT JSON ====="
-          cat outputs/result.json || true
+          if [ -n "$YOUTUBE_URL" ]; then
+            CMD+=(--youtube-url "$YOUTUBE_URL")
+          fi
 
-      - name: Upload JSON and logs
+          if [ -n "$INSTAGRAM_URL" ]; then
+            CMD+=(--instagram-url "$INSTAGRAM_URL")
+          fi
+
+          if [ -n "$LINKS" ]; then
+            CMD+=(--links "$LINKS")
+          fi
+
+          echo "Running command:"
+          printf '%q ' "${CMD[@]}"
+          echo
+
+          "${CMD[@]}" 2>&1 | tee outputs/logs.txt
+
+          if [ ! -f outputs/result.json ]; then
+            echo '{"status":"completed","note":"No result.json generated. Check logs.txt."}' > outputs/result.json
+          fi
+
+      - name: Upload logs and JSON
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: artist-radar-output
-          path: |
-            outputs/result.json
-            outputs/logs.txt
+          path: outputs/
           if-no-files-found: warn

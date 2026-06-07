@@ -1,28 +1,21 @@
-name: Run artist test
+name: Run Artist Radar CLI
 
 on:
   workflow_dispatch:
     inputs:
-      artist:
-        description: "Artist name"
+      command:
+        description: "Command to run"
         required: true
-        default: "Tuesday Fall"
+        default: 'npm run dev -- booking --artist "Tuesday Fall" --genre "pop punk" --target "France" --limit 10'
         type: string
-      limit:
-        description: "Consolidate artist limit"
-        required: true
-        default: "20"
-        type: string
-      debug:
-        description: "Enable debug logs"
-        required: false
-        default: true
-        type: boolean
 
 jobs:
-  run-artist-test:
+  run-cli:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout repository
@@ -37,40 +30,32 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Prepare output folder
+      - name: Prepare outputs
         run: mkdir -p outputs
 
-      - name: Run artist test
+      - name: Run command
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
-          DEBUG_ARTIST_AI: ${{ github.event.inputs.debug }}
         run: |
           set -o pipefail
 
-          npm run test:artist -- \
-            --artist "${{ github.event.inputs.artist }}" \
-            --limit "${{ github.event.inputs.limit }}" \
-            --output "outputs/result.json" \
+          echo "Running command:"
+          echo '${{ github.event.inputs.command }}'
+
+          bash -lc '${{ github.event.inputs.command }}' \
             2>&1 | tee outputs/logs.txt
 
-      - name: Show result preview
-        if: always()
-        run: |
-          echo "===== LOGS PREVIEW ====="
-          tail -n 120 outputs/logs.txt || true
+          if [ ! -f outputs/result.json ]; then
+            echo '{"status":"completed","note":"No result.json generated. Check logs.txt."}' > outputs/result.json
+          fi
 
-          echo "===== RESULT PREVIEW ====="
-          cat outputs/result.json || true
-
-      - name: Upload JSON and logs
+      - name: Upload logs and JSON
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: artist-test-${{ github.event.inputs.artist }}-limit-${{ github.event.inputs.limit }}
-          path: |
-            outputs/result.json
-            outputs/logs.txt
+          name: cli-output
+          path: outputs/
           if-no-files-found: warn

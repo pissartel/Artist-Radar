@@ -39,7 +39,7 @@ on:
       limit:
         description: "Maximum number of opportunities"
         required: true
-        default: "10"
+        default: "20"
         type: string
 
       spotify_url:
@@ -65,6 +65,42 @@ on:
         required: false
         default: ""
         type: string
+
+      consolidate_similar_artists:
+        description: "CONSOLIDATE_SIMILAR_ARTISTS"
+        required: true
+        default: true
+        type: boolean
+
+      consolidate_similar_artists_limit:
+        description: "CONSOLIDATE_SIMILAR_ARTISTS_LIMIT"
+        required: true
+        default: "20"
+        type: string
+
+      enable_firecrawl_consolidation:
+        description: "ENABLE_FIRECRAWL_CONSOLIDATION"
+        required: true
+        default: true
+        type: boolean
+
+      debug_firecrawl:
+        description: "DEBUG_FIRECRAWL"
+        required: false
+        default: true
+        type: boolean
+
+      debug_artist_consolidation:
+        description: "DEBUG_ARTIST_CONSOLIDATION"
+        required: false
+        default: true
+        type: boolean
+
+      debug_similar_artists:
+        description: "DEBUG_SIMILAR_ARTISTS"
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   run-cli:
@@ -96,6 +132,7 @@ jobs:
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+
           MODE: ${{ github.event.inputs.mode }}
           ARTIST: ${{ github.event.inputs.artist }}
           CITY: ${{ github.event.inputs.city }}
@@ -106,6 +143,14 @@ jobs:
           YOUTUBE_URL: ${{ github.event.inputs.youtube_url }}
           INSTAGRAM_URL: ${{ github.event.inputs.instagram_url }}
           LINKS: ${{ github.event.inputs.links }}
+
+          CONSOLIDATE_SIMILAR_ARTISTS: ${{ github.event.inputs.consolidate_similar_artists }}
+          CONSOLIDATE_SIMILAR_ARTISTS_LIMIT: ${{ github.event.inputs.consolidate_similar_artists_limit }}
+          ENABLE_FIRECRAWL_CONSOLIDATION: ${{ github.event.inputs.enable_firecrawl_consolidation }}
+          DEBUG_FIRECRAWL: ${{ github.event.inputs.debug_firecrawl }}
+          DEBUG_ARTIST_CONSOLIDATION: ${{ github.event.inputs.debug_artist_consolidation }}
+          DEBUG_SIMILAR_ARTISTS: ${{ github.event.inputs.debug_similar_artists }}
+
         run: |
           set -o pipefail
 
@@ -136,6 +181,14 @@ jobs:
           echo "Running command:"
           printf '%q ' "${CMD[@]}"
           echo
+
+          echo "Environment flags:"
+          echo "CONSOLIDATE_SIMILAR_ARTISTS=$CONSOLIDATE_SIMILAR_ARTISTS"
+          echo "CONSOLIDATE_SIMILAR_ARTISTS_LIMIT=$CONSOLIDATE_SIMILAR_ARTISTS_LIMIT"
+          echo "ENABLE_FIRECRAWL_CONSOLIDATION=$ENABLE_FIRECRAWL_CONSOLIDATION"
+          echo "DEBUG_FIRECRAWL=$DEBUG_FIRECRAWL"
+          echo "DEBUG_ARTIST_CONSOLIDATION=$DEBUG_ARTIST_CONSOLIDATION"
+          echo "DEBUG_SIMILAR_ARTISTS=$DEBUG_SIMILAR_ARTISTS"
 
           "${CMD[@]}" 2>&1 | tee outputs/logs.txt
 

@@ -1,0 +1,76 @@
+name: Run artist test
+
+on:
+  workflow_dispatch:
+    inputs:
+      artist:
+        description: "Artist name"
+        required: true
+        default: "Tuesday Fall"
+        type: string
+      limit:
+        description: "Consolidate artist limit"
+        required: true
+        default: "20"
+        type: string
+      debug:
+        description: "Enable debug logs"
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  run-artist-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare output folder
+        run: mkdir -p outputs
+
+      - name: Run artist test
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          DEBUG_ARTIST_AI: ${{ github.event.inputs.debug }}
+        run: |
+          set -o pipefail
+
+          npm run test:artist -- \
+            --artist "${{ github.event.inputs.artist }}" \
+            --limit "${{ github.event.inputs.limit }}" \
+            --output "outputs/result.json" \
+            2>&1 | tee outputs/logs.txt
+
+      - name: Show result preview
+        if: always()
+        run: |
+          echo "===== LOGS PREVIEW ====="
+          tail -n 120 outputs/logs.txt || true
+
+          echo "===== RESULT PREVIEW ====="
+          cat outputs/result.json || true
+
+      - name: Upload JSON and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: artist-test-${{ github.event.inputs.artist }}-limit-${{ github.event.inputs.limit }}
+          path: |
+            outputs/result.json
+            outputs/logs.txt
+          if-no-files-found: warn

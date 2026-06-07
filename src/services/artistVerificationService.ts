@@ -2,20 +2,9 @@ import type { ArtistProfile } from "../schemas.js";
 import { extractInstagramHandles } from "../modules/instagramHandleExtractor.js";
 import { searchSpotifyArtists, type SpotifyArtistProfile } from "./spotifyService.js";
 import { debugLog } from "../utils/logger.js";
+import type { WebSearchProvider, WebSearchResult } from "../providers/web/WebSearchProvider.js";
 
 export type ArtistVerificationStatus = "verified" | "needs_verification" | "unverified";
-
-export interface WebSearchResult {
-  title: string | null;
-  url: string | null;
-  snippet: string | null;
-  markdown?: string | null;
-  links?: string[];
-}
-
-export interface WebSearchProvider {
-  search(query: string, limit: number): Promise<WebSearchResult[]>;
-}
 
 export interface ArtistVerificationCandidate {
   name: string;
@@ -237,7 +226,7 @@ async function findInstagramFromSearchResults(
   queries: string[]
 ): Promise<{ handle: string; url: string; sourceUrl: string } | null> {
   for (const query of queries) {
-    const results = await provider.search(query, 5);
+    const results = await provider.search(query, { limit: 5 });
     for (const result of results) {
       const sourceText = compactStrings([result.url, result.title, result.snippet]).join(" ");
       const handles = extractInstagramHandles({
@@ -262,7 +251,7 @@ async function findYouTubeFromSearchResults(
   queries: string[]
 ): Promise<{ url: string } | null> {
   for (const query of queries) {
-    const results = await provider.search(query, 5);
+    const results = await provider.search(query, { limit: 5 });
     for (const result of results) {
       const url = normalizeYouTubeCandidateUrl(result.url);
       if (url) {

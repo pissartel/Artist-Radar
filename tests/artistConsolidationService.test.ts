@@ -125,7 +125,8 @@ describe("consolidateArtistCandidate", () => {
               : [];
           }
         },
-        youtubeChannelStats: async () => youtubeStats()
+        youtubeChannelStats: async () => youtubeStats(),
+        env: { WEB_SEARCH_MAX_QUERIES_PER_CANDIDATE: "4" }
       }
     );
 

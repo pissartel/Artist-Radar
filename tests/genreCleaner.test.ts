@@ -23,11 +23,15 @@ describe("cleanArtistGenres", () => {
     expect(result.genres).toEqual(["pop punk", "easycore", "emo", "punk rock"]);
   });
 
-  it("does not keep alternative alone for pop punk", () => {
+  it("keeps alternative as insufficient evidence rather than incompatible for pop punk", () => {
     const result = cleanArtistGenres(["alternative"], ["pop punk"]);
 
-    expect(result.genres).toEqual([]);
-    expect(result.discardedTags).toEqual(["alternative"]);
+    expect(result.genres).toEqual(["alternative"]);
+    expect(result.discardedTags).toEqual([]);
+    expect(evaluateGenreCompatibility(["pop punk"], ["alternative"])).toMatchObject({
+      compatible: false,
+      level: "insufficient_evidence"
+    });
   });
 
   it("keeps alternative when combined with emo evidence", () => {
@@ -40,7 +44,7 @@ describe("cleanArtistGenres", () => {
     const result = evaluateGenreCompatibility(["pop punk"], ["punk rock", "emo", "easycore"]);
 
     expect(result.compatible).toBe(true);
-    expect(result.level).toBe("close");
+    expect(result.level).toBe("compatible");
     expect(result.matchedGenres).toEqual(["punk rock", "emo", "easycore"]);
   });
 
@@ -55,7 +59,7 @@ describe("cleanArtistGenres", () => {
 
     const result = evaluateGenreCompatibility(["pop punk"], ["alternative rock", "emo"]);
     expect(result.compatible).toBe(true);
-    expect(result.level).toBe("close");
+    expect(result.level).toBe("compatible");
   });
 
   it("accepts metal family genres for metalcore", () => {

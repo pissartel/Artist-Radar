@@ -64,7 +64,16 @@ export const GENRE_FAMILIES = {
 
 export type GenreFamily = keyof typeof GENRE_FAMILIES;
 export type GenreSpecificity = "specific" | "broad";
-export type GenreCompatibilityLevel = "exact" | "close" | "broad_weak" | "incompatible" | "unknown";
+export type GenreCompatibilityLevel =
+  | "compatible"
+  | "weak_broad_match"
+  | "insufficient_evidence"
+  | "explicitly_incompatible"
+  | "unknown"
+  | "exact"
+  | "close"
+  | "broad_weak"
+  | "incompatible";
 
 export const MUSIC_GENRE_ALIASES: Record<string, string> = {
   "post hardcore": "post-hardcore",
@@ -108,6 +117,16 @@ const BROAD_GENRES = new Set([
   "folk",
   "acoustic",
   "rap"
+]);
+
+const AMBIGUOUS_INSUFFICIENT_GENRES = new Set([
+  "pop",
+  "rock",
+  "alternative",
+  "alternative rock",
+  "indie",
+  "indie rock",
+  "pop rock"
 ]);
 
 const GENERIC_LOCATION_LANGUAGE_TAGS = new Set([
@@ -215,7 +234,12 @@ export function cleanArtistGenres(
       continue;
     }
 
-    if (compatibilityContext.compatible || compatibilityContext.level === "unknown") {
+    if (
+      compatibilityContext.compatible ||
+      compatibilityContext.level === "unknown" ||
+      compatibilityContext.level === "insufficient_evidence" ||
+      compatibilityContext.level === "weak_broad_match"
+    ) {
       kept.push(normalized);
       continue;
     }
@@ -282,7 +306,7 @@ export function evaluateGenreCompatibility(userGenres: string[], candidateGenres
   if (exactMatches.length > 0) {
     return {
       compatible: true,
-      level: "exact",
+      level: "compatible",
       confidence: 0.95,
       matchedGenres: uniqueStrings(exactMatches),
       rejectedGenres: candidate.filter((genre) => !exactMatches.includes(genre)),
@@ -299,7 +323,7 @@ export function evaluateGenreCompatibility(userGenres: string[], candidateGenres
   if (sharedFamilies.length > 0 && hasSpecificFamilyEvidence(user, candidate, sharedFamilies)) {
     return {
       compatible: true,
-      level: "close",
+      level: "compatible",
       confidence: 0.82,
       matchedGenres: uniqueStrings(matchedGenres),
       rejectedGenres,
@@ -310,7 +334,7 @@ export function evaluateGenreCompatibility(userGenres: string[], candidateGenres
   if (sharedFamilies.length > 0 && matchedGenres.length > 0) {
     return {
       compatible: true,
-      level: "broad_weak",
+      level: "weak_broad_match",
       confidence: 0.55,
       matchedGenres: uniqueStrings(matchedGenres),
       rejectedGenres,
@@ -321,7 +345,7 @@ export function evaluateGenreCompatibility(userGenres: string[], candidateGenres
   if (hasAdjacentGenreEvidence(user, candidate, userFamilies, candidateFamilies)) {
     return {
       compatible: true,
-      level: "close",
+      level: "compatible",
       confidence: 0.65,
       matchedGenres: candidate.filter((genre) => isSpecificGenre(genre)),
       rejectedGenres: candidate.filter((genre) => !isSpecificGenre(genre)),
@@ -329,13 +353,24 @@ export function evaluateGenreCompatibility(userGenres: string[], candidateGenres
     };
   }
 
+  if (hasOnlyInsufficientGenreEvidence(candidate, userFamilies, candidateFamilies)) {
+    return {
+      compatible: false,
+      level: "insufficient_evidence",
+      confidence: 0.35,
+      matchedGenres: [],
+      rejectedGenres: [],
+      reason: "insufficient_genre_evidence"
+    };
+  }
+
   return {
     compatible: false,
-    level: "incompatible",
+    level: "explicitly_incompatible",
     confidence: 0.05,
     matchedGenres: [],
     rejectedGenres: candidate,
-    reason: "hard_genre_gate_unrelated_explicit_genres"
+    reason: "explicit_incompatible_genre"
   };
 }
 
@@ -496,6 +531,28 @@ function hasAdjacentGenreEvidence(
   return candidateGenres.some((genre) => isSpecificGenre(genre) && /\b(punk|emo|hardcore)\b/.test(genre));
 }
 
+function hasOnlyInsufficientGenreEvidence(
+  candidateGenres: string[],
+  userFamilies: GenreFamily[],
+  candidateFamilies: GenreFamily[]
+): boolean {
+  if (candidateGenres.length === 0) {
+    return true;
+  }
+
+  const punkIndieAltAdjacent =
+    (userFamilies.includes("punk") && candidateFamilies.includes("indie_alt")) ||
+    (userFamilies.includes("indie_alt") && candidateFamilies.includes("punk"));
+
+  return candidateGenres.every((genre) => {
+    if (AMBIGUOUS_INSUFFICIENT_GENRES.has(genre)) {
+      return true;
+    }
+    const genreFamilies = getGenreFamilies([genre]);
+    return punkIndieAltAdjacent && genreFamilies.includes("indie_alt");
+  });
+}
+
 function sortGenresByUserRelevance(genres: string[], userGenres: string[]): string[] {
   return [...genres].sort((left, right) => {
     const leftScore = genreSortScore(left, userGenres);
@@ -512,10 +569,10 @@ function genreSortScore(genre: string, userGenres: string[]): number {
     return 4;
   }
   const compatibility = evaluateGenreCompatibility(userGenres, [genre]);
-  if (compatibility.level === "close") {
+  if (compatibility.compatible) {
     return 3;
   }
-  if (compatibility.level === "broad_weak") {
+  if (compatibility.level === "weak_broad_match") {
     return 2;
   }
   return 1;

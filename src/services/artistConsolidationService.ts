@@ -10,8 +10,12 @@ import { searchSpotifyArtists, type SpotifyArtistProfile } from "./spotifyServic
 import { getLastFmArtistInfo, type LastFmArtistInfo } from "./lastfmService.js";
 import { enrichArtistWithMusicBrainz, type MusicBrainzArtistMetadata } from "./musicBrainzService.js";
 import { getYouTubeChannelStats, type YouTubeChannelStats } from "./youtubeService.js";
-import type { ArtistVerificationStatus, WebSearchProvider, WebSearchResult } from "./artistVerificationService.js";
-import { buildFirecrawlWebSearchProvider, type FirecrawlEnv } from "./firecrawlService.js";
+import type { ArtistVerificationStatus } from "./artistVerificationService.js";
+import type { FirecrawlEnv } from "./firecrawlService.js";
+import type { WebExtractProvider, WebExtractResult } from "../providers/web/WebExtractProvider.js";
+import type { WebProviderEnv } from "../providers/web/providers.js";
+import { buildDefaultWebExtractProvider, buildDefaultWebSearchProvider } from "../providers/web/providers.js";
+import type { WebSearchProvider, WebSearchResult } from "../providers/web/WebSearchProvider.js";
 
 export interface ArtistConsolidationCandidate {
   name: string;
@@ -47,14 +51,20 @@ export interface ArtistConsolidationContext {
   lastfmArtistInfo?: (artistName: string) => Promise<LastFmArtistInfo | null>;
   musicBrainzSearch?: (artistName: string) => Promise<MusicBrainzArtistMetadata | null>;
   webSearchProvider?: WebSearchProvider | null;
+  webExtractProvider?: WebExtractProvider | null;
   youtubeChannelStats?: (youtubeUrl: string) => Promise<YouTubeChannelStats | null>;
-  env?: FirecrawlEnv & {
+  env?: FirecrawlEnv & WebProviderEnv & {
     LASTFM_API_KEY?: string;
     SPOTIFY_CLIENT_ID?: string;
     SPOTIFY_CLIENT_SECRET?: string;
     APP_USER_AGENT?: string;
     YOUTUBE_API_KEY?: string;
     DEBUG_ARTIST_CONSOLIDATION?: string;
+    DEBUG_WEB_SEARCH?: string;
+    WEB_SEARCH_MAX_QUERIES_PER_CANDIDATE?: string;
+    WEB_SEARCH_MAX_RESULTS_PER_QUERY?: string;
+    WEB_EXTRACT_MAX_PAGES_PER_CANDIDATE?: string;
+    WEB_PROVIDER_DAILY_BUDGET_GUARD?: string;
   };
 }
 
@@ -199,18 +209,40 @@ export async function consolidateArtistCandidate(
     tagsCount: musicBrainzInfo?.tags.length ?? 0
   });
 
-  const webSearchProvider = context.webSearchProvider ?? buildFirecrawlWebSearchProvider(context.env);
+  const webSearchProvider = context.webSearchProvider ?? buildDefaultWebSearchProvider(context.env);
+  const webExtractProvider = typeof context.webExtractProvider !== "undefined"
+    ? context.webExtractProvider
+    : buildDefaultWebExtractProvider(context.env);
+  const webSearchProviderName = getProviderName(webSearchProvider, "firecrawl");
   debugLog("artist-consolidation", "web search availability", {
     name: candidate.name,
-    enabled: Boolean(webSearchProvider)
+    enabled: webSearchProviderName !== "noop",
+    provider: webSearchProviderName,
+    extractProvider: webExtractProvider?.providerName ?? null
   });
-  if (webSearchProvider) {
+  if (webSearchProviderName !== "noop") {
     const primaryGenre = context.userGenres[0] ?? genres[0] ?? null;
-    const { entries: resultsByQuery, failedCount } = await searchCandidateWebResults(webSearchProvider, buildWebSearchQueries(candidate.name, primaryGenre));
-    if (failedCount > 0) {
-      evidenceNotes.push("Firecrawl search failed; candidate still needs verification.");
+    const queryLimit = parseCostLimit(context.env?.WEB_SEARCH_MAX_QUERIES_PER_CANDIDATE, 3, 1, 10);
+    const resultsPerQuery = parseCostLimit(context.env?.WEB_SEARCH_MAX_RESULTS_PER_QUERY, 5, 1, 10);
+    const extractPageLimit = parseCostLimit(context.env?.WEB_EXTRACT_MAX_PAGES_PER_CANDIDATE, 3, 0, 10);
+    const queries = buildWebSearchQueries(candidate.name, primaryGenre).slice(0, queryLimit);
+    if (buildWebSearchQueries(candidate.name, primaryGenre).length > queries.length) {
+      debugLog("web-search", "cost-control skipped queries", {
+        name: candidate.name,
+        skippedCount: buildWebSearchQueries(candidate.name, primaryGenre).length - queries.length,
+        queryLimit
+      });
     }
-    const webResults = resultsByQuery.flatMap((entry) => entry.results);
+    const { entries: resultsByQuery, failedCount } = await searchCandidateWebResults(webSearchProvider, queries, resultsPerQuery);
+    if (failedCount > 0) {
+      evidenceNotes.push("Web search failed; candidate still needs verification.");
+      if (webSearchProviderName === "firecrawl") {
+        evidenceNotes.push("Firecrawl search failed; candidate still needs verification.");
+      }
+    }
+    const searchResults = resultsByQuery.flatMap((entry) => entry.results);
+    const extractedResults = await extractCandidateWebPages(webExtractProvider, searchResults, extractPageLimit);
+    const webResults = [...searchResults, ...extractedResults.map(webExtractResultToSearchResult)];
 
     if (!spotifyUrl) {
       const spotifyMatch = findSpotifyUrlFromWebResults(webResults);
@@ -248,7 +280,7 @@ export async function consolidateArtistCandidate(
       evidenceNotes.push("Size evidence found from public web/search result.");
     }
 
-    debugLog("firecrawl", "extracted links/evidence", {
+    debugLog("web-search", "extracted links/evidence", {
       name: candidate.name,
       spotifyUrlFound: Boolean(spotifyUrl),
       instagramUrlFound: Boolean(instagramUrl),
@@ -287,6 +319,11 @@ export async function consolidateArtistCandidate(
         youtubeUrl: youtubeMatch ?? null
       });
     }
+  } else {
+    debugLog("web-search", "web search provider unavailable", {
+      name: candidate.name,
+      provider: webSearchProviderName
+    });
   }
 
   if (youtubeUrl) {
@@ -363,40 +400,39 @@ function pickExactSpotifyMatch(candidateName: string, matches: SpotifyArtistProf
 function buildWebSearchQueries(artistName: string, primaryGenre: string | null): string[] {
   return uniqueStrings([
     primaryGenre ? `"${artistName}" "${primaryGenre}" band` : "",
-    `"${artistName}" "pop punk"`,
-    `"${artistName}" "punk rock"`,
     `"${artistName}" Instagram`,
     `"${artistName}" Spotify`,
     `"${artistName}" YouTube`,
-    `"${artistName}" official`,
-    `"${artistName}" France band`,
-    `"${artistName}" band Instagram`,
-    primaryGenre ? `"${artistName}" "${primaryGenre}" Instagram` : "",
-    `"${artistName}" band YouTube`,
-    primaryGenre ? `"${artistName}" "${primaryGenre}" YouTube` : ""
+    `"${artistName}" official`
   ]);
 }
 
 async function searchCandidateWebResults(
   provider: WebSearchProvider,
-  queries: string[]
+  queries: string[],
+  limit: number
 ): Promise<{ entries: Array<{ query: string; results: WebSearchResult[] }>; failedCount: number }> {
-  debugLog("firecrawl", "Firecrawl consolidation search queries generated", {
-    queries
+  const providerName = getProviderName(provider, "firecrawl");
+  debugLog("web-search", "web consolidation search queries generated", {
+    provider: providerName,
+    queries,
+    limit
   });
   const entries = [];
   let failedCount = 0;
   for (const query of queries) {
     try {
-      const results = await provider.search(query, 5);
-      debugLog("firecrawl", "Firecrawl consolidation query result count", {
+      const results = await provider.search(query, { limit });
+      debugLog("web-search", "web consolidation query result count", {
+        provider: providerName,
         query,
         resultCount: results.length
       });
       entries.push({ query, results });
     } catch (error) {
       failedCount += 1;
-      debugLog("firecrawl", "Firecrawl consolidation query failed", {
+      debugLog("web-search", "web consolidation query failed", {
+        provider: providerName,
         query,
         errorName: error instanceof Error ? error.name : "Error",
         errorMessage: error instanceof Error ? error.message : String(error)
@@ -405,6 +441,73 @@ async function searchCandidateWebResults(
     }
   }
   return { entries, failedCount };
+}
+
+async function extractCandidateWebPages(
+  provider: WebExtractProvider | null,
+  results: WebSearchResult[],
+  limit: number
+): Promise<WebExtractResult[]> {
+  if (!provider || limit <= 0) {
+    debugLog("web-search", "cost-control skipped extraction", {
+      provider: provider?.providerName ?? null,
+      pageLimit: limit
+    });
+    return [];
+  }
+
+  const urls = uniqueStrings(results.flatMap((result) => compactStrings([result.url, ...(result.links ?? [])])))
+    .filter((url) => !isSocialPlatformUrl(url));
+  const selectedUrls = urls.slice(0, limit);
+  if (urls.length > selectedUrls.length) {
+    debugLog("web-search", "cost-control skipped extraction pages", {
+      provider: provider.providerName,
+      selectedUrls,
+      skippedCount: urls.length - selectedUrls.length,
+      pageLimit: limit
+    });
+  } else {
+    debugLog("web-search", "extraction URLs", {
+      provider: provider.providerName,
+      selectedUrls
+    });
+  }
+
+  const extracted: WebExtractResult[] = [];
+  for (const url of selectedUrls) {
+    try {
+      const result = await provider.extract(url);
+      debugLog("web-search", "extraction result", {
+        provider: provider.providerName,
+        url,
+        success: Boolean(result),
+        statusCode: result?.statusCode ?? null
+      });
+      if (result) {
+        extracted.push(result);
+      }
+    } catch (error) {
+      debugLog("web-search", "extraction failed", {
+        provider: provider.providerName,
+        url,
+        errorName: error instanceof Error ? error.name : "Error",
+        errorMessage: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+  return extracted;
+}
+
+function webExtractResultToSearchResult(result: WebExtractResult): WebSearchResult {
+  return {
+    title: result.title,
+    url: result.url,
+    snippet: result.text,
+    markdown: result.markdown,
+    sourceProvider: result.sourceProvider,
+    confidence: result.statusCode && result.statusCode >= 200 && result.statusCode < 300 ? 0.82 : 0.5,
+    links: []
+  };
 }
 
 function findSpotifyUrlFromWebResults(results: WebSearchResult[]): { url: string; sourceUrl: string } | null {
@@ -465,7 +568,7 @@ function extractGenreEvidenceFromWebResults(results: WebSearchResult[], artistNa
       return [];
     }
     return [{
-      source: "firecrawl",
+      source: result.sourceProvider ?? "firecrawl",
       genres: uniqueStrings(genres),
       confidence: result.markdown ? 0.78 : 0.68,
       notes: "Explicit compatible genre clue from public web/search result.",
@@ -487,7 +590,7 @@ function extractLocationEvidenceFromWebResults(results: WebSearchResult[], artis
       return [];
     }
     return [{
-      source: "firecrawl",
+      source: result.sourceProvider ?? "firecrawl",
       city,
       country,
       confidence: result.markdown ? 0.74 : 0.64,
@@ -510,7 +613,7 @@ function extractSizeEvidenceFromWebResults(results: WebSearchResult[], artistNam
       return [];
     }
     return [{
-      source: "firecrawl",
+      source: result.sourceProvider ?? "firecrawl",
       followers: instagramFollowers,
       subscribers,
       views,
@@ -534,6 +637,15 @@ function parseCompactCount(value: string): number | null {
   const multiplier = /k$/i.test(normalized) ? 1000 : /m$/i.test(normalized) ? 1_000_000 : 1;
   const numeric = Number.parseFloat(normalized.replace(/[kKmM]$/, ""));
   return Number.isFinite(numeric) ? Math.round(numeric * multiplier) : null;
+}
+
+function parseCostLimit(value: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = Number.parseInt(value ?? String(fallback), 10);
+  return Number.isFinite(parsed) ? Math.max(min, Math.min(parsed, max)) : fallback;
+}
+
+function getProviderName(provider: { providerName?: string } | null, fallback: string): string {
+  return provider?.providerName?.trim() || fallback;
 }
 
 function extractUrlsFromWebResult(result: WebSearchResult): string[] {
@@ -578,6 +690,22 @@ function normalizeUrl(value: string): string {
     return url.toString();
   } catch {
     return value;
+  }
+}
+
+function isSocialPlatformUrl(value: string): boolean {
+  try {
+    const hostname = new URL(value).hostname.replace(/^www\./, "");
+    return [
+      "instagram.com",
+      "youtube.com",
+      "m.youtube.com",
+      "youtu.be",
+      "open.spotify.com",
+      "spotify.com"
+    ].includes(hostname);
+  } catch {
+    return false;
   }
 }
 

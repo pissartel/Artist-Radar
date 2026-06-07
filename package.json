@@ -12,7 +12,9 @@
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js",
     "test": "vitest run",
-    "test:firecrawl": "tsx scripts/testFirecrawl.ts"
+    "test:firecrawl": "tsx scripts/testFirecrawl.ts",
+    "test:artist": "tsx scripts/runArtistTest.ts",
+    "test:compare-limits": "tsx scripts/compareConsolidateLimits.ts"
   },
   "keywords": [],
   "author": "",

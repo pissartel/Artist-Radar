@@ -124,6 +124,8 @@ Responsibilities:
 - Size evidence is summarized into a compact `popularity` object by platform. Raw size evidence remains internal unless debug evidence export is enabled.
 - Last.fm `artist.getInfo` tags become genre evidence and listeners/playcount become rough size evidence. MusicBrainz tags/location become genre and location evidence, but MusicBrainz is never used for popularity or size.
 - Spotify consolidation is identity-first: exact normalized artist-name matches can add Spotify ID/URL, but Spotify popularity/followers are not treated as the main size source.
+- Web search and extraction are pluggable provider interfaces. Search provider priority is Tavily, Exa, Firecrawl and Noop; extraction provider priority is Jina Reader, Firecrawl scrape and null. Firecrawl is therefore a fallback rather than the only consolidation source.
+- Web provider cost controls cap queries, results and extracted pages per candidate with `WEB_SEARCH_MAX_QUERIES_PER_CANDIDATE`, `WEB_SEARCH_MAX_RESULTS_PER_QUERY` and `WEB_EXTRACT_MAX_PAGES_PER_CANDIDATE`. URLs are deduplicated before extraction, and direct Instagram, YouTube and Spotify page extraction is skipped.
 - Instagram links are discovered from web/search results or public non-Instagram pages and normalized with `InstagramHandleExtractor`; Instagram pages are not scraped directly.
 - YouTube channel stats are fetched only after a channel URL is found, and only when `YOUTUBE_API_KEY` is configured.
 - Genre relevance is the primary scoring and filtering criterion. The booking-oriented total relevance weights are genre 55%, locality 25%, size 10% and source confidence 10%.

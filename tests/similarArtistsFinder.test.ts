@@ -306,7 +306,7 @@ describe("findSimilarArtists", () => {
     expect(artists.some((artist) => artist.name === "Star Crystal")).toBe(false);
   });
 
-  it("does not let France locality rescue a generic pop-only candidate for pop punk", async () => {
+  it("keeps a generic pop-only Last.fm candidate in to_verify instead of promoting it for pop punk", async () => {
     const artists = await findSimilarArtists({
       profile,
       target: "France",
@@ -335,7 +335,10 @@ describe("findSimilarArtists", () => {
       spotifySearch: async () => []
     });
 
-    expect(artists.some((artist) => artist.name === "French Pop Only")).toBe(false);
+    const grouped = groupSimilarArtistsByTier(artists);
+    expect(grouped.regional_peer.some((artist) => artist.name === "French Pop Only")).toBe(false);
+    expect(grouped.local_peer.some((artist) => artist.name === "French Pop Only")).toBe(false);
+    expect(grouped.to_verify.some((artist) => artist.name === "French Pop Only")).toBe(true);
   });
 
   it("groups a good genre and France candidate as regional_peer", async () => {
@@ -936,6 +939,42 @@ describe("findSimilarArtists", () => {
     expect(broadPeak?.totalRelevance).toBeGreaterThanOrEqual(35);
   });
 
+  it("keeps Broad Peak with alternative-only Last.fm/MusicBrainz tags in to_verify", async () => {
+    const artists = await findSimilarArtists({
+      profile,
+      target: "France",
+      genre: "pop punk",
+      city: "Paris",
+      seedCandidates: [],
+      env: {
+        MOCK_AI: "false",
+        LASTFM_API_KEY: "key",
+        ENABLE_SPOTIFY_DEEP_ENRICHMENT: "false",
+        ENABLE_SPOTIFY_RELATED_ARTISTS: "false"
+      },
+      lastfmSimilarArtists: async () => [
+        { name: "Broad Peak", url: null, match: 0.94 }
+      ],
+      musicBrainzSearch: async () => ({
+        musicBrainzId: "broad-peak",
+        name: "Broad Peak",
+        country: null,
+        area: null,
+        beginArea: null,
+        tags: ["alternative"],
+        sourceUrl: "https://musicbrainz.org/artist/broad-peak",
+        score: 95
+      }),
+      spotifySearch: async () => []
+    });
+
+    const grouped = groupSimilarArtistsByTier(artists);
+    const broadPeak = grouped.to_verify.find((artist) => artist.name === "Broad Peak");
+    expect(broadPeak).toBeDefined();
+    expect(broadPeak?.genres).toEqual(["alternative"]);
+    expect(artists.some((artist) => artist.name === "Broad Peak")).toBe(true);
+  });
+
   it("keeps Bad Frequencies-like Last.fm candidates in to_verify when consolidation finds no evidence", async () => {
     const artists = await findSimilarArtists({
       profile,
@@ -1346,6 +1385,41 @@ describe("findSimilarArtists", () => {
     expect(broadPeak).toBeDefined();
     expect(broadPeak?.instagramUrl).toBe("https://www.instagram.com/broadpeakband/");
     expect(broadPeak?.verificationStatus).toBe("verified");
+  });
+
+  it("promotes Broad Peak with alternative plus pop punk and punk rock metadata in France", async () => {
+    const artists = await findSimilarArtists({
+      profile,
+      target: "France",
+      genre: "pop punk",
+      city: "Paris",
+      seedCandidates: [],
+      env: {
+        MOCK_AI: "false",
+        LASTFM_API_KEY: "key",
+        ENABLE_SPOTIFY_DEEP_ENRICHMENT: "false",
+        ENABLE_SPOTIFY_RELATED_ARTISTS: "false"
+      },
+      lastfmSimilarArtists: async () => [
+        { name: "Broad Peak", url: null, match: 0.94 }
+      ],
+      musicBrainzSearch: async () => ({
+        musicBrainzId: "broad-peak",
+        name: "Broad Peak",
+        country: "France",
+        area: "France",
+        beginArea: null,
+        tags: ["alternative", "pop punk", "punk rock"],
+        sourceUrl: "https://musicbrainz.org/artist/broad-peak",
+        score: 95
+      }),
+      spotifySearch: async () => []
+    });
+
+    const grouped = groupSimilarArtistsByTier(artists);
+    const broadPeak = grouped.regional_peer.find((artist) => artist.name === "Broad Peak");
+    expect(broadPeak).toBeDefined();
+    expect(broadPeak?.genres).toEqual(expect.arrayContaining(["pop punk", "punk rock", "alternative"]));
   });
 
   it("attaches Spotify verification for non-Spotify candidates when enabled", async () => {

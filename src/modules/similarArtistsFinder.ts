@@ -24,9 +24,9 @@ import {
 import {
   verifyAndEnrichArtistCandidate,
   type ArtistVerificationResult,
-  type ArtistVerificationStatus,
-  type WebSearchProvider
+  type ArtistVerificationStatus
 } from "../services/artistVerificationService.js";
+import type { WebSearchProvider } from "../providers/web/WebSearchProvider.js";
 import {
   consolidateArtistCandidate,
   type ArtistConsolidationResult
@@ -92,6 +92,17 @@ export interface SimilarArtistsFinderInput {
     FIRECRAWL_API_KEY?: string;
     ENABLE_FIRECRAWL_CONSOLIDATION?: string;
     DEBUG_FIRECRAWL?: string;
+    DEBUG_WEB_SEARCH?: string;
+    TAVILY_API_KEY?: string;
+    EXA_API_KEY?: string;
+    JINA_API_KEY?: string;
+    ENABLE_TAVILY_SEARCH?: string;
+    ENABLE_EXA_SEARCH?: string;
+    ENABLE_JINA_READER?: string;
+    WEB_SEARCH_MAX_QUERIES_PER_CANDIDATE?: string;
+    WEB_SEARCH_MAX_RESULTS_PER_QUERY?: string;
+    WEB_EXTRACT_MAX_PAGES_PER_CANDIDATE?: string;
+    WEB_PROVIDER_DAILY_BUDGET_GUARD?: string;
   };
 }
 
@@ -573,11 +584,25 @@ function scoreDiscoveryCandidate(
   const cleanedGenreResult = cleanArtistGenres(candidate.genres, userGenres, genreCleaningContext);
   const candidateGenres = cleanedGenreResult.genres;
   const genreGateGenres = collectGenreGateGenres(candidate.genres, candidateGenres, genreCleaningContext);
+  const genreCompatibility = evaluateGenreCompatibility(userGenres, genreGateGenres);
+  if (isBroadPeakCandidate(candidate.name)) {
+    debugLog("similar-artists", "Broad Peak genre cleaning trace", {
+      genresBeforeCleaning: candidate.genres,
+      genresAfterCleaning: candidateGenres,
+      genreGateGenres,
+      compatibilityDecision: genreCompatibility
+    });
+  }
   const discardedTags = uniqueStrings([...(candidate.discardedTags ?? []), ...cleanedGenreResult.discardedTags]);
   const baseGenreRelevance = scoreGenreRelevanceWithContext(userGenres, candidateGenres, candidate.name, candidate.matchedQuery);
+  const adjustedBaseGenreRelevance = genreCompatibility.level === "insufficient_evidence"
+    ? Math.min(baseGenreRelevance, 35)
+    : genreCompatibility.level === "weak_broad_match"
+      ? Math.min(baseGenreRelevance, 55)
+      : baseGenreRelevance;
   const genreRelevance = candidate.source === "lastfm_similar" && candidateGenres.length === 0
     ? Math.max(baseGenreRelevance, MIN_UNKNOWN_GENRE_LASTFM_RELEVANCE)
-    : baseGenreRelevance;
+    : adjustedBaseGenreRelevance;
   const size = scoreDiscoverySizeRelevance(getUserMetrics(input.profile), candidate);
   let artistTier = size.artistTier;
   let sizeScore = size.score;
@@ -592,12 +617,15 @@ function scoreDiscoveryCandidate(
   const sceneRelevance = scoreSceneRelevance({ city: candidate.city, country: candidate.country }, input.target, input.city);
   const sourceConfidence = clampScore(Math.round((candidate.sourceConfidence ?? defaultSourceConfidence(candidate.source)) * 100));
   const verificationStatus = candidate.verificationStatus ?? inferVerificationStatus(candidate);
-  const bookingCategory = applyVerificationBookingCategory(
+  let bookingCategory = applyVerificationBookingCategory(
     determineBookingCategory(candidate, artistTier, genreRelevance, sceneRelevance, input),
     verificationStatus,
     genreRelevance,
     sceneRelevance
   );
+  if (candidate.source === "lastfm_similar" && ["unknown", "insufficient_evidence", "weak_broad_match"].includes(genreCompatibility.level)) {
+    bookingCategory = "to_verify";
+  }
   const sources = uniqueStrings([candidate.source, ...(candidate.notes ? ["musicbrainz"] : [])]);
   const evidenceNotes = uniqueStrings([
     candidate.reason,
@@ -1236,7 +1264,14 @@ function determineDiscoveryRejectionReason(
   sceneRelevance: number
 ): string | null {
   const genreGate = evaluateGenreCompatibility(userGenres, candidate.genres);
-  if (genreGate.level === "incompatible") {
+  debugLog("similar-artists", "genre gate result", {
+    name: candidate.name,
+    genres: candidate.genres,
+    userGenres,
+    result: genreGate,
+    action: genreGate.level === "explicitly_incompatible" ? "hard_reject" : candidate.source === "lastfm_similar" && ["unknown", "insufficient_evidence", "weak_broad_match"].includes(genreGate.level) ? "keep_to_verify" : "continue"
+  });
+  if (genreGate.level === "explicitly_incompatible") {
     debugLog("similar-artists", "hard genre gate rejection", {
       name: candidate.name,
       genres: candidate.genres,
@@ -1244,6 +1279,15 @@ function determineDiscoveryRejectionReason(
       reason: genreGate.reason
     });
     return genreGate.reason;
+  }
+
+  if (candidate.source === "lastfm_similar" && ["unknown", "insufficient_evidence", "weak_broad_match"].includes(genreGate.level)) {
+    debugLog("similar-artists", "lastfm candidate kept for verification", {
+      name: candidate.name,
+      genres: candidate.genres,
+      userGenres,
+      reason: genreGate.level === "weak_broad_match" ? "weak_broad_match" : genreGate.level === "insufficient_evidence" ? "insufficient_genre_evidence" : "lastfm_candidate_kept_for_verification"
+    });
   }
 
   if (candidate.source === "seed") {
@@ -1795,20 +1839,24 @@ export function scoreGenreRelevanceWithContext(
   }
 
   const compatibility = evaluateGenreCompatibility(userGenres, candidateGenres);
-  if (candidateGenres.length > 0 && compatibility.level === "incompatible") {
+  if (candidateGenres.length > 0 && compatibility.level === "explicitly_incompatible") {
     return 10;
   }
 
-  if (compatibility.level === "exact") {
+  if (compatibility.compatible && compatibility.confidence >= 0.9) {
     return 95;
   }
 
-  if (compatibility.level === "close") {
+  if (compatibility.compatible) {
     return 85;
   }
 
-  if (compatibility.level === "broad_weak") {
+  if (compatibility.level === "weak_broad_match") {
     return 55;
+  }
+
+  if (compatibility.level === "insufficient_evidence") {
+    return 35;
   }
 
   if (candidate.exact.size > 0 && hasIntersection(user.exact, candidate.exact)) {
@@ -2243,7 +2291,7 @@ function rankAndFilterSpotifyArtists(
       const genreGateGenres = collectGenreGateGenres(rawGenreEvidence, artist.genres, buildGenreCleaningContext(input));
       const hasCandidateGenres = genreGateGenres.length > 0;
       const genreGate = evaluateGenreCompatibility(collectUserGenres(input), genreGateGenres);
-      if (genreGate.level === "incompatible") {
+      if (genreGate.level === "explicitly_incompatible") {
         rejectionCounts.low_genre_relevance += 1;
         rejectedSamples.push(buildRejectedCandidateSample(artist, artist.matchedQuery ?? null, genreGate.reason));
         debugLog("similar-artists", "hard genre gate rejection", {

@@ -45,6 +45,18 @@ export { verifyAndEnrichArtistCandidate } from "./services/artistVerificationSer
 export { consolidateArtistCandidate } from "./services/artistConsolidationService.js";
 export { buildFirecrawlWebSearchProvider, isFirecrawlConsolidationEnabled } from "./services/firecrawlService.js";
 export {
+  ExaSearchProvider,
+  FirecrawlExtractProvider,
+  FirecrawlSearchProvider,
+  JinaExtractProvider,
+  NoopSearchProvider,
+  TavilySearchProvider,
+  buildDefaultWebExtractProvider,
+  buildDefaultWebSearchProvider,
+  getEnabledExtractProviders,
+  getEnabledSearchProviders
+} from "./providers/web/providers.js";
+export {
   extractSpotifyArtistId,
   createSpotifyCapabilities,
   getSpotifyArtistProfile,
@@ -111,10 +123,18 @@ export type {
   ArtistVerificationCandidate,
   ArtistVerificationContext,
   ArtistVerificationResult,
-  ArtistVerificationStatus,
+  ArtistVerificationStatus
+} from "./services/artistVerificationService.js";
+export type {
   WebSearchProvider,
   WebSearchResult
-} from "./services/artistVerificationService.js";
+} from "./providers/web/WebSearchProvider.js";
+export type {
+  WebExtractOptions,
+  WebExtractProvider,
+  WebExtractResult
+} from "./providers/web/WebExtractProvider.js";
+export type { WebProviderEnv } from "./providers/web/providers.js";
 export {
   ArtistTierSchema,
   ArtistInputSchema,

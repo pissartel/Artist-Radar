@@ -1,5 +1,5 @@
 import { debugLog } from "../utils/logger.js";
-import type { WebSearchProvider, WebSearchResult } from "./artistVerificationService.js";
+import type { WebSearchOptions, WebSearchProvider, WebSearchResult } from "../providers/web/WebSearchProvider.js";
 
 export interface FirecrawlEnv {
   FIRECRAWL_API_KEY?: string;
@@ -56,8 +56,9 @@ export function buildFirecrawlWebSearchProvider(
   }
 
   return {
-    async search(query: string, limit: number): Promise<WebSearchResult[]> {
-      const cappedLimit = Math.max(1, Math.min(limit, 5));
+    providerName: "firecrawl",
+    async search(query: string, options: WebSearchOptions = {}): Promise<WebSearchResult[]> {
+      const cappedLimit = Math.max(1, Math.min(options.limit ?? 5, 5));
       const timeoutMs = parseFirecrawlTimeout(env.FIRECRAWL_TIMEOUT_MS);
       const body = {
         query,
@@ -176,6 +177,8 @@ function normalizeFirecrawlResult(result: FirecrawlSearchResult): WebSearchResul
       title: result.title ?? result.metadata?.title ?? null,
       url,
       snippet: result.description ?? result.metadata?.description ?? null,
+      sourceProvider: "firecrawl",
+      confidence: 0.72,
       markdown: result.markdown ?? null,
       links: result.links ?? []
     }

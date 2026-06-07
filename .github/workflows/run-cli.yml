@@ -1,0 +1,85 @@
+name: Run Artist Radar CLI
+
+on:
+  workflow_dispatch:
+    inputs:
+      artist:
+        description: "Artist name"
+        required: true
+        default: "Tuesday Fall"
+        type: string
+
+      genre:
+        description: "Main genre"
+        required: true
+        default: "pop punk"
+        type: string
+
+      links:
+        description: "Artist links, separated by spaces"
+        required: false
+        default: ""
+        type: string
+
+      extra_args:
+        description: "Extra CLI args"
+        required: false
+        default: ""
+        type: string
+
+jobs:
+  run-cli:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare outputs
+        run: mkdir -p outputs
+
+      - name: Run Artist Radar command
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+        run: |
+          set -o pipefail
+
+          npm run dev -- \
+            --artist "${{ github.event.inputs.artist }}" \
+            --genre "${{ github.event.inputs.genre }}" \
+            --links "${{ github.event.inputs.links }}" \
+            --output "outputs/result.json" \
+            ${{ github.event.inputs.extra_args }} \
+            2>&1 | tee outputs/logs.txt
+
+      - name: Show logs preview
+        if: always()
+        run: |
+          echo "===== LAST LOGS ====="
+          tail -n 150 outputs/logs.txt || true
+
+          echo "===== RESULT JSON ====="
+          cat outputs/result.json || true
+
+      - name: Upload JSON and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: artist-radar-output
+          path: |
+            outputs/result.json
+            outputs/logs.txt
+          if-no-files-found: warn

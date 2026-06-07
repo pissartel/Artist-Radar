@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   extractSpotifyArtistId,
   getSpotifyArtistProfile,
+  getSpotifyArtistById,
   getSpotifyRelatedArtists,
   searchSpotifyArtists
 } from "../src/services/spotifyService.js";
@@ -37,13 +38,18 @@ describe("spotifyService", () => {
       fetchImpl
     );
 
-    expect(profile).toEqual({
+    expect(profile).toMatchObject({
       id: spotifyArtistId,
       name: "Mock Spotify Artist",
       followers: 1200,
       popularity: 18,
       genres: ["metalcore", "hardcore"],
-      spotifyUrl: `https://open.spotify.com/artist/${spotifyArtistId}`
+      spotifyUrl: `https://open.spotify.com/artist/${spotifyArtistId}`,
+      images: [],
+      topTrackPopularityMax: null,
+      topTrackPopularityAvg: null,
+      topTrackCount: null,
+      sizeSignalSource: "spotify_artist"
     });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
@@ -66,17 +72,158 @@ describe("spotifyService", () => {
 
     const profile = await getSpotifyArtistProfile(
       `https://open.spotify.com/artist/${spotifyArtistId}`,
-      { SPOTIFY_CLIENT_ID: "id", SPOTIFY_CLIENT_SECRET: "secret" },
+      {
+        SPOTIFY_CLIENT_ID: "id",
+        SPOTIFY_CLIENT_SECRET: "secret",
+        ENABLE_SPOTIFY_TOP_TRACKS: "true"
+      },
       fetchImpl
     );
 
-    expect(profile).toEqual({
+    expect(profile).toMatchObject({
       id: spotifyArtistId,
       name: "Tuesday Fall",
       followers: 4321,
       popularity: 27,
       genres: ["pop punk", "punk rock"],
-      spotifyUrl: "https://open.spotify.com/artist/2RO6dHJK11CKcEg1G7XYps"
+      spotifyUrl: "https://open.spotify.com/artist/2RO6dHJK11CKcEg1G7XYps",
+      images: [],
+      topTrackPopularityMax: null,
+      topTrackPopularityAvg: null,
+      topTrackCount: null,
+      sizeSignalSource: "spotify_artist"
+    });
+  });
+
+  it("fetches and normalizes a Spotify artist by id", async () => {
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(responseWithJson({ access_token: "token" }))
+      .mockResolvedValueOnce(
+        responseWithJson({
+          id: "6FBDaR13swtiWwGhX1WQsP",
+          name: "blink-182",
+          followers: { total: 6500000 },
+          popularity: 82,
+          genres: ["punk", "rock"],
+          external_urls: {
+            spotify: "https://open.spotify.com/artist/spotify-id"
+          },
+          images: [{ url: "https://image.example/green-day.jpg" }]
+        })
+      );
+
+    const artist = await getSpotifyArtistById(
+      "6FBDaR13swtiWwGhX1WQsP",
+      {
+        SPOTIFY_CLIENT_ID: "id",
+        SPOTIFY_CLIENT_SECRET: "secret",
+        ENABLE_SPOTIFY_TOP_TRACKS: "true"
+      },
+      fetchImpl
+    );
+
+    expect(artist).toMatchObject({
+      id: "6FBDaR13swtiWwGhX1WQsP",
+      name: "blink-182",
+      followers: 6500000,
+      popularity: 82,
+      genres: ["punk", "rock"],
+      spotifyUrl: "https://open.spotify.com/artist/spotify-id",
+      images: ["https://image.example/green-day.jpg"],
+      topTrackPopularityMax: null,
+      topTrackPopularityAvg: null,
+      topTrackCount: null,
+      sizeSignalSource: "spotify_artist"
+    });
+  });
+
+  it("falls back to top track popularity when artist popularity and followers are missing", async () => {
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(responseWithJson({ access_token: "token" }))
+      .mockResolvedValueOnce(
+        responseWithJson({
+          id: "6FBDaR13swtiWwGhX1WQsP",
+          name: "blink-182",
+          followers: { total: null },
+          popularity: null,
+          genres: [],
+          external_urls: {
+            spotify: "https://open.spotify.com/artist/6FBDaR13swtiWwGhX1WQsP"
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        responseWithJson({
+          tracks: [
+            { popularity: 66 },
+            { popularity: 61 },
+            { popularity: 58 }
+          ]
+        })
+      );
+
+    const artist = await getSpotifyArtistById(
+      "6FBDaR13swtiWwGhX1WQsP",
+      {
+        SPOTIFY_CLIENT_ID: "id",
+        SPOTIFY_CLIENT_SECRET: "secret",
+        ENABLE_SPOTIFY_TOP_TRACKS: "true"
+      },
+      fetchImpl
+    );
+
+    expect(artist).toMatchObject({
+      id: "6FBDaR13swtiWwGhX1WQsP",
+      name: "blink-182",
+      followers: null,
+      popularity: null,
+      genres: [],
+      spotifyUrl: "https://open.spotify.com/artist/6FBDaR13swtiWwGhX1WQsP",
+      topTrackPopularityMax: 66,
+      topTrackPopularityAvg: 62,
+      topTrackCount: 3,
+      sizeSignalSource: "spotify_tracks"
+    });
+  });
+
+  it("preserves zero and empty Spotify artist metadata values", async () => {
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(responseWithJson({ access_token: "token" }))
+      .mockResolvedValueOnce(
+        responseWithJson({
+          id: spotifyArtistId,
+          name: "Zero Value Artist",
+          followers: { total: 0 },
+          popularity: 0,
+          genres: [],
+          external_urls: {
+            spotify: "https://open.spotify.com/artist/2RO6dHJK11CKcEg1G7XYps"
+          }
+        })
+      );
+
+    const profile = await getSpotifyArtistProfile(
+      `https://open.spotify.com/artist/${spotifyArtistId}`,
+      {
+        SPOTIFY_CLIENT_ID: "id",
+        SPOTIFY_CLIENT_SECRET: "secret",
+        ENABLE_SPOTIFY_TOP_TRACKS: "true"
+      },
+      fetchImpl
+    );
+
+    expect(profile).toMatchObject({
+      id: spotifyArtistId,
+      name: "Zero Value Artist",
+      followers: 0,
+      popularity: 0,
+      genres: [],
+      spotifyUrl: "https://open.spotify.com/artist/2RO6dHJK11CKcEg1G7XYps",
+      images: [],
+      topTrackPopularityMax: null,
+      topTrackPopularityAvg: null,
+      topTrackCount: null,
+      sizeSignalSource: "spotify_artist"
     });
   });
 
@@ -85,6 +232,52 @@ describe("spotifyService", () => {
 
     await expect(searchSpotifyArtists("pop punk France", 5, {}, fetchImpl)).resolves.toEqual([]);
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("does not call related artists when the feature is disabled", async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+
+    await expect(
+      getSpotifyRelatedArtists(
+        spotifyArtistId,
+        {
+          SPOTIFY_CLIENT_ID: "id",
+          SPOTIFY_CLIENT_SECRET: "secret",
+          ENABLE_SPOTIFY_RELATED_ARTISTS: "false"
+        },
+        fetchImpl
+      )
+    ).resolves.toEqual([]);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("does not call top tracks when the feature is disabled", async () => {
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(responseWithJson({ access_token: "token" }))
+      .mockResolvedValueOnce(
+        responseWithJson({
+          id: "6FBDaR13swtiWwGhX1WQsP",
+          name: "blink-182",
+          followers: { total: null },
+          popularity: null,
+          genres: [],
+          external_urls: {
+            spotify: "https://open.spotify.com/artist/6FBDaR13swtiWwGhX1WQsP"
+          }
+        })
+      );
+
+    await getSpotifyArtistById(
+      "6FBDaR13swtiWwGhX1WQsP",
+      {
+        SPOTIFY_CLIENT_ID: "id",
+        SPOTIFY_CLIENT_SECRET: "secret",
+        ENABLE_SPOTIFY_TOP_TRACKS: "false"
+      },
+      fetchImpl
+    );
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it("searches Spotify artists and maps API results", async () => {
@@ -112,7 +305,11 @@ describe("spotifyService", () => {
     const artists = await searchSpotifyArtists(
       "pop punk France",
       5,
-      { SPOTIFY_CLIENT_ID: "id", SPOTIFY_CLIENT_SECRET: "secret" },
+      {
+        SPOTIFY_CLIENT_ID: "id",
+        SPOTIFY_CLIENT_SECRET: "secret",
+        ENABLE_SPOTIFY_RELATED_ARTISTS: "true"
+      },
       fetchImpl
     );
 
@@ -123,7 +320,12 @@ describe("spotifyService", () => {
         followers: 9000,
         popularity: 34,
         genres: ["pop punk"],
-        spotifyUrl: "https://open.spotify.com/artist/artist-1"
+        spotifyUrl: "https://open.spotify.com/artist/artist-1",
+        images: [],
+        topTrackPopularityMax: null,
+        topTrackPopularityAvg: null,
+        topTrackCount: null,
+        sizeSignalSource: "spotify_artist"
       }
     ]);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
@@ -165,7 +367,11 @@ describe("spotifyService", () => {
 
     const artists = await getSpotifyRelatedArtists(
       spotifyArtistId,
-      { SPOTIFY_CLIENT_ID: "id", SPOTIFY_CLIENT_SECRET: "secret" },
+      {
+        SPOTIFY_CLIENT_ID: "id",
+        SPOTIFY_CLIENT_SECRET: "secret",
+        ENABLE_SPOTIFY_RELATED_ARTISTS: "true"
+      },
       fetchImpl
     );
 
@@ -176,7 +382,12 @@ describe("spotifyService", () => {
         followers: 12000,
         popularity: 38,
         genres: ["pop punk"],
-        spotifyUrl: "https://open.spotify.com/artist/related-1"
+        spotifyUrl: "https://open.spotify.com/artist/related-1",
+        images: [],
+        topTrackPopularityMax: null,
+        topTrackPopularityAvg: null,
+        topTrackCount: null,
+        sizeSignalSource: "spotify_artist"
       }
     ]);
   });
@@ -189,7 +400,15 @@ describe("spotifyService", () => {
       .mockResolvedValueOnce(responseWithJson({}, false, 403));
 
     await expect(
-      getSpotifyRelatedArtists(spotifyArtistId, { SPOTIFY_CLIENT_ID: "id", SPOTIFY_CLIENT_SECRET: "secret" }, fetchImpl)
+      getSpotifyRelatedArtists(
+        spotifyArtistId,
+        {
+          SPOTIFY_CLIENT_ID: "id",
+          SPOTIFY_CLIENT_SECRET: "secret",
+          ENABLE_SPOTIFY_RELATED_ARTISTS: "true"
+        },
+        fetchImpl
+      )
     ).resolves.toEqual([]);
 
     expect(log).not.toHaveBeenCalled();
@@ -207,7 +426,15 @@ describe("spotifyService", () => {
       .mockResolvedValueOnce(responseWithJson({}, false, 403));
 
     await expect(
-      getSpotifyRelatedArtists(spotifyArtistId, { SPOTIFY_CLIENT_ID: "id", SPOTIFY_CLIENT_SECRET: "secret" }, fetchImpl)
+      getSpotifyRelatedArtists(
+        spotifyArtistId,
+        {
+          SPOTIFY_CLIENT_ID: "id",
+          SPOTIFY_CLIENT_SECRET: "secret",
+          ENABLE_SPOTIFY_RELATED_ARTISTS: "true"
+        },
+        fetchImpl
+      )
     ).resolves.toEqual([]);
 
     expect(log).toHaveBeenCalledWith(expect.stringContaining("Spotify related artists unavailable."));

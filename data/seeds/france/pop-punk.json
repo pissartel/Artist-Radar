@@ -1,0 +1,74 @@
+[
+  {
+    "name": "Paris Pop Punk Collective",
+    "genres": ["pop punk", "punk rock", "emo"],
+    "city": "Paris",
+    "country": "France",
+    "url": null,
+    "source": "manual_seed",
+    "notes": "Local Paris seed for emerging pop punk bills and co-bill discovery.",
+    "estimatedTier": "small",
+    "mockOnly": true,
+    "sourceNotes": "Temporary mock seed for local scene tests."
+  },
+  {
+    "name": "East Paris Emo Punks",
+    "genres": ["pop punk", "emo pop", "punk rock"],
+    "city": "Paris",
+    "country": "France",
+    "url": null,
+    "source": "manual_seed",
+    "notes": "Paris-side seed for accessible support slots and local scene comparison.",
+    "estimatedTier": "small",
+    "mockOnly": true,
+    "sourceNotes": "Temporary mock seed for local scene tests."
+  },
+  {
+    "name": "Montreuil Punk Rock Friends",
+    "genres": ["punk rock", "pop punk", "emo"],
+    "city": "Montreuil",
+    "country": "France",
+    "url": null,
+    "source": "manual_seed",
+    "notes": "Close-by Ile-de-France seed for small-room routing and co-bills.",
+    "estimatedTier": "small",
+    "mockOnly": true,
+    "sourceNotes": "Temporary mock seed for local scene tests."
+  },
+  {
+    "name": "Lyon Pop Punk Next Step",
+    "genres": ["pop punk", "alternative rock"],
+    "city": "Lyon",
+    "country": "France",
+    "url": null,
+    "source": "manual_seed",
+    "notes": "Regional French reference for next-step support and routing.",
+    "estimatedTier": "medium",
+    "mockOnly": true,
+    "sourceNotes": "Temporary mock seed for local scene tests."
+  },
+  {
+    "name": "Bordeaux Emo Rock Band",
+    "genres": ["emo pop", "alternative rock", "pop punk"],
+    "city": "Bordeaux",
+    "country": "France",
+    "url": null,
+    "source": "manual_seed",
+    "notes": "French city support target with slightly larger room scale.",
+    "estimatedTier": "medium",
+    "mockOnly": true,
+    "sourceNotes": "Temporary mock seed for local scene tests."
+  },
+  {
+    "name": "French Pop Punk Reference",
+    "genres": ["pop punk", "punk rock"],
+    "city": null,
+    "country": "France",
+    "url": null,
+    "source": "manual_seed",
+    "notes": "National French reference for long-term positioning.",
+    "estimatedTier": "large",
+    "mockOnly": true,
+    "sourceNotes": "Temporary mock seed for local scene tests."
+  }
+]

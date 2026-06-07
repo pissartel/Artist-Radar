@@ -171,6 +171,7 @@ Requirements:
 - Add getSpotifyRelatedArtists(spotifyArtistId)
 - Prefer Spotify Related Artists before search fallback
 - Return [] and warn clearly when Related Artists is unavailable
+- Keep Spotify lightweight by default; deep enrichment and related/top-track lookups are opt-in through environment flags
 - Keep fallback search queries genre-agnostic and derived from ArtistProfile/input genres
 - Add generic genre relevance, size relevance and scene relevance scoring
 - Filter very low genre relevance candidates
@@ -195,6 +196,7 @@ Requirements:
 - Support deterministic mock YouTube stats in `MOCK_AI=true`
 - Enrich ArtistProfile with YouTube channel ID, title, subscribers, total views and video count
 - Use YouTube metrics as supporting artist-level evidence
+- Mix Spotify artist metrics, Spotify top-track popularity and YouTube stats in the size estimator so artists are not left `unknown` when a strong signal exists
 - Add EventCandidate and VenueCandidate schemas
 - Add EventProvider and VenueProvider interfaces
 - Add mock venue/event candidates in `MOCK_AI=true`

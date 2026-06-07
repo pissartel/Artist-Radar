@@ -3,7 +3,7 @@ import path from "node:path";
 import { Parser } from "json2csv";
 import slugify from "slugify";
 import type { OpportunitySearchRunResult } from "../pipeline.js";
-import type { ArtistInput, EventCandidate, Opportunity, SimilarArtist } from "../schemas.js";
+import type { ArtistInput, BookingCategory, EventCandidate, Opportunity, SimilarArtist } from "../schemas.js";
 import { debugLog } from "../utils/logger.js";
 
 export interface ExportPaths {
@@ -28,24 +28,31 @@ const opportunityCsvFields = [
 
 const similarArtistCsvFields = [
   "name",
-  "url",
-  "spotifyId",
+  "bookingCategory",
+  "possibleUse",
   "genres",
   "city",
   "country",
-  "source",
-  "reason",
-  "confidence",
-  "artistTier",
-  "estimatedFollowers",
-  "estimatedPopularity",
-  "genreRelevance",
-  "sizeRelevance",
-  "sceneRelevance",
+  "estimatedLevel",
+  "popularityConfidence",
+  "instagramFollowers",
+  "youtubeSubscribers",
+  "youtubeViews",
+  "spotifyFollowers",
+  "spotifyPopularity",
+  "lastfmListeners",
+  "lastfmPlaycount",
+  "spotifyUrl",
+  "instagramUrl",
+  "youtubeUrl",
+  "verificationStatus",
   "totalRelevance",
-  "relevanceToUserArtist",
-  "possibleUse",
-  "estimatedLevel"
+  "genreRelevance",
+  "localRelevance",
+  "sizeRelevance",
+  "sources",
+  "sourceUrls",
+  "reason"
 ];
 
 const eventCsvFields = [
@@ -78,17 +85,19 @@ export async function exportOpportunities(
   const normalizedResult = Array.isArray(result)
     ? {
         artistProfile: null,
-        similarArtists: [],
-        similarArtistsByTier: { small: [], medium: [], large: [], unknown: [] },
+        similarArtists: emptySimilarArtistsGroup(),
         venueCandidates: [],
         eventCandidates: [],
         opportunities: result
       }
     : result;
 
-  await writeFile(jsonPath, JSON.stringify({ input, ...normalizedResult }, null, 2), "utf8");
+  const exportResult = Array.isArray(result) || shouldExportDebugEvidence()
+    ? normalizedResult
+    : compactOpportunitySearchRunResult(result);
+  await writeFile(jsonPath, JSON.stringify({ input, ...exportResult }, null, 2), "utf8");
   await writeFile(opportunitiesCsvPath, opportunitiesToCsv(normalizedResult.opportunities), "utf8");
-  await writeFile(similarArtistsCsvPath, similarArtistsToCsv(normalizedResult.similarArtists), "utf8");
+  await writeFile(similarArtistsCsvPath, similarArtistsToCsv(flattenSimilarArtists(normalizedResult.similarArtists)), "utf8");
   await writeFile(eventsCsvPath, eventsToCsv(normalizedResult.eventCandidates), "utf8");
   debugLog("pipeline", "export paths", {
     jsonPath,
@@ -111,11 +120,33 @@ export function similarArtistsToCsv(similarArtists: SimilarArtist[]): string {
     transforms: [
       (artist: SimilarArtist) => ({
         ...artist,
-        genres: artist.genres.join(", ")
+        genres: artist.genres.join(", "),
+        sources: artist.sources.join(", "),
+        sourceUrls: artist.sourceUrls.join(", "),
+        estimatedLevel: artist.popularity.estimatedLevel,
+        popularityConfidence: artist.popularity.confidence,
+        instagramFollowers: artist.popularity.platforms.instagram?.followers ?? null,
+        youtubeSubscribers: artist.popularity.platforms.youtube?.subscribers ?? null,
+        youtubeViews: artist.popularity.platforms.youtube?.views ?? null,
+        spotifyFollowers: artist.popularity.platforms.spotify?.followers ?? null,
+        spotifyPopularity: artist.popularity.platforms.spotify?.popularity ?? null,
+        lastfmListeners: artist.popularity.platforms.lastfm?.listeners ?? null,
+        lastfmPlaycount: artist.popularity.platforms.lastfm?.playcount ?? null
       })
     ]
   });
   return parser.parse(similarArtists);
+}
+
+export function flattenSimilarArtists(similarArtists: Record<BookingCategory, SimilarArtist[]>): SimilarArtist[] {
+  return [
+    ...similarArtists.local_peer,
+    ...similarArtists.regional_peer,
+    ...similarArtists.support_target,
+    ...similarArtists.reference,
+    ...similarArtists.to_verify,
+    ...similarArtists.unknown
+  ];
 }
 
 export function eventsToCsv(events: EventCandidate[]): string {
@@ -135,4 +166,50 @@ export function buildOutputBaseName(input: Pick<ArtistInput, "mode" | "artist" |
   const timestamp = date.toISOString().replace(/[:.]/g, "-");
   const slug = slugify(`${input.mode}-${input.artist}-${input.city}`, { lower: true, strict: true });
   return `${slug}-${timestamp}`;
+}
+
+function emptySimilarArtistsGroup(): Record<BookingCategory, SimilarArtist[]> {
+  return { local_peer: [], regional_peer: [], support_target: [], reference: [], to_verify: [], unknown: [] };
+}
+
+function shouldExportDebugEvidence(env = process.env): boolean {
+  return env.EXPORT_DEBUG_EVIDENCE === "true";
+}
+
+function compactOpportunitySearchRunResult(result: OpportunitySearchRunResult): OpportunitySearchRunResult {
+  return {
+    ...result,
+    similarArtists: {
+      local_peer: result.similarArtists.local_peer.map(compactSimilarArtistForOutput) as SimilarArtist[],
+      regional_peer: result.similarArtists.regional_peer.map(compactSimilarArtistForOutput) as SimilarArtist[],
+      support_target: result.similarArtists.support_target.map(compactSimilarArtistForOutput) as SimilarArtist[],
+      reference: result.similarArtists.reference.map(compactSimilarArtistForOutput) as SimilarArtist[],
+      to_verify: result.similarArtists.to_verify.map(compactSimilarArtistForOutput) as SimilarArtist[],
+      unknown: result.similarArtists.unknown.map(compactSimilarArtistForOutput) as SimilarArtist[]
+    }
+  };
+}
+
+function compactSimilarArtistForOutput(artist: SimilarArtist): Partial<SimilarArtist> {
+  return {
+    name: artist.name,
+    bookingCategory: artist.bookingCategory,
+    possibleUse: artist.possibleUse,
+    genres: artist.genres,
+    city: artist.city,
+    country: artist.country,
+    spotifyUrl: artist.spotifyUrl ?? null,
+    instagramUrl: artist.instagramUrl ?? null,
+    instagramHandle: artist.instagramHandle ?? null,
+    youtubeUrl: artist.youtubeUrl ?? null,
+    popularity: artist.popularity,
+    verificationStatus: artist.verificationStatus,
+    totalRelevance: artist.totalRelevance,
+    genreRelevance: artist.genreRelevance,
+    localRelevance: artist.localRelevance,
+    sizeRelevance: artist.sizeRelevance,
+    sources: artist.sources,
+    sourceUrls: artist.sourceUrls,
+    reason: artist.reason
+  };
 }

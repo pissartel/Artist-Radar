@@ -19,6 +19,12 @@ describe("logger", () => {
     expect(isDebugEnabled("similar-artists")).toBe(true);
   });
 
+  it("supports the seed debug scope", () => {
+    vi.stubEnv("DEBUG_SEEDS", "true");
+
+    expect(isDebugEnabled("seeds")).toBe(true);
+  });
+
   it("prints debug logs only when the relevant flag is enabled", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.stubEnv("DEBUG_PROFILE", "true");

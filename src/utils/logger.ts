@@ -1,8 +1,14 @@
-type DebugScope = "spotify" | "similar-artists" | "profile" | "youtube" | "events" | "pipeline";
+type DebugScope = "spotify" | "lastfm" | "musicbrainz" | "firecrawl" | "artist-verification" | "artist-consolidation" | "similar-artists" | "seeds" | "profile" | "youtube" | "events" | "pipeline";
 
 const DEBUG_FLAG_BY_SCOPE: Record<DebugScope, string> = {
   spotify: "DEBUG_SPOTIFY",
+  lastfm: "DEBUG_LASTFM",
+  musicbrainz: "DEBUG_MUSICBRAINZ",
+  firecrawl: "DEBUG_FIRECRAWL",
+  "artist-verification": "DEBUG_ARTIST_VERIFICATION",
+  "artist-consolidation": "DEBUG_ARTIST_CONSOLIDATION",
   "similar-artists": "DEBUG_SIMILAR_ARTISTS",
+  seeds: "DEBUG_SEEDS",
   profile: "DEBUG_PROFILE",
   youtube: "DEBUG_YOUTUBE",
   events: "DEBUG_EVENTS",

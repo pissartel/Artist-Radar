@@ -11,19 +11,25 @@ import type { SpotifyArtistProfile } from "./services/spotifyService.js";
 import { gatherSearchContext } from "./services/searchService.js";
 import { normalizeOpportunityUrls } from "./services/urlNormalization.js";
 import { findVenueEventCandidates } from "./modules/venueEventFinder.js";
-import type { ArtistProfile, EventCandidate, SimilarArtist, VenueCandidate } from "./schemas.js";
+import type { ArtistProfile, EventCandidate, VenueCandidate } from "./schemas.js";
 import { debugLog } from "./utils/logger.js";
+import type { SimilarArtistSeedRecord } from "./modules/similarArtistSeeds.js";
+import type { LastFmSimilarArtist } from "./services/lastfmService.js";
+import type { MusicBrainzArtistMetadata } from "./services/musicBrainzService.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
   spotifyRelatedArtists?: (spotifyArtistId: string) => Promise<SpotifyArtistProfile[]>;
   spotifySearch?: (query: string, limit: number) => Promise<SpotifyArtistProfile[]>;
+  spotifyArtistById?: (spotifyArtistId: string) => Promise<SpotifyArtistProfile | null>;
+  lastfmSimilarArtists?: (artistName: string, limit: number) => Promise<LastFmSimilarArtist[]>;
+  musicBrainzSearch?: (artistName: string) => Promise<MusicBrainzArtistMetadata | null>;
+  seedCandidates?: SimilarArtistSeedRecord[];
 }
 
 export interface OpportunitySearchRunResult {
   artistProfile: ArtistProfile;
-  similarArtists: SimilarArtist[];
-  similarArtistsByTier: SimilarArtistsByTier;
+  similarArtists: SimilarArtistsByTier;
   venueCandidates: VenueCandidate[];
   eventCandidates: EventCandidate[];
   opportunities: Opportunity[];
@@ -47,9 +53,13 @@ export async function runOpportunitySearch(
     city: input.city,
     links: input.links,
     spotifyRelatedArtists: options.spotifyRelatedArtists,
-    spotifySearch: options.spotifySearch
+    spotifySearch: options.spotifySearch,
+    spotifyArtistById: options.spotifyArtistById,
+    lastfmSimilarArtists: options.lastfmSimilarArtists,
+    musicBrainzSearch: options.musicBrainzSearch,
+    seedCandidates: options.seedCandidates
   });
-  const similarArtistsByTier = groupSimilarArtistsByTier(similarArtists);
+  const groupedSimilarArtists = groupSimilarArtistsByTier(similarArtists);
   const { venueCandidates, eventCandidates } = await findVenueEventCandidates({
     profile,
     target: input.target,
@@ -65,7 +75,15 @@ export async function runOpportunitySearch(
   debugLog("pipeline", "runOpportunitySearch summary", {
     mode: input.mode,
     artistName: input.artist,
-    similarArtistsCount: similarArtists.length,
+    similarArtistsCount: countSimilarArtists(groupedSimilarArtists),
+    similarArtistGroups: {
+      localPeers: groupedSimilarArtists.local_peer.length,
+      regionalPeers: groupedSimilarArtists.regional_peer.length,
+      supportTargets: groupedSimilarArtists.support_target.length,
+      references: groupedSimilarArtists.reference.length,
+      toVerify: groupedSimilarArtists.to_verify.length,
+      unknown: groupedSimilarArtists.unknown.length
+    },
     venueCandidatesCount: venueCandidates.length,
     eventCandidatesCount: eventCandidates.length,
     opportunitiesCount: validated.opportunities.length
@@ -73,10 +91,13 @@ export async function runOpportunitySearch(
 
   return {
     artistProfile: profile,
-    similarArtists,
-    similarArtistsByTier,
+    similarArtists: groupedSimilarArtists,
     venueCandidates,
     eventCandidates,
     opportunities: validated.opportunities.slice(0, input.limit)
   };
+}
+
+function countSimilarArtists(groups: SimilarArtistsByTier): number {
+  return groups.local_peer.length + groups.regional_peer.length + groups.support_target.length + groups.reference.length + groups.to_verify.length + groups.unknown.length;
 }

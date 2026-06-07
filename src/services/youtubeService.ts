@@ -12,6 +12,7 @@ export interface YouTubeChannelStats {
   youtubeSubscribers: number | null;
   youtubeTotalViews: number | null;
   youtubeVideoCount: number | null;
+  hiddenSubscriberCount: boolean | null;
   youtubeUrl: string;
 }
 
@@ -37,9 +38,21 @@ interface YouTubeChannelsResponse {
   }>;
 }
 
+interface YouTubeSearchResponse {
+  items?: Array<{
+    id?: {
+      channelId?: string;
+    };
+  }>;
+}
+
 type FetchLike = typeof fetch;
 
 export function extractYouTubeChannelIdentifier(youtubeUrl: string): YouTubeChannelIdentifier | null {
+  return parseYouTubeChannelInput(youtubeUrl);
+}
+
+export function parseYouTubeChannelInput(youtubeUrl: string): YouTubeChannelIdentifier | null {
   try {
     const url = new URL(youtubeUrl);
     const hostname = url.hostname.replace(/^www\./, "");
@@ -103,6 +116,7 @@ export async function getYouTubeChannelStats(
       youtubeSubscribers: 2400,
       youtubeTotalViews: 185000,
       youtubeVideoCount: 24,
+      hiddenSubscriberCount: false,
       youtubeUrl
     };
     debugLog("youtube", "normalized YouTube stats", stats);
@@ -114,9 +128,19 @@ export async function getYouTubeChannelStats(
   }
 
   try {
-    const params = buildChannelsParams(identifier, env.YOUTUBE_API_KEY);
+    const channelId = await resolveYouTubeChannelId(identifier, env.YOUTUBE_API_KEY, fetchImpl);
+    debugLog("youtube", "resolved YouTube channel ID", { channelId });
+    if (!channelId) {
+      return null;
+    }
+
+    const params = new URLSearchParams({
+      part: "snippet,statistics",
+      id: channelId,
+      key: env.YOUTUBE_API_KEY
+    });
     const response = await fetchImpl(`https://www.googleapis.com/youtube/v3/channels?${params.toString()}`);
-    debugLog("youtube", "YouTube API result status", { status: response.status });
+    debugLog("youtube", "YouTube API result status", { status: response.status, channelId });
     if (!response.ok) {
       return null;
     }
@@ -135,6 +159,7 @@ export async function getYouTubeChannelStats(
         channel.statistics?.hiddenSubscriberCount === true ? null : parseNullableInt(channel.statistics?.subscriberCount),
       youtubeTotalViews: parseNullableInt(channel.statistics?.viewCount),
       youtubeVideoCount: parseNullableInt(channel.statistics?.videoCount),
+      hiddenSubscriberCount: channel.statistics?.hiddenSubscriberCount ?? null,
       youtubeUrl
     };
     debugLog("youtube", "normalized YouTube stats", stats);
@@ -147,21 +172,50 @@ export async function getYouTubeChannelStats(
   }
 }
 
-function buildChannelsParams(identifier: YouTubeChannelIdentifier, apiKey: string): URLSearchParams {
-  const params = new URLSearchParams({
-    part: "snippet,statistics",
-    key: apiKey
-  });
-
+async function resolveYouTubeChannelId(
+  identifier: YouTubeChannelIdentifier,
+  apiKey: string,
+  fetchImpl: FetchLike
+): Promise<string | null> {
   if (identifier.type === "channel") {
-    params.set("id", identifier.value);
-  } else if (identifier.type === "user") {
-    params.set("forUsername", identifier.value);
-  } else {
-    params.set("forHandle", identifier.value.startsWith("@") ? identifier.value : `@${identifier.value}`);
+    return identifier.value;
   }
 
-  return params;
+  const searchQuery = identifier.value.startsWith("@") ? identifier.value.slice(1) : identifier.value;
+
+  if (identifier.type === "handle") {
+    const handleParams = new URLSearchParams({
+      part: "snippet",
+      forHandle: identifier.value.startsWith("@") ? identifier.value.slice(1) : identifier.value,
+      key: apiKey,
+      maxResults: "5"
+    });
+    const handleResponse = await fetchImpl(`https://www.googleapis.com/youtube/v3/channels?${handleParams.toString()}`);
+    debugLog("youtube", "YouTube handle lookup status", { status: handleResponse.status });
+    if (handleResponse.ok) {
+      const handleData = (await handleResponse.json()) as YouTubeChannelsResponse;
+      const handleChannelId = handleData.items?.[0]?.id ?? null;
+      if (handleChannelId) {
+        return handleChannelId;
+      }
+    }
+  }
+
+  const searchParams = new URLSearchParams({
+    part: "snippet",
+    q: searchQuery,
+    type: "channel",
+    key: apiKey,
+    maxResults: "5"
+  });
+  const searchResponse = await fetchImpl(`https://www.googleapis.com/youtube/v3/search?${searchParams.toString()}`);
+  debugLog("youtube", "YouTube search lookup status", { status: searchResponse.status });
+  if (!searchResponse.ok) {
+    return null;
+  }
+
+  const searchData = (await searchResponse.json()) as YouTubeSearchResponse;
+  return searchData.items?.[0]?.id?.channelId ?? null;
 }
 
 function normalizeHandle(value: string | undefined): string | null {

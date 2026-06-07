@@ -1,4 +1,5 @@
 import { debugLog, warnLog } from "../utils/logger.js";
+import type { SizeSignalSource } from "../schemas.js";
 
 export interface SpotifyArtistProfile {
   id: string;
@@ -6,7 +7,20 @@ export interface SpotifyArtistProfile {
   followers: number | null;
   popularity: number | null;
   genres: string[];
-  spotifyUrl: string;
+  spotifyUrl: string | null;
+  images: string[];
+  topTrackPopularityMax?: number | null;
+  topTrackPopularityAvg?: number | null;
+  topTrackCount?: number | null;
+  sizeSignalSource?: SizeSignalSource;
+}
+
+export interface SpotifyCapabilities {
+  artistFollowersAvailable: boolean;
+  artistPopularityAvailable: boolean;
+  artistGenresAvailable: boolean;
+  relatedArtistsAvailable: boolean;
+  topTracksAvailable: boolean;
 }
 
 interface SpotifyTokenResponse {
@@ -24,6 +38,17 @@ interface SpotifyArtistApiResponse {
   external_urls?: {
     spotify?: string;
   };
+  images?: Array<{
+    url?: string;
+  }>;
+}
+
+interface SpotifyTopTrackApiResponse {
+  popularity?: number;
+}
+
+interface SpotifyTopTracksResponse {
+  tracks?: SpotifyTopTrackApiResponse[];
 }
 
 interface SpotifySearchArtistsResponse {
@@ -40,9 +65,22 @@ interface SpotifyEnv {
   MOCK_AI?: string;
   SPOTIFY_CLIENT_ID?: string;
   SPOTIFY_CLIENT_SECRET?: string;
+  ENABLE_SPOTIFY_DEEP_ENRICHMENT?: string;
+  ENABLE_SPOTIFY_RELATED_ARTISTS?: string;
+  ENABLE_SPOTIFY_TOP_TRACKS?: string;
 }
 
 type FetchLike = typeof fetch;
+
+export function createSpotifyCapabilities(env: SpotifyEnv = process.env): SpotifyCapabilities {
+  return {
+    artistFollowersAvailable: true,
+    artistPopularityAvailable: true,
+    artistGenresAvailable: true,
+    relatedArtistsAvailable: env.ENABLE_SPOTIFY_RELATED_ARTISTS === "true",
+    topTracksAvailable: env.ENABLE_SPOTIFY_TOP_TRACKS === "true"
+  };
+}
 
 export function extractSpotifyArtistId(spotifyUrl: string): string | null {
   try {
@@ -65,7 +103,8 @@ export function extractSpotifyArtistId(spotifyUrl: string): string | null {
 export async function getSpotifyArtistProfile(
   spotifyUrl: string | null | undefined,
   env: SpotifyEnv = process.env,
-  fetchImpl: FetchLike = fetch
+  fetchImpl: FetchLike = fetch,
+  capabilities: SpotifyCapabilities = createSpotifyCapabilities(env)
 ): Promise<SpotifyArtistProfile | null> {
   if (!spotifyUrl) {
     return null;
@@ -84,7 +123,12 @@ export async function getSpotifyArtistProfile(
       followers: 1200,
       popularity: 18,
       genres: ["metalcore", "hardcore"],
-      spotifyUrl
+      spotifyUrl,
+      images: [],
+      topTrackPopularityMax: null,
+      topTrackPopularityAvg: null,
+      topTrackCount: null,
+      sizeSignalSource: "spotify_artist"
     };
   }
 
@@ -97,58 +141,7 @@ export async function getSpotifyArtistProfile(
   }
 
   try {
-    const token = await fetchSpotifyAccessToken(env.SPOTIFY_CLIENT_ID, env.SPOTIFY_CLIENT_SECRET, fetchImpl);
-    if (!token) {
-      warnLog("spotify", "Spotify artist profile skipped: could not obtain an access token.", {
-        spotifyClientIdPresent: true,
-        spotifyClientSecretPresent: true
-      });
-      return null;
-    }
-
-    const response = await fetchImpl(`https://api.spotify.com/v1/artists/${artistId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    });
-    debugLog("spotify", "get artist request status", { status: response.status, artistId });
-
-    if (!response.ok) {
-      warnLog("spotify", "Spotify artist profile request failed.", {
-        artistId,
-        status: response.status
-      });
-      return null;
-    }
-
-    const artist = (await response.json()) as SpotifyArtistApiResponse;
-    if (!artist.id || !artist.name) {
-      return null;
-    }
-
-    debugLog("spotify", "raw artist response summary", {
-      hasFollowersObject: Boolean(artist.followers),
-      followersTotalType: typeof artist.followers?.total,
-      popularityType: typeof artist.popularity,
-      genresIsArray: Array.isArray(artist.genres),
-      rawGenresCount: Array.isArray(artist.genres) ? artist.genres.length : 0
-    });
-
-    const profile = {
-      id: artist.id,
-      name: artist.name,
-      followers: typeof artist.followers?.total === "number" ? artist.followers.total : null,
-      popularity: typeof artist.popularity === "number" ? artist.popularity : null,
-      genres: Array.isArray(artist.genres) ? artist.genres : [],
-      spotifyUrl: artist.external_urls?.spotify ?? spotifyUrl
-    };
-    debugLog("spotify", "Spotify artist profile normalized", {
-      artistName: profile.name,
-      followersCount: profile.followers,
-      popularity: profile.popularity,
-      genresCount: profile.genres.length
-    });
-    return profile;
+    return getSpotifyArtistById(artistId, env, fetchImpl, spotifyUrl, capabilities);
   } catch {
     warnLog("spotify", "Spotify artist profile request failed.", { artistId });
     return null;
@@ -159,7 +152,8 @@ export async function searchSpotifyArtists(
   query: string,
   limit = 10,
   env: SpotifyEnv = process.env,
-  fetchImpl: FetchLike = fetch
+  fetchImpl: FetchLike = fetch,
+  capabilities: SpotifyCapabilities = createSpotifyCapabilities(env)
 ): Promise<SpotifyArtistProfile[]> {
   const trimmedQuery = query.trim();
   if (!trimmedQuery) {
@@ -202,7 +196,7 @@ export async function searchSpotifyArtists(
     }
 
     const data = (await response.json()) as SpotifySearchArtistsResponse;
-    const artists = (data.artists?.items ?? []).map(mapSpotifyArtistApiResponse).filter((artist) => artist !== null);
+    const artists = (data.artists?.items ?? []).map((artist) => mapSpotifyArtistApiResponse(artist, capabilities)).filter((artist) => artist !== null);
     debugLog("spotify", "Spotify artist search result count", { query: trimmedQuery, resultCount: artists.length });
     return artists;
   } catch (error) {
@@ -218,10 +212,19 @@ export async function searchSpotifyArtists(
 export async function getSpotifyRelatedArtists(
   spotifyArtistId: string,
   env: SpotifyEnv = process.env,
-  fetchImpl: FetchLike = fetch
+  fetchImpl: FetchLike = fetch,
+  capabilities: SpotifyCapabilities = createSpotifyCapabilities(env)
 ): Promise<SpotifyArtistProfile[]> {
   const artistId = spotifyArtistId.trim();
   if (!artistId) {
+    return [];
+  }
+
+  if (env.ENABLE_SPOTIFY_RELATED_ARTISTS !== "true") {
+    capabilities.relatedArtistsAvailable = false;
+    debugLog("spotify", "Spotify related artists disabled by configuration", {
+      relatedArtistsAvailable: capabilities.relatedArtistsAvailable
+    });
     return [];
   }
 
@@ -248,12 +251,16 @@ export async function getSpotifyRelatedArtists(
     debugLog("spotify", "Spotify related artists status", { artistId, status: response.status });
 
     if (!response.ok) {
+      capabilities.relatedArtistsAvailable = false;
       logRelatedArtistsUnavailable(artistId, response.status);
       return [];
     }
 
     const data = (await response.json()) as SpotifyRelatedArtistsResponse;
-    const artists = (data.artists ?? []).map(mapSpotifyArtistApiResponse).filter((artist) => artist !== null);
+    const artists = (data.artists ?? []).map((artist) => mapSpotifyArtistApiResponse(artist, capabilities)).filter((artist) => artist !== null);
+    if (artists.length === 0) {
+      capabilities.relatedArtistsAvailable = false;
+    }
     debugLog("spotify", "Spotify related artists result count", { artistId, resultCount: artists.length });
     return artists;
   } catch (error) {
@@ -266,9 +273,32 @@ export async function getSpotifyRelatedArtists(
   }
 }
 
-function mapSpotifyArtistApiResponse(artist: SpotifyArtistApiResponse): SpotifyArtistProfile | null {
+function mapSpotifyArtistApiResponse(
+  artist: SpotifyArtistApiResponse,
+  capabilities: SpotifyCapabilities = createSpotifyCapabilities()
+): SpotifyArtistProfile | null {
   if (!artist.id || !artist.name) {
     return null;
+  }
+
+  debugLog("spotify", "raw artist response summary", {
+    hasFollowersObject: Boolean(artist.followers),
+    followersTotal: artist.followers?.total ?? null,
+    followersTotalType: typeof artist.followers?.total,
+    popularity: artist.popularity ?? null,
+    popularityType: typeof artist.popularity,
+    genresIsArray: Array.isArray(artist.genres),
+    genresCount: Array.isArray(artist.genres) ? artist.genres.length : 0
+  });
+
+  if (typeof artist.followers?.total !== "number") {
+    capabilities.artistFollowersAvailable = false;
+  }
+  if (typeof artist.popularity !== "number") {
+    capabilities.artistPopularityAvailable = false;
+  }
+  if (!Array.isArray(artist.genres) || artist.genres.length === 0) {
+    capabilities.artistGenresAvailable = false;
   }
 
   return {
@@ -277,7 +307,180 @@ function mapSpotifyArtistApiResponse(artist: SpotifyArtistApiResponse): SpotifyA
     followers: typeof artist.followers?.total === "number" ? artist.followers.total : null,
     popularity: typeof artist.popularity === "number" ? artist.popularity : null,
     genres: Array.isArray(artist.genres) ? artist.genres : [],
-    spotifyUrl: artist.external_urls?.spotify ?? `https://open.spotify.com/artist/${artist.id}`
+    spotifyUrl: artist.external_urls?.spotify ?? null,
+    images: Array.isArray(artist.images) ? artist.images.map((image) => image.url).filter((url): url is string => Boolean(url)) : [],
+    topTrackPopularityMax: null,
+    topTrackPopularityAvg: null,
+    topTrackCount: null,
+    sizeSignalSource: determineSpotifySizeSignalSource({
+      followers: typeof artist.followers?.total === "number" ? artist.followers.total : null,
+      popularity: typeof artist.popularity === "number" ? artist.popularity : null,
+      topTrackPopularityMax: null,
+      topTrackPopularityAvg: null
+    })
+  };
+}
+
+export async function getSpotifyArtistById(
+  artistId: string,
+  env: SpotifyEnv = process.env,
+  fetchImpl: FetchLike = fetch,
+  fallbackSpotifyUrl?: string,
+  capabilities: SpotifyCapabilities = createSpotifyCapabilities(env)
+): Promise<SpotifyArtistProfile | null> {
+  const trimmedArtistId = artistId.trim();
+  if (!trimmedArtistId || !env.SPOTIFY_CLIENT_ID || !env.SPOTIFY_CLIENT_SECRET) {
+    return null;
+  }
+
+  const token = await fetchSpotifyAccessToken(env.SPOTIFY_CLIENT_ID, env.SPOTIFY_CLIENT_SECRET, fetchImpl);
+  if (!token) {
+    warnLog("spotify", "Spotify artist profile skipped: could not obtain an access token.", {
+      spotifyClientIdPresent: true,
+      spotifyClientSecretPresent: true
+    });
+    return null;
+  }
+
+  const response = await fetchImpl(`https://api.spotify.com/v1/artists/${trimmedArtistId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+  debugLog("spotify", "get artist request status", { status: response.status, artistId: trimmedArtistId });
+
+  if (!response.ok) {
+    warnLog("spotify", "Spotify artist profile request failed.", {
+      artistId: trimmedArtistId,
+      status: response.status
+    });
+    return null;
+  }
+
+  const artist = (await response.json()) as SpotifyArtistApiResponse;
+  if (!artist.id || !artist.name) {
+    return null;
+  }
+
+  debugLog("spotify", "raw artist response summary", {
+    hasFollowersObject: Boolean(artist.followers),
+    followersTotal: artist.followers?.total ?? null,
+    popularity: artist.popularity ?? null,
+    genresCount: Array.isArray(artist.genres) ? artist.genres.length : 0
+  });
+
+  const profile: SpotifyArtistProfile = {
+    id: artist.id,
+    name: artist.name,
+    followers: typeof artist.followers?.total === "number" ? artist.followers.total : null,
+    popularity: typeof artist.popularity === "number" ? artist.popularity : null,
+    genres: Array.isArray(artist.genres) ? artist.genres : [],
+    spotifyUrl: artist.external_urls?.spotify ?? null,
+    images: Array.isArray(artist.images) ? artist.images.map((image) => image.url).filter((url): url is string => Boolean(url)) : [],
+    topTrackPopularityMax: null,
+    topTrackPopularityAvg: null,
+    topTrackCount: null,
+    sizeSignalSource: "unknown"
+  };
+
+  if (typeof artist.followers?.total !== "number") {
+    capabilities.artistFollowersAvailable = false;
+  }
+  if (typeof artist.popularity !== "number") {
+    capabilities.artistPopularityAvailable = false;
+  }
+  if (!Array.isArray(artist.genres) || artist.genres.length === 0) {
+    capabilities.artistGenresAvailable = false;
+  }
+
+  let topTracksStatus: number | "skipped" | null = "skipped";
+  if (env.ENABLE_SPOTIFY_TOP_TRACKS === "true" && profile.popularity === null && capabilities.topTracksAvailable !== false) {
+    const topTrackStats = await fetchSpotifyArtistTopTrackStats(trimmedArtistId, token, fetchImpl);
+    topTracksStatus = topTrackStats?.status ?? null;
+    if (topTrackStats) {
+      profile.topTrackPopularityMax = topTrackStats.topTrackPopularityMax;
+      profile.topTrackPopularityAvg = topTrackStats.topTrackPopularityAvg;
+      profile.topTrackCount = topTrackStats.topTrackCount;
+      if (topTrackStats.status >= 400) {
+        capabilities.topTracksAvailable = false;
+      }
+    } else {
+      capabilities.topTracksAvailable = false;
+    }
+  } else if (env.ENABLE_SPOTIFY_TOP_TRACKS !== "true") {
+    capabilities.topTracksAvailable = false;
+  }
+
+  profile.sizeSignalSource = determineSpotifySizeSignalSource(profile);
+
+  debugLog("spotify", "Spotify artist profile normalized", {
+    artistName: profile.name,
+    followersCount: profile.followers,
+    popularity: profile.popularity,
+    genresCount: profile.genres.length
+  });
+  debugLog("spotify", "Spotify artist size signal summary", {
+    artistName: profile.name,
+    artistPopularityPresent: profile.popularity !== null,
+    followersPresent: profile.followers !== null,
+    topTracksRequestStatus: topTracksStatus,
+    topTrackPopularityMax: profile.topTrackPopularityMax,
+    topTrackPopularityAvg: profile.topTrackPopularityAvg,
+    topTrackCount: profile.topTrackCount,
+    chosenSizeSignalSource: profile.sizeSignalSource
+  });
+  return profile;
+}
+
+async function fetchSpotifyArtistTopTrackStats(
+  artistId: string,
+  token: string,
+  fetchImpl: FetchLike
+): Promise<
+  | {
+      status: number;
+      topTrackPopularityMax: number | null;
+      topTrackPopularityAvg: number | null;
+      topTrackCount: number | null;
+    }
+  | null
+> {
+  const response = await fetchImpl(`https://api.spotify.com/v1/artists/${encodeURIComponent(artistId)}/top-tracks?market=US`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+  debugLog("spotify", "Spotify top tracks request status", { artistId, status: response.status });
+
+  if (!response.ok) {
+    return {
+      status: response.status,
+      topTrackPopularityMax: null,
+      topTrackPopularityAvg: null,
+      topTrackCount: null
+    };
+  }
+
+  const data = (await response.json()) as SpotifyTopTracksResponse;
+  const pops = (data.tracks ?? [])
+    .map((track) => (typeof track.popularity === "number" ? track.popularity : null))
+    .filter((value): value is number => value !== null);
+  const topTrackCount = data.tracks?.length ?? 0;
+  const topTrackPopularityMax = pops.length > 0 ? Math.max(...pops) : null;
+  const topTrackPopularityAvg = pops.length > 0 ? Math.round(pops.reduce((sum, value) => sum + value, 0) / pops.length) : null;
+
+  debugLog("spotify", "Spotify top tracks normalized", {
+    artistId,
+    topTrackCount,
+    topTrackPopularityMax,
+    topTrackPopularityAvg
+  });
+
+  return {
+    status: response.status,
+    topTrackPopularityMax,
+    topTrackPopularityAvg,
+    topTrackCount
   };
 }
 
@@ -322,4 +525,20 @@ function logRelatedArtistsUnavailable(artistId: string, status: number): void {
   }
 
   warnLog("spotify", "Spotify related artists unavailable.", payload);
+}
+
+function determineSpotifySizeSignalSource(profile: Pick<SpotifyArtistProfile, "followers" | "popularity" | "topTrackPopularityMax" | "topTrackPopularityAvg">): SizeSignalSource {
+  if (typeof profile.popularity === "number") {
+    return "spotify_artist";
+  }
+
+  if (typeof profile.followers === "number") {
+    return "spotify_artist";
+  }
+
+  if (typeof profile.topTrackPopularityMax === "number" || typeof profile.topTrackPopularityAvg === "number") {
+    return "spotify_tracks";
+  }
+
+  return "unknown";
 }

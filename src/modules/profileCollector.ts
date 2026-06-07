@@ -10,6 +10,7 @@ import {
 import { getSpotifyArtistProfile, type SpotifyArtistProfile } from "../services/spotifyService.js";
 import { getYouTubeChannelStats, type YouTubeChannelStats } from "../services/youtubeService.js";
 import { debugLog } from "../utils/logger.js";
+import { estimateArtistSize } from "./sizeEstimator.js";
 
 export interface ArtistLevelThresholds {
   developingMinPopularity: number;
@@ -48,14 +49,27 @@ export async function collectArtistProfile(rawInput: ArtistInput): Promise<Artis
   const platformStats = mergePlatformStats(input.platformStats ?? {}, spotifyProfile, youtubeStats);
   const spotifyGenres = spotifyProfile?.genres ?? [];
   const genres = mergeGenres([input.genre], spotifyGenres);
-  const estimatedLevel = estimateArtistLevel(platformStats);
+  const sizeEstimate = estimateArtistSize({
+    spotifyFollowers: platformStats.spotifyFollowers ?? null,
+    spotifyArtistPopularity: platformStats.spotifyPopularity ?? null,
+    spotifyTopTrackPopularityMax: spotifyProfile?.topTrackPopularityMax ?? null,
+    spotifyTopTrackPopularityAvg: spotifyProfile?.topTrackPopularityAvg ?? null,
+    youtubeSubscribers: platformStats.youtubeSubscribers ?? null,
+    youtubeTotalViews: platformStats.youtubeTotalViews ?? null,
+    youtubeVideoCount: platformStats.youtubeVideoCount ?? null
+  });
+  const estimatedLevel = sizeEstimate.estimatedLevel;
   const confidence = calculateConfidence(socialLinks, platformStats, estimatedLevel);
-  const notes = buildNotes(socialLinks, platformStats, estimatedLevel, spotifyProfile);
+  const notes = buildNotes(socialLinks, platformStats, estimatedLevel, spotifyProfile, sizeEstimate);
   debugLog("profile", "artist enrichment results", {
     spotifyEnrichmentSucceeded: Boolean(spotifyProfile),
     youtubeEnrichmentSucceeded: Boolean(youtubeStats),
     estimatedArtistLevel: estimatedLevel,
-    confidence
+    confidence,
+    sizeTier: sizeEstimate.sizeTier,
+    sizeConfidence: sizeEstimate.sizeConfidence,
+    sizeSignalSource: sizeEstimate.sizeSignalSource,
+    sizeReasons: sizeEstimate.sizeReasons
   });
 
   return ArtistProfileSchema.parse({
@@ -119,58 +133,15 @@ export function estimateArtistLevel(
   stats: PlatformStats,
   thresholds: ArtistLevelThresholds = DEFAULT_ARTIST_LEVEL_THRESHOLDS
 ): EstimatedArtistLevel {
-  const spotifyFollowers = stats.spotifyFollowers ?? null;
-  const spotifyPopularity = stats.spotifyPopularity ?? null;
-  const youtubeSubscribers = stats.youtubeSubscribers ?? 0;
-  const youtubeTotalViews = stats.youtubeTotalViews ?? 0;
-  const youtubeVideoCount = stats.youtubeVideoCount ?? 0;
-  const instagramFollowers = stats.instagramFollowers ?? 0;
-  const hasSpotifyMetrics = spotifyFollowers !== null || spotifyPopularity !== null;
-  const hasOtherMetrics = youtubeSubscribers > 0 || youtubeTotalViews > 0 || youtubeVideoCount > 0 || instagramFollowers > 0;
-
-  if (!hasSpotifyMetrics && !hasOtherMetrics) {
-    return "unknown";
-  }
-
-  const popularity = spotifyPopularity ?? 0;
-  const followers = spotifyFollowers ?? 0;
-  const hasStrongEstablishedSignal =
-    popularity >= thresholds.strongEstablishedPopularity || followers >= thresholds.strongEstablishedFollowers;
-  const hasSupportedEstablishedSignal =
-    popularity > thresholds.establishedPopularity && followers > thresholds.establishedFollowers;
-
-  if (
-    hasStrongEstablishedSignal ||
-    hasSupportedEstablishedSignal ||
-    (youtubeSubscribers >= 100000 && youtubeTotalViews >= 5_000_000) ||
-    instagramFollowers >= 50000
-  ) {
-    return "established";
-  }
-
-  if (
-    followers >= thresholds.developingMinFollowers ||
-    popularity >= thresholds.developingMinPopularity ||
-    youtubeSubscribers >= 5000 ||
-    youtubeTotalViews >= 500_000 ||
-    (youtubeVideoCount >= 50 && youtubeTotalViews >= 250_000) ||
-    instagramFollowers >= 5000
-  ) {
-    return "developing";
-  }
-
-  if (
-    followers > 0 ||
-    popularity > 0 ||
-    youtubeSubscribers > 0 ||
-    youtubeTotalViews > 0 ||
-    youtubeVideoCount > 0 ||
-    instagramFollowers > 0
-  ) {
-    return "emerging";
-  }
-
-  return "unknown";
+  void thresholds;
+  return estimateArtistSize({
+    spotifyFollowers: stats.spotifyFollowers ?? null,
+    spotifyArtistPopularity: stats.spotifyPopularity ?? null,
+    youtubeSubscribers: stats.youtubeSubscribers ?? null,
+    youtubeTotalViews: stats.youtubeTotalViews ?? null,
+    youtubeVideoCount: stats.youtubeVideoCount ?? null,
+    manualEstimatedTier: null
+  }).estimatedLevel;
 }
 
 function mergePlatformStats(
@@ -182,6 +153,7 @@ function mergePlatformStats(
     ...stats,
     spotifyFollowers: spotifyProfile?.followers ?? stats.spotifyFollowers,
     spotifyPopularity: spotifyProfile?.popularity ?? stats.spotifyPopularity,
+    hiddenSubscriberCount: youtubeStats?.hiddenSubscriberCount ?? stats.hiddenSubscriberCount,
     youtubeSubscribers: youtubeStats?.youtubeSubscribers ?? stats.youtubeSubscribers,
     youtubeTotalViews: youtubeStats?.youtubeTotalViews ?? stats.youtubeTotalViews,
     youtubeVideoCount: youtubeStats?.youtubeVideoCount ?? stats.youtubeVideoCount
@@ -220,7 +192,8 @@ function buildNotes(
   socialLinks: SocialLinks,
   stats: PlatformStats,
   estimatedLevel: EstimatedArtistLevel,
-  spotifyProfile: SpotifyArtistProfile | null
+  spotifyProfile: SpotifyArtistProfile | null,
+  sizeEstimate: ReturnType<typeof estimateArtistSize>
 ): string[] {
   const notes: string[] = [];
 
@@ -239,6 +212,9 @@ function buildNotes(
   } else {
     notes.push("Estimated level is unknown because no platform stats were provided.");
   }
+
+  notes.push(`Size signals used: ${sizeEstimate.sizeSignalSource}.`);
+  notes.push(`Size reasons: ${sizeEstimate.sizeReasons.join(" ")}`);
 
   return notes;
 }

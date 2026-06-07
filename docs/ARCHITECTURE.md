@@ -30,6 +30,8 @@ src/
     exportService.ts
     searchService.ts
     spotifyService.ts
+    lastfmService.ts
+    musicBrainzService.ts
     youtubeService.ts
 
 ## Core principle
@@ -59,7 +61,7 @@ Steps:
 7. Optionally gather search context
 8. Call OpenAI
 9. Normalize nullable URL fields and validate structured result
-10. Return artistProfile, similarArtists, similarArtistsByTier, venueCandidates, eventCandidates and opportunities
+10. Return artistProfile, grouped similarArtists, venueCandidates, eventCandidates and opportunities
 
 ## Artist Profile Collector
 
@@ -73,6 +75,7 @@ Responsibilities:
 - Parse Spotify, YouTube and Instagram URLs from the generic links field
 - Fetch Spotify artist name, genres, followers and popularity when credentials are configured
 - Fetch YouTube channel title, subscribers, total views and video count when `YOUTUBE_API_KEY` is configured
+- Estimate artist size from the best available platform signal, using Spotify artist metrics first, Spotify top tracks next, then YouTube as a supporting signal
 - Accept optional mock platform stats when provided by tests or future callers
 - Estimate a basic artist level from Spotify metrics or provided stats
 - Return a confidence score from 0 to 1
@@ -95,25 +98,79 @@ Responsibilities:
 - Accept genre, city and links context from ArtistInput
 - Accept optional user-provided similar artist names for future callers
 - Return deterministic mock similar artists across small, medium and large tiers when `MOCK_AI=true`
-- Prefer Spotify Related Artists when a Spotify artist URL is available
-- Fall back to Spotify artist search from profile-derived genre and market queries when related artists are unavailable
-- Score candidates with genre, size and scene relevance before grouping
+- Combine manual seed candidates with Spotify discovery candidates
+- Use Spotify Related Artists when supplied as a provider input, then fall back to Spotify artist search from profile-derived genre and market queries when related artists are unavailable
+- Treat Spotify as a lightweight ID/search provider by default; deep enrichment, related-artists lookup and top-track lookup are opt-in through environment flags
+- Treat Spotify followers, popularity and genres as optional, and fall back to Spotify top-track popularity when artist popularity is missing
+- Use Last.fm as the first musical similarity provider when `LASTFM_API_KEY` is configured
+- Use MusicBrainz to enrich candidate country, area and tag metadata when available
+- Treat Last.fm and MusicBrainz as candidate-name and metadata sources first; candidate identity links are verified later
+- Optionally run `ArtistVerificationService` for the top non-Spotify candidates when `VERIFY_SIMILAR_ARTISTS=true`
+- Limit verification with `VERIFY_SIMILAR_ARTISTS_LIMIT`, defaulting to 10, to avoid excessive Spotify or search calls
+- Verification can add Spotify URL/ID, Instagram URL/handle, YouTube URL, country/city, genre clues, evidence notes and source URLs
+- `verificationStatus` is `verified`, `needs_verification` or `unverified`; weak candidates are kept in `to_verify` or `unknown` rather than promoted into actionable local/regional groups
+- Candidate discovery and candidate consolidation are separate steps. Discovery finds promising names from Last.fm, MusicBrainz, Spotify, seeds and future web providers; consolidation enriches top candidates with additional evidence before final scoring.
+- `ArtistConsolidationService` runs behind `CONSOLIDATE_SIMILAR_ARTISTS=true` and is limited by `CONSOLIDATE_SIMILAR_ARTISTS_LIMIT`, default 20. This limit controls enrichment calls only; it must not cap final output retention.
+- Final similar artist retention is controlled separately with `SIMILAR_ARTISTS_OUTPUT_LIMIT` default 80, `SIMILAR_ARTISTS_TO_VERIFY_LIMIT` default 40 and `SIMILAR_ARTISTS_PER_GROUP_LIMIT` default 20.
+- Last.fm candidates that remain musically promising, have no explicit incompatible genre evidence and score at least 30 should remain in `to_verify` even when they were not consolidated or consolidation found no extra evidence.
+- Firecrawl consolidation runs only when `ENABLE_FIRECRAWL_CONSOLIDATION=true` and `FIRECRAWL_API_KEY` is present. `DEBUG_FIRECRAWL=true` logs key presence, generated queries, result counts, selected URLs and extracted evidence without exposing secrets.
+- Consolidation gathers internal evidence into structured `genreEvidence`, `locationEvidence` and `sizeEvidence` arrays so scoring can explain which source supported genre, location and size assumptions.
+- Final output is compact by default. `EXPORT_DEBUG_EVIDENCE=false` omits raw evidence arrays, discarded tags, snippets and internal ranking fields from JSON exports; `EXPORT_DEBUG_EVIDENCE=true` exposes them for debugging.
+- Provider tags are cleaned with `GenreCleaner` before scoring and export. Default output keeps music-style genres only and discards non-genre tags such as singer, songwriter, language/location labels, listener-count labels and generic mood tags.
+- Genre normalization, genre family compatibility, non-genre filtering and location/language filtering are separate concerns. The genre family map is generic and extensible across punk, metal, indie/alternative, hip hop, electronic, pop and folk families.
+- Genre compatibility returns an explicit level: `exact`, `close`, `broad_weak`, `incompatible` or `unknown`. Exact matches are strongest, specific genres in the same family are close, broad parent tags are lower confidence, and unrelated explicit families are rejected.
+- Broad parent tags do not rescue specific user genres unless there is close family evidence. For example, pop punk can match punk rock, emo or easycore, but not pop, rock or europop alone; metalcore can match deathcore, hardcore or metal; techno can match house or electronic but not hip hop.
+- Location and language tags are filtered from genres with request context, not a single hardcoded city list. If the target is France, tags such as France, French, Paris or Lyon are removed as location/language evidence; if the target is Germany, Germany, German or Berlin can be removed the same way. Known global country/language tags such as Hungarian, Magyar and Hungary are also removed from genres.
+- Size evidence is summarized into a compact `popularity` object by platform. Raw size evidence remains internal unless debug evidence export is enabled.
+- Last.fm `artist.getInfo` tags become genre evidence and listeners/playcount become rough size evidence. MusicBrainz tags/location become genre and location evidence, but MusicBrainz is never used for popularity or size.
+- Spotify consolidation is identity-first: exact normalized artist-name matches can add Spotify ID/URL, but Spotify popularity/followers are not treated as the main size source.
+- Instagram links are discovered from web/search results or public non-Instagram pages and normalized with `InstagramHandleExtractor`; Instagram pages are not scraped directly.
+- YouTube channel stats are fetched only after a channel URL is found, and only when `YOUTUBE_API_KEY` is configured.
+- Genre relevance is the primary scoring and filtering criterion. The booking-oriented total relevance weights are genre 55%, locality 25%, size 10% and source confidence 10%.
+- A hard genre gate rejects candidates with explicit unrelated tags before locality or source confidence can compensate. Generic pop alone is not compatible with pop punk; locality must only boost genre-compatible candidates.
+- Last.fm candidates with missing genre/location evidence can survive in `to_verify` when musically promising, so candidates like Broad Peak are not silently dropped before verification.
+- `LASTFM_SIMILAR_LIMIT` defaults to 50 when Last.fm is configured. Optional second-degree Last.fm discovery remains off by default.
+- MusicBrainz requests must send a meaningful `APP_USER_AGENT`, and the helper defaults to a safe project string when the env var is missing
+- MusicBrainz calls are rate-limited and limited to a small number of candidates per run
+- Prefer YouTube stats and other non-Spotify scene signals for size estimation, while keeping the output conservative when sources disagree
+- Score candidates with genre, size, scene and source confidence before grouping
 - Deduplicate Spotify artists and exclude the user artist
 - Group similar artists with groupSimilarArtistsByTier()
 - Avoid non-Spotify search APIs until an explicit search provider is added
 - Use null for unknown artist URLs
-- Estimate artistTier from available follower and popularity metrics
+- Estimate artistTier from the best available size signal: YouTube first, then Spotify artist metrics or Spotify top-track popularity, then manual seed estimates
 
-Artist tiers:
-- small: similar or slightly smaller than the user artist; useful for co-bills, local shows, swaps and accessible collaborations
-- medium: similar or moderately bigger; useful for ambitious support slots and realistic next-step venue context
-- large: much bigger; useful as references and long-term targets, not immediate co-bill opportunities
+Booking categories:
+- local_peer: same city or nearby area, same or close genre, likely comparable or accessible level; useful for co-bills and local networking
+- regional_peer: same country or target region, same or close genre, plausible small/medium peer; useful for scene mapping and booking research
+- support_target: same or close genre, moderately bigger, active in the target country or region; useful for support slots
+- reference: clearly bigger or mainstream, useful as a reference or long-term target, not an immediate booking opportunity
 - unknown: not enough data
 
 Provider limitations:
 - Spotify Related Artists may return 403, 404, 429 or other failures depending on app access or artist availability
 - Related Artists failures do not crash the CLI; they return [] and allow fallback search
+- Spotify artist followers, popularity and genres may be unavailable; top-track popularity is used as a fallback size signal when deep enrichment is enabled
+- Last.fm similar-artist lookup is optional and returns [] when `LASTFM_API_KEY` is missing
+- MusicBrainz enrichment is optional and rate-limited; it is used to improve country and tag metadata, not to invent size metrics
+- MusicBrainz must never be used as a size or popularity source
 - Spotify-only results usually do not include city or country, so scene relevance is neutral or slightly penalized
+- Similar artists should prioritize local and regional peers over generic mainstream references when the target is a local market such as France
+
+Manual seed provider:
+- Loads local seed data from `data/seeds/**`
+- Seeds intended for real mode must be verified and backed by a credible source URL or social profile
+- Placeholder seed fixtures are marked `mockOnly` and are only used when `MOCK_AI=true`
+- Seeds are temporary MVP data that improve local and French scene coverage before web discovery exists
+- Seed matching is generic and can be extended to other genres later
+
+Future provider placeholder:
+- `WebLocalSceneProvider` is reserved for venue, event and web search discovery
+- It should stay behind the same provider interface so it can be added later without changing the pipeline shape
+- Future web discovery should search public non-Instagram pages first: venue sites, event pages, music blogs, local agendas, collectives and associations
+- The provider should discover artist names, city, genre clues, event or venue context, source URLs and Instagram links found on those source pages
+- Instagram is enrichment by handle extraction only; direct Instagram scraping, login, proxies, bypass techniques, follower scraping and post scraping are not part of the MVP
+- `InstagramHandleExtractor` accepts plain text or HTML from public non-Instagram pages and normalizes profile links into handles
 
 ## Venue And Event Finder
 
@@ -130,6 +187,14 @@ Bandsintown note:
 - Bandsintown API access appears limited to an artist's own data unless approved otherwise
 - Artist Radar must not rely on Bandsintown as a general multi-artist event discovery API
 - Bandsintown can be reconsidered only with explicit authorization, partnership, or a permitted use case
+
+## Instagram Enrichment
+
+Instagram is not a discovery provider for the MVP. Artist Radar may extract Instagram handles that appear on public venue, event, blog, local agenda, collective or association pages, but it must not fetch Instagram pages to scrape posts, followers or profiles.
+
+Direct Instagram scraping is intentionally excluded because it is fragile, often requires login or proxies, and may violate platform terms. Future discovery should use Firecrawl or search providers against non-Instagram pages first, then pass the fetched page text or HTML to `InstagramHandleExtractor`.
+
+`ArtistVerificationService` may also inspect public web search result URLs/snippets for Instagram profile URLs. It normalizes handles and ignores posts, reels, stories and explore links. It must not log in to Instagram, use proxies, bypass access controls or scrape follower/post data.
 
 ## Future SaaS reuse
 
@@ -174,24 +239,56 @@ ArtistProfile:
 
 SimilarArtist:
 - name
-- url
+- bookingCategory
+- possibleUse
 - genres
 - city
 - country
-- source
+- spotifyUrl
+- instagramUrl
+- instagramHandle
+- youtubeUrl
+- popularity
+- verificationStatus
+- totalRelevance
+- genreRelevance
+- localRelevance
+- sizeRelevance
+- sources
+- sourceUrls
 - reason
+
+Internal/debug SimilarArtist fields:
+- url
+- spotifyId
+- youtubeChannelId
+- youtubeSubscribers
+- youtubeTotalViews
+- youtubeVideoCount
+- source
 - confidence
+- sourceConfidence
 - artistTier
 - estimatedFollowers
 - estimatedPopularity
+- topTrackPopularityMax
+- topTrackPopularityAvg
+- topTrackCount
+- sizeSignalSource
+- sceneRelevance
 - relevanceToUserArtist
-- possibleUse
 - estimatedLevel
+- evidenceNotes
+- genreEvidence
+- locationEvidence
+- sizeEvidence
+- discardedTags
+- matchedQuery
+- searchRelevanceBoost
 
 OpportunitySearchRunResult:
 - artistProfile
-- similarArtists
-- similarArtistsByTier
+- similarArtists grouped by local_peer, regional_peer, support_target, reference, to_verify and unknown
 - venueCandidates
 - eventCandidates
 - opportunities

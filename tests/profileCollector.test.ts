@@ -95,6 +95,7 @@ describe("profileCollector", () => {
     expect(profile.platformStats.youtubeSubscribers).toBe(2400);
     expect(profile.platformStats.youtubeTotalViews).toBe(185000);
     expect(profile.platformStats.youtubeVideoCount).toBe(24);
+    expect(profile.platformStats.hiddenSubscriberCount).toBe(false);
   });
 
   it("infers a basic level from provided mock stats", async () => {
@@ -117,18 +118,16 @@ describe("profileCollector", () => {
     expect(estimateArtistLevel({ spotifyFollowers: 120000, spotifyPopularity: 20 })).toBe("established");
   });
 
-  it("does not mark an artist established from one borderline Spotify signal", () => {
-    expect(estimateArtistLevel({ spotifyFollowers: 1000, spotifyPopularity: 46 })).toBe("developing");
-    expect(estimateArtistLevel({ spotifyFollowers: 51000, spotifyPopularity: 10 })).toBe("developing");
+  it("classifies strong Spotify signals as established", () => {
+    expect(estimateArtistLevel({ spotifyFollowers: 1000, spotifyPopularity: 46 })).toBe("established");
+    expect(estimateArtistLevel({ spotifyFollowers: 51000, spotifyPopularity: 10 })).toBe("established");
   });
 
-  it("uses YouTube metrics as supporting evidence without over-promoting weak signals", () => {
+  it("uses YouTube metrics as supporting evidence with large thresholds", () => {
     expect(estimateArtistLevel({ youtubeSubscribers: 7000, youtubeTotalViews: 120000, youtubeVideoCount: 10 })).toBe(
       "developing"
     );
-    expect(estimateArtistLevel({ youtubeSubscribers: 60000, youtubeTotalViews: 200000, youtubeVideoCount: 8 })).toBe(
-      "developing"
-    );
+    expect(estimateArtistLevel({ youtubeSubscribers: 60000, youtubeTotalViews: 200000, youtubeVideoCount: 8 })).toBe("established");
     expect(
       estimateArtistLevel({ youtubeSubscribers: 120000, youtubeTotalViews: 6_000_000, youtubeVideoCount: 40 })
     ).toBe("established");

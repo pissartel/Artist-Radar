@@ -28,15 +28,15 @@ interface OpenAgendaEvent {
   description?: string | Record<string, string | undefined> | null;
   longDescription?: string | Record<string, string | undefined> | null;
   html?: string | Record<string, string | undefined> | null;
-  url?: string | null;
-  canonicalUrl?: string | null;
-  registrationUrl?: string | null;
-  keywords?: string[];
-  tags?: string[];
+  url?: unknown;
+  canonicalUrl?: unknown;
+  registrationUrl?: unknown;
+  keywords?: unknown;
+  tags?: unknown;
   location?: {
     name?: string | null;
-    city?: string | null;
-    country?: string | null;
+    city?: unknown;
+    country?: unknown;
   } | null;
   firstTiming?: {
     begin?: string | null;
@@ -361,8 +361,7 @@ function buildOpenAgendaMetadata({
       source: agenda.source
     })),
     eventSourceUrls: uniqueStrings(eventResults
-      .map(({ event }) => event.canonicalUrl ?? event.url ?? event.registrationUrl ?? null)
-      .filter((url): url is string => Boolean(url))),
+      .map(({ event }) => firstText(event.canonicalUrl, event.url, event.registrationUrl))),
     eventsFetched: eventResults.length,
     normalizedBookingTargets: targetCount,
     total
@@ -625,16 +624,21 @@ function logOpenAgendaSummary(metadata: Record<string, unknown>, warnings: strin
 
 function openAgendaEventToRawSource(event: OpenAgendaEvent, fallbackCity: string, agenda: SelectedOpenAgendaAgenda): RawBookingSource {
   const title = localizedText(event.title) ?? `OpenAgenda event ${event.uid ?? ""}`.trim();
+  const keywords = textList(event.keywords);
+  const tags = textList(event.tags);
+  const sourceUrl = firstText(event.canonicalUrl, event.url, event.registrationUrl);
+  const registrationUrl = firstText(event.registrationUrl);
+  const eventUrl = firstText(event.url);
+  const canonicalUrl = firstText(event.canonicalUrl);
   const description = [
     localizedText(event.description),
     localizedText(event.longDescription),
     localizedText(event.html),
-    ...(event.keywords ?? []),
-    ...(event.tags ?? []),
+    ...keywords,
+    ...tags,
     agenda.title ? `Agenda: ${agenda.title}` : null,
     `Agenda UID: ${agenda.uid}`
   ].filter(Boolean).join(" ");
-  const sourceUrl = event.canonicalUrl ?? event.url ?? event.registrationUrl ?? null;
 
   return {
     name: title,
@@ -642,11 +646,11 @@ function openAgendaEventToRawSource(event: OpenAgendaEvent, fallbackCity: string
     sourceUrl,
     url: sourceUrl,
     sourceType: "openagenda",
-    city: event.location?.city ?? fallbackCity,
-    country: event.location?.country ?? null,
+    city: firstText(event.location?.city) ?? fallbackCity,
+    country: firstText(event.location?.country),
     text: description,
-    links: [event.registrationUrl, event.url, event.canonicalUrl].filter((url): url is string => Boolean(url)),
-    genres: [...(event.keywords ?? []), ...(event.tags ?? [])],
+    links: [registrationUrl, eventUrl, canonicalUrl].filter((url): url is string => Boolean(url)),
+    genres: [...keywords, ...tags],
     confidence: sourceUrl ? 0.74 : 0.45,
     eventDate: event.firstTiming?.begin ?? event.timings?.[0]?.begin ?? null
   };
@@ -689,8 +693,8 @@ function uniqueByQuery(values: Array<{ query: string; location: string | null }>
   });
 }
 
-function uniqueStrings(values: string[]): string[] {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))];
 }
 
 function normalizeSearchText(value: string): string {
@@ -701,6 +705,34 @@ function normalizeSearchText(value: string): string {
     .toLowerCase();
 }
 
+function textList(value: unknown): string[] {
+  if (!value) {
+    return [];
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    return [String(value)];
+  }
+  if (Array.isArray(value)) {
+    return uniqueStrings(value.flatMap(textList));
+  }
+  if (typeof value === "object") {
+    return localizedText(value as Record<string, string | undefined>)
+      ? [localizedText(value as Record<string, string | undefined>) as string]
+      : uniqueStrings(Object.values(value).flatMap(textList));
+  }
+  return [];
+}
+
+function firstText(...values: unknown[]): string | null {
+  for (const value of values) {
+    const text = textList(value)[0];
+    if (text) {
+      return text;
+    }
+  }
+  return null;
+}
+
 function localizedText(value: OpenAgendaEvent["title"]): string | null {
   if (!value) {
     return null;
@@ -708,5 +740,11 @@ function localizedText(value: OpenAgendaEvent["title"]): string | null {
   if (typeof value === "string") {
     return value;
   }
-  return value.fr ?? value.en ?? Object.values(value).find((entry): entry is string => Boolean(entry)) ?? null;
+  if (typeof value.fr === "string") {
+    return value.fr;
+  }
+  if (typeof value.en === "string") {
+    return value.en;
+  }
+  return Object.values(value).find((entry): entry is string => typeof entry === "string" && Boolean(entry)) ?? null;
 }

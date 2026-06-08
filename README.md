@@ -2,6 +2,8 @@
 
 Artist Radar is a Node.js TypeScript CLI MVP that generates structured booking and promotion opportunities for music artists.
 
+Codex mobile branch test.
+
 ## Install
 
 ```bash

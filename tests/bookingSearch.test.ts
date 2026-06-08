@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { classifyBookingTarget } from "../src/booking/classifyTarget.js";
 import { extractPublicContactSignals } from "../src/booking/contactExtraction.js";
 import { getRelatedGenres, matchBookingGenres } from "../src/booking/genreMatching.js";
+import { buildDefaultBookingSourceProviders } from "../src/booking/providers/BookingSourceProvider.js";
 import { buildMockBookingSourceProvider } from "../src/booking/providers/MockBookingSourceProvider.js";
 import { buildOpenAgendaBookingSourceProvider } from "../src/booking/providers/OpenAgendaBookingSourceProvider.js";
 import { buildWebSearchBookingSourceProvider } from "../src/booking/providers/WebSearchBookingSourceProvider.js";
@@ -35,6 +36,10 @@ const input: BookingSearchInput = {
 };
 
 describe("Booking Search core", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("returns related genres for pop punk", () => {
     expect(getRelatedGenres(["pop punk"])).toEqual(expect.arrayContaining(["punk rock", "emo", "easycore"]));
   });
@@ -255,12 +260,50 @@ describe("Booking Search core", () => {
     expect(result.metadata).toMatchObject({ enabled: false });
   });
 
+  it("logs booking provider startup status without secret values", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    buildDefaultBookingSourceProviders({
+      ENABLE_OPENAGENDA: "true",
+      OPENAGENDA_AGENDA_UIDS: "agenda",
+      OPENAGENDA_API_KEY: "secret-openagenda-key",
+      ENABLE_FIRECRAWL_CONSOLIDATION: "true",
+      FIRECRAWL_API_KEY: "secret-firecrawl-key",
+      MOCK_AI: "false"
+    });
+
+    const message = warn.mock.calls[0]?.[0] ?? "";
+    expect(message).toContain("[booking] Booking providers:");
+    expect(message).toContain("- OpenAgenda: enabled");
+    expect(message).toContain("- Firecrawl: enabled");
+    expect(message).toContain("- Mock: disabled");
+    expect(message).not.toContain("secret-openagenda-key");
+    expect(message).not.toContain("secret-firecrawl-key");
+  });
+
+  it("disables OpenAgenda gracefully when the API key is missing", async () => {
+    const fetchMock = vi.fn();
+    const provider = buildOpenAgendaBookingSourceProvider({
+      env: {
+        ENABLE_OPENAGENDA: "true"
+      },
+      fetchImpl: fetchMock as unknown as typeof fetch
+    });
+
+    const result = await provider.search({ input, maxResults: 5 });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.targets).toEqual([]);
+    expect(result.warnings[0]).toContain("missing OPENAGENDA_API_KEY");
+    expect(result.metadata).toMatchObject({ enabled: false, reason: "missing_api_key" });
+  });
+
   it("normalizes OpenAgenda events without inventing contacts", async () => {
     const provider = buildOpenAgendaBookingSourceProvider({
       env: {
-        ENABLE_OPENAGENDA_BOOKING: "true",
+        ENABLE_OPENAGENDA: "true",
         OPENAGENDA_API_KEY: "test-key",
-        OPENAGENDA_AGENDA_UID: "agenda"
+        OPENAGENDA_AGENDA_UIDS: "agenda"
       },
       fetchImpl: async () => new Response(JSON.stringify({
         total: 1,
@@ -286,6 +329,270 @@ describe("Booking Search core", () => {
       eventDate: "2026-07-01T20:00:00+02:00",
       contacts: []
     });
+  });
+
+  it("uses configured OpenAgenda agenda UIDs before discovery", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const endpoint = String(url);
+      expect(endpoint).toContain("/v2/agendas/paris-env/events");
+      return new Response(JSON.stringify({
+        total: 1,
+        events: [{
+          uid: 456,
+          title: { fr: "Concert env Paris" },
+          description: { fr: "Concert pop punk Paris." },
+          canonicalUrl: "https://openagenda.com/paris-env/events/456",
+          keywords: ["pop punk"],
+          location: { city: "Paris", country: "France" }
+        }]
+      }), { status: 200 }) as unknown as Response;
+    });
+    const provider = buildOpenAgendaBookingSourceProvider({
+      env: {
+        ENABLE_OPENAGENDA: "true",
+        OPENAGENDA_API_KEY: "test-key",
+        OPENAGENDA_AGENDA_UIDS: "paris-env"
+      },
+      fetchImpl: fetchMock as unknown as typeof fetch
+    });
+
+    const result = await provider.search({ input, maxResults: 5 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.targets[0]?.name).toBe("Concert env Paris");
+    expect(result.metadata).toMatchObject({
+      configuredAgendaUids: ["paris-env"],
+      selectedAgendaUids: ["paris-env"],
+      selectedAgendas: [{
+        uid: "paris-env",
+        sourceUrl: "https://openagenda.com/agendas/paris-env",
+        source: "env_override"
+      }]
+    });
+  });
+
+  it("uses configured OpenAgenda seed agenda UIDs before discovery", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const endpoint = String(url);
+      expect(endpoint).toContain("/v2/agendas/paris-seed/events");
+      return new Response(JSON.stringify({
+        total: 1,
+        events: [{
+          uid: 457,
+          title: { fr: "Concert seed Paris" },
+          description: { fr: "Concert pop punk Paris." },
+          canonicalUrl: "https://openagenda.com/paris-seed/events/457",
+          keywords: ["pop punk"],
+          location: { city: "Paris", country: "France" }
+        }]
+      }), { status: 200 }) as unknown as Response;
+    });
+    const provider = buildOpenAgendaBookingSourceProvider({
+      env: {
+        ENABLE_OPENAGENDA: "true",
+        OPENAGENDA_API_KEY: "test-key"
+      },
+      seeds: [{
+        locationKey: "paris",
+        city: "Paris",
+        region: "Ile-de-France",
+        country: "France",
+        agendaUids: ["paris-seed"],
+        keywords: ["concert", "musiques actuelles"],
+        nearbyCities: ["Montreuil"]
+      }],
+      fetchImpl: fetchMock as unknown as typeof fetch
+    });
+
+    const result = await provider.search({ input, maxResults: 5 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.targets[0]?.name).toBe("Concert seed Paris");
+    expect(result.metadata).toMatchObject({
+      seedLocationKeys: ["paris"],
+      seedAgendaUids: ["paris-seed"],
+      seedAgendaUidsUsed: 1,
+      selectedAgendas: [{
+        uid: "paris-seed",
+        source: "seed"
+      }]
+    });
+  });
+
+  it("discovers OpenAgenda agenda UIDs when no configured UID exists", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const endpoint = String(url);
+      if (endpoint.includes("/v2/agendas?") && !endpoint.includes("/events")) {
+        return new Response(JSON.stringify({
+          total: 1,
+          agendas: [{
+            uid: "discovered-paris",
+            slug: "discovered-paris",
+            title: { fr: "Agenda découvert Paris" },
+            description: { fr: "Concerts musique à Paris" },
+            official: true
+          }]
+        }), { status: 200 }) as unknown as Response;
+      }
+
+      expect(endpoint).toContain("/v2/agendas/discovered-paris/events");
+      return new Response(JSON.stringify({
+        total: 1,
+        events: [{
+          uid: 789,
+          title: { fr: "Concert découvert" },
+          description: { fr: "Concert pop punk à Paris." },
+          canonicalUrl: "https://openagenda.com/discovered-paris/events/789",
+          keywords: ["pop punk"],
+          location: { city: "Paris", country: "France" }
+        }]
+      }), { status: 200 }) as unknown as Response;
+    });
+    const provider = buildOpenAgendaBookingSourceProvider({
+      env: {
+        ENABLE_OPENAGENDA: "true",
+        OPENAGENDA_API_KEY: "test-key"
+      },
+      fetchImpl: fetchMock as unknown as typeof fetch
+    });
+
+    const result = await provider.search({ input, maxResults: 5 });
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(result.targets[0]?.name).toBe("Concert découvert");
+    expect(result.warnings[0]).toContain("OpenAgenda discovered agenda UIDs for future seed review");
+    expect(result.metadata).toMatchObject({
+      configuredAgendaUids: [],
+      seedAgendaUidsUsed: 0,
+      discoveredAgendaUids: ["discovered-paris"],
+      selectedAgendaUids: ["discovered-paris"],
+      eventSourceUrls: ["https://openagenda.com/discovered-paris/events/789"],
+      selectedAgendas: [{
+        uid: "discovered-paris",
+        title: "Agenda découvert Paris",
+        slug: "discovered-paris",
+        official: true,
+        sourceUrl: "https://openagenda.com/discovered-paris",
+        source: "discovery"
+      }]
+    });
+  });
+
+  it("falls back to artist location and nearby cities when request city is missing", async () => {
+    const provider = buildOpenAgendaBookingSourceProvider({
+      env: {
+        ENABLE_OPENAGENDA: "true",
+        OPENAGENDA_API_KEY: "test-key"
+      },
+      fetchImpl: vi.fn(async () => new Response(JSON.stringify({ agendas: [] }), { status: 200 }) as unknown as Response)
+    });
+
+    const result = await provider.search({
+      input: {
+        ...input,
+        city: "",
+        target: null,
+        artistProfile: {
+          ...input.artistProfile!,
+          city: "Paris"
+        }
+      },
+      maxResults: 5
+    });
+
+    expect(result.metadata.locationsSearched).toEqual(expect.arrayContaining(["Paris", "Montreuil", "Pantin", "Saint-Denis", "Ivry-sur-Seine"]));
+  });
+
+  it("expands grandes villes françaises target to major French cities", async () => {
+    const provider = buildOpenAgendaBookingSourceProvider({
+      env: {
+        ENABLE_OPENAGENDA: "true",
+        OPENAGENDA_API_KEY: "test-key"
+      },
+      fetchImpl: vi.fn(async () => new Response(JSON.stringify({ agendas: [] }), { status: 200 }) as unknown as Response)
+    });
+
+    const result = await provider.search({
+      input: {
+        ...input,
+        target: "grandes villes françaises"
+      },
+      maxResults: 5
+    });
+
+    expect(result.metadata.locationsSearched).toEqual(expect.arrayContaining([
+      "Paris",
+      "Lyon",
+      "Marseille",
+      "Lille",
+      "Nantes",
+      "Bordeaux",
+      "Toulouse",
+      "Rennes",
+      "Strasbourg",
+      "Montpellier"
+    ]));
+  });
+
+  it("uses genre-aware OpenAgenda discovery keywords for pop punk", async () => {
+    const provider = buildOpenAgendaBookingSourceProvider({
+      env: {
+        ENABLE_OPENAGENDA: "true",
+        OPENAGENDA_API_KEY: "test-key"
+      },
+      fetchImpl: vi.fn(async () => new Response(JSON.stringify({ agendas: [] }), { status: 200 }) as unknown as Response)
+    });
+
+    const result = await provider.search({ input, maxResults: 5 });
+    const queries = result.searchedQueries.join(" | ");
+
+    expect(queries).toContain("pop punk");
+    expect(queries).toContain("punk rock");
+    expect(queries).toContain("emo");
+    expect(queries).toContain("musiques actuelles");
+  });
+
+  it("returns a clear warning when OpenAgenda agenda discovery finds nothing", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      total: 0,
+      agendas: []
+    }), { status: 200 }) as unknown as Response);
+    const provider = buildOpenAgendaBookingSourceProvider({
+      env: {
+        ENABLE_OPENAGENDA: "true",
+        OPENAGENDA_API_KEY: "test-key"
+      },
+      fetchImpl: fetchMock as unknown as typeof fetch
+    });
+
+    const result = await provider.search({ input, maxResults: 5 });
+
+    expect(result.targets).toEqual([]);
+    expect(result.warnings).toEqual([
+      "OpenAgenda agenda discovery found no relevant public agendas for the requested location."
+    ]);
+    expect(result.metadata).toMatchObject({
+      enabled: true,
+      selectedAgendaUids: []
+    });
+  });
+
+  it("returns a clear warning when OpenAgenda agenda discovery fails", async () => {
+    const provider = buildOpenAgendaBookingSourceProvider({
+      env: {
+        ENABLE_OPENAGENDA: "true",
+        OPENAGENDA_API_KEY: "test-key"
+      },
+      fetchImpl: vi.fn(async () => {
+        throw new Error("network unavailable");
+      }) as unknown as typeof fetch
+    });
+
+    const result = await provider.search({ input, maxResults: 5 });
+
+    expect(result.targets).toEqual([]);
+    expect(result.warnings.some((warning) => warning.includes("OpenAgenda agenda discovery failed"))).toBe(true);
+    expect(result.warnings).toContain("OpenAgenda agenda discovery found no relevant public agendas for the requested location.");
   });
 
   it("builds a strict source-grounded Booking Search extraction prompt", () => {

@@ -78,14 +78,30 @@ It is disabled unless the existing Firecrawl configuration is present. It should
 
 ### OpenAgendaBookingSourceProvider
 
-Disabled by default. OpenAgenda API access currently requires authentication.
+Disabled by default in local runs. The GitHub Actions booking CLI workflow sets `ENABLE_OPENAGENDA=true` by default and uses GitHub Actions secrets for real OpenAgenda runs.
 
 Documented configuration only:
 
-- `ENABLE_OPENAGENDA_BOOKING=true`
-- `OPENAGENDA_AGENDA_UID`
-- `OPENAGENDA_API_KEY`
+- `ENABLE_OPENAGENDA=true`
+- `OPENAGENDA_API_KEY`, configured as the `OPENAGENDA_API_KEY` GitHub Actions secret for real OpenAgenda runs
+- optional `OPENAGENDA_AGENDA_UIDS`, a comma-separated GitHub Actions secret override for known agenda UIDs
 - optional `OPENAGENDA_BASE_URL`
+
+`ENABLE_OPENAGENDA_BOOKING=true` and `OPENAGENDA_AGENDA_UID` are kept only as backward-compatible aliases.
+
+Agenda UID resolution order:
+
+- `OPENAGENDA_AGENDA_UIDS` override when provided.
+- seed config in `src/booking/config/openAgendaSeeds.ts` when a matched location has verified agenda UIDs.
+- OpenAgenda public agenda discovery from explicit CLI city/target locations, artist profile location, nearby cities for known artist locations, and major French cities only when the target requests `grandes villes françaises` or equivalent France-wide wording.
+
+`OPENAGENDA_AGENDA_UIDS` is optional. The provider works without it by discovering agendas from location and genre keywords. The seed config starts with major French cities, empty `agendaUids`, booking keywords and nearby cities; it is a future database precursor, not a database. If seed `agendaUids` are empty, discovery is used. Do not hardcode one global agenda UID for all booking runs.
+
+OpenAgenda discovery uses city/region/location terms, genre-aware keywords and music keywords such as concert, musiques actuelles, festival, tremplin and appel à candidature. When agenda discovery finds useful UIDs, the provider stores selected agenda UIDs, agenda source URLs, discovery locations, discovered UIDs and event source URLs in provider metadata and warnings so they can later be reviewed for the seed config. If discovery finds no relevant public agendas, the provider returns an empty result with a clear warning.
+
+When `ENABLE_OPENAGENDA=true` but `OPENAGENDA_API_KEY` is missing, the provider is disabled with a warning instead of exposing secret values or crashing unrelated booking flow.
+
+The manual GitHub Actions workflow can be configured with `workflow_dispatch` inputs for artist, city, genre, target, limit, `enable_openagenda` and optional `openagenda_agenda_uids`. Secrets are read from GitHub Actions secrets and must not be hardcoded or printed.
 
 Do not add these values to `.env` in code changes.
 

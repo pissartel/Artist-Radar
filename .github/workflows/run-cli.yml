@@ -42,6 +42,18 @@ on:
         default: "20"
         type: string
 
+      enable_openagenda:
+        description: "ENABLE_OPENAGENDA"
+        required: true
+        default: true
+        type: boolean
+
+      openagenda_agenda_uids:
+        description: "Optional comma-separated OpenAgenda agenda UID override"
+        required: false
+        default: ""
+        type: string
+
       spotify_url:
         description: "Spotify artist URL"
         required: false
@@ -130,6 +142,9 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+          ENABLE_OPENAGENDA: ${{ github.event.inputs.enable_openagenda }}
+          OPENAGENDA_AGENDA_UIDS: ${{ github.event.inputs.openagenda_agenda_uids }}
+          OPENAGENDA_API_KEY: ${{ secrets.OPENAGENDA_API_KEY }}
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
 
@@ -186,15 +201,16 @@ jobs:
           echo "CONSOLIDATE_SIMILAR_ARTISTS=$CONSOLIDATE_SIMILAR_ARTISTS"
           echo "CONSOLIDATE_SIMILAR_ARTISTS_LIMIT=$CONSOLIDATE_SIMILAR_ARTISTS_LIMIT"
           echo "ENABLE_FIRECRAWL_CONSOLIDATION=$ENABLE_FIRECRAWL_CONSOLIDATION"
+          echo "ENABLE_OPENAGENDA=$ENABLE_OPENAGENDA"
           echo "DEBUG_FIRECRAWL=$DEBUG_FIRECRAWL"
           echo "DEBUG_ARTIST_CONSOLIDATION=$DEBUG_ARTIST_CONSOLIDATION"
           echo "DEBUG_SIMILAR_ARTISTS=$DEBUG_SIMILAR_ARTISTS"
 
-          "${CMD[@]}" 2>&1 | tee outputs/logs.txt
-
-          if [ ! -f outputs/result.json ]; then
-            echo '{"status":"completed","note":"No result.json generated. Check logs.txt."}' > outputs/result.json
+          if [ "$ENABLE_OPENAGENDA" = "true" ] && [ -z "$OPENAGENDA_API_KEY" ]; then
+            echo "::warning::ENABLE_OPENAGENDA is true but OPENAGENDA_API_KEY secret is missing; OpenAgenda will be disabled gracefully."
           fi
+
+          "${CMD[@]}" 2>&1 | tee outputs/logs.txt
 
       - name: Upload logs and JSON
         if: always()

@@ -8,6 +8,7 @@ import { buildFirecrawlBookingSourceProvider } from "./FirecrawlBookingSourcePro
 import { buildMockBookingSourceProvider } from "./MockBookingSourceProvider.js";
 import { buildOpenAgendaBookingSourceProvider, type OpenAgendaBookingSourceProviderEnv } from "./OpenAgendaBookingSourceProvider.js";
 import { buildWebSearchBookingSourceProvider } from "./WebSearchBookingSourceProvider.js";
+import { warnLog } from "../../utils/logger.js";
 
 export interface BookingSourceProviderContext {
   input: BookingSearchInput;
@@ -37,6 +38,8 @@ export function buildDefaultBookingSourceProviders(
   env: DefaultBookingProviderEnv = process.env,
   fetchImpl: FetchLike = fetch
 ): BookingSourceProvider[] {
+  logBookingProviderStartup(env);
+
   const providers: BookingSourceProvider[] = [
     buildOpenAgendaBookingSourceProvider({ env, fetchImpl }),
     buildFirecrawlBookingSourceProvider(env, fetchImpl)
@@ -60,6 +63,48 @@ export function buildDefaultBookingSourceProviders(
   }
 
   return providers;
+}
+
+function logBookingProviderStartup(env: DefaultBookingProviderEnv): void {
+  const openAgenda = getOpenAgendaProviderStatus(env);
+  const firecrawl = getFirecrawlProviderStatus(env);
+  const mock = getMockProviderStatus(env);
+  warnLog("booking", [
+    "Booking providers:",
+    `- OpenAgenda: ${openAgenda.enabled ? "enabled" : "disabled"} (${openAgenda.reason})`,
+    `- Firecrawl: ${firecrawl.enabled ? "enabled" : "disabled"} (${firecrawl.reason})`,
+    `- Mock: ${mock.enabled ? "enabled" : "disabled"} (${mock.reason})`
+  ].join("\n"));
+}
+
+function getOpenAgendaProviderStatus(env: DefaultBookingProviderEnv): { enabled: boolean; reason: string } {
+  if (env.ENABLE_OPENAGENDA !== "true" && env.ENABLE_OPENAGENDA_BOOKING !== "true") {
+    return { enabled: false, reason: "ENABLE_OPENAGENDA is not true" };
+  }
+  if (!env.OPENAGENDA_API_KEY) {
+    return { enabled: false, reason: "OPENAGENDA_API_KEY is missing" };
+  }
+  if (env.OPENAGENDA_AGENDA_UIDS || env.OPENAGENDA_AGENDA_UID) {
+    return { enabled: true, reason: "enabled with configured OpenAgenda agenda UIDs" };
+  }
+  return { enabled: true, reason: "enabled with OpenAgenda agenda discovery" };
+}
+
+function getFirecrawlProviderStatus(env: DefaultBookingProviderEnv): { enabled: boolean; reason: string } {
+  if (env.ENABLE_FIRECRAWL_CONSOLIDATION !== "true") {
+    return { enabled: false, reason: "ENABLE_FIRECRAWL_CONSOLIDATION is not true" };
+  }
+  if (!env.FIRECRAWL_API_KEY) {
+    return { enabled: false, reason: "FIRECRAWL_API_KEY is missing" };
+  }
+  return { enabled: true, reason: "enabled by ENABLE_FIRECRAWL_CONSOLIDATION" };
+}
+
+function getMockProviderStatus(env: DefaultBookingProviderEnv): { enabled: boolean; reason: string } {
+  if (env.MOCK_AI === "true") {
+    return { enabled: true, reason: "enabled by MOCK_AI" };
+  }
+  return { enabled: false, reason: "MOCK_AI is not true" };
 }
 
 export function buildNoopBookingSourceProvider(): BookingSourceProvider {

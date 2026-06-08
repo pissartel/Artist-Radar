@@ -331,6 +331,34 @@ describe("Booking Search core", () => {
     });
   });
 
+  it("normalizes OpenAgenda events when keywords and tags are not arrays", async () => {
+    const provider = buildOpenAgendaBookingSourceProvider({
+      env: {
+        ENABLE_OPENAGENDA: "true",
+        OPENAGENDA_API_KEY: "test-key",
+        OPENAGENDA_AGENDA_UIDS: "agenda"
+      },
+      fetchImpl: async () => new Response(JSON.stringify({
+        total: 1,
+        events: [{
+          uid: 124,
+          title: { fr: "Concert format variable" },
+          description: { fr: "Concert à Paris." },
+          canonicalUrl: "https://openagenda.com/agenda/events/124",
+          keywords: { fr: ["pop punk", "concert"] },
+          tags: "festival",
+          location: { city: "Paris", country: "France" }
+        }]
+      }), { status: 200 }) as unknown as Response
+    });
+
+    const result = await provider.search({ input, maxResults: 5 });
+
+    expect(result.targets).toHaveLength(1);
+    expect(result.targets[0]?.genres).toEqual(expect.arrayContaining(["pop punk", "concert"]));
+    expect(result.targets[0]?.description).toContain("pop punk");
+  });
+
   it("uses configured OpenAgenda agenda UIDs before discovery", async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const endpoint = String(url);

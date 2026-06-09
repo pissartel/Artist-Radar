@@ -10,6 +10,7 @@ import { normalizeBookingSource } from "../src/booking/normalizeBookingTarget.js
 import { recommendBookingAction, scoreBookingCompatibility } from "../src/booking/scoring.js";
 import { searchBookingOpportunities } from "../src/booking/searchBookingOpportunities.js";
 import { buildBookingSearchExtractionPrompt } from "../src/prompts.js";
+import type { SimilarArtist } from "../src/schemas.js";
 import type { BookingSearchInput, BookingTarget } from "../src/booking/types.js";
 import type { BookingSourceProvider } from "../src/booking/providers/BookingSourceProvider.js";
 
@@ -181,11 +182,11 @@ describe("Booking Search core", () => {
 
     const result = await searchBookingOpportunities(input, { providers: [provider] });
 
-    expect(result.opportunities.map((opportunity) => opportunity.name)).toEqual(["Strong Punk Room", "Weak Rock Room"]);
+    expect(result.opportunities.map((opportunity) => opportunity.name)).toEqual(["Strong Punk Room"]);
     expect(result.opportunities[0]?.contact).toBe("booking@example.test");
     expect(result.opportunities[0]?.reason).toContain("Genre fit:");
     expect(result.opportunities[0]?.suggestedAction).toBe("booking_contact");
-    expect(result.warnings).toEqual(["Provider-level warning."]);
+    expect(result.warnings).toEqual(expect.arrayContaining(["Provider-level warning."]));
     expect(result.sourceMetadata[0]).toMatchObject({
       sourceProvider: "qa_booking_provider",
       targetCount: 2,
@@ -219,7 +220,7 @@ describe("Booking Search core", () => {
           return [{
             title: "Pop Punk Venue",
             url: "https://example.test/pop-punk-venue",
-            snippet: "Paris venue programmation pop punk booking@example.test",
+            snippet: "Paris venue programmation pop punk booking@example.test 2026-07-01",
             sourceProvider: "test-search",
             confidence: 0.7,
             links: []
@@ -232,8 +233,8 @@ describe("Booking Search core", () => {
           return {
             url,
             title: "Pop Punk Venue",
-            text: "Official venue page with pop punk concerts.",
-            markdown: "Official venue page with pop punk concerts.",
+            text: "Official venue page with pop punk concerts. 2026-07-01",
+            markdown: "Official venue page with pop punk concerts. 2026-07-01",
             sourceProvider: "test-extract",
             statusCode: 200
           };
@@ -623,6 +624,148 @@ describe("Booking Search core", () => {
     expect(result.warnings).toContain("OpenAgenda agenda discovery found no relevant public agendas for the requested location.");
   });
 
+  it("filters booking candidates by recent date and strict pop punk genre evidence", async () => {
+    const provider: BookingSourceProvider = {
+      providerName: "qa_filter_provider",
+      async search() {
+        return {
+          sourceProvider: "qa_filter_provider",
+          searchedQueries: ["filter"],
+          warnings: [],
+          metadata: {},
+          targets: [
+            baseTarget({ name: "Future Pop Punk", genres: ["pop punk"], eventDate: "2026-08-01", confidence: 0.8 }),
+            baseTarget({ name: "Recent Emo", genres: ["emo"], eventDate: "2025-06-01", confidence: 0.8 }),
+            baseTarget({ name: "Old Punk", genres: ["punk rock"], eventDate: "2023-01-01", confidence: 0.9 }),
+            baseTarget({ name: "Techno Only", genres: ["techno"], description: "Techno club night.", eventDate: "2026-08-01", confidence: 0.9 }),
+            baseTarget({ name: "Generic Rock", genres: ["rock"], description: "Rock concert music.", eventDate: "2026-08-01", confidence: 0.9 })
+          ]
+        };
+      }
+    };
+
+    const result = await searchBookingOpportunities(input, {
+      providers: [provider],
+      now: new Date("2026-06-09T12:00:00Z")
+    });
+
+    expect(result.opportunities.map((opportunity) => opportunity.name)).toEqual(["Future Pop Punk", "Recent Emo"]);
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      "Booking relevance rejected 1 events older than 24 months.",
+      "Booking relevance rejected 2 genre-mismatch candidates."
+    ]));
+  });
+
+  it("ranks similar-artist live history above OpenAgenda when both are genre/date matched", async () => {
+    const provider: BookingSourceProvider = {
+      providerName: "qa_priority_provider",
+      async search() {
+        return {
+          sourceProvider: "qa_priority_provider",
+          searchedQueries: ["priority"],
+          warnings: [],
+          metadata: {},
+          targets: [
+            baseTarget({
+              name: "OpenAgenda Pop Punk Event",
+              sourceType: "openagenda",
+              sourceProvider: "openagenda_booking",
+              genres: ["pop punk"],
+              eventDate: "2026-08-01",
+              confidence: 0.9
+            }),
+            baseTarget({
+              name: "Peer Venue Live History",
+              sourceType: "similar_artist_live_history",
+              sourceProvider: "similar_artist_live_history:test",
+              genres: ["pop punk"],
+              eventDate: "2025-09-01",
+              confidence: 0.86,
+              derivedFromSimilarArtist: {
+                name: "Comparable Punk Band",
+                popularityComparison: "same_tier",
+                matchedGenres: ["pop punk"],
+                sourceUrl: "https://example.test/comparable-punk-band"
+              }
+            })
+          ]
+        };
+      }
+    };
+
+    const result = await searchBookingOpportunities(input, {
+      providers: [provider],
+      now: new Date("2026-06-09T12:00:00Z")
+    });
+
+    expect(result.opportunities[0]?.name).toBe("Peer Venue Live History");
+    expect(result.opportunities[0]?.derivedFromSimilarArtist).toMatchObject({
+      name: "Comparable Punk Band",
+      popularityComparison: "same_tier"
+    });
+    expect(result.opportunities[0]?.reason).toContain("Similar artist Comparable Punk Band");
+  });
+
+  it("treats massively bigger similar artists as support-slot references", () => {
+    const target = baseTarget({
+      sourceType: "similar_artist_live_history",
+      genres: ["pop punk"],
+      eventDate: "2026-08-01",
+      derivedFromSimilarArtist: {
+        name: "Arena Pop Punk Band",
+        popularityComparison: "massively_bigger",
+        matchedGenres: ["pop punk"],
+        sourceUrl: "https://example.test/arena-pop-punk-band"
+      }
+    });
+
+    const score = scoreBookingCompatibility(input, target);
+
+    expect(recommendBookingAction(input, target, score)).toBe("support_slot");
+  });
+
+  it("uses comparable similar artists as booking context without returning them as opportunities", async () => {
+    const provider: BookingSourceProvider = {
+      providerName: "qa_similar_context_provider",
+      async search({ input }) {
+        const artist = input.similarArtists?.[0];
+        return {
+          sourceProvider: "qa_similar_context_provider",
+          searchedQueries: [],
+          warnings: [],
+          metadata: { similarArtistsConsidered: input.similarArtists?.length ?? 0 },
+          targets: artist
+            ? [baseTarget({
+                name: "Venue From Similar Artist",
+                sourceType: "similar_artist_live_history",
+                genres: artist.genres,
+                eventDate: "2026-08-01",
+                derivedFromSimilarArtist: {
+                  name: artist.name,
+                  popularityComparison: "same_tier",
+                  matchedGenres: ["pop punk"],
+                  sourceUrl: artist.sourceUrls[0] ?? artist.url
+                }
+              })]
+            : []
+        };
+      }
+    };
+
+    const result = await searchBookingOpportunities({
+      ...input,
+      similarArtists: [baseSimilarArtist({ name: "Comparable Punk Band" })]
+    }, {
+      providers: [provider],
+      now: new Date("2026-06-09T12:00:00Z")
+    });
+
+    expect(result.opportunities).toHaveLength(1);
+    expect(result.opportunities[0]?.name).toBe("Venue From Similar Artist");
+    expect(result.opportunities[0]?.name).not.toBe("Comparable Punk Band");
+    expect(result.opportunities[0]?.derivedFromSimilarArtist?.name).toBe("Comparable Punk Band");
+  });
+
   it("builds a strict source-grounded Booking Search extraction prompt", () => {
     const prompt = buildBookingSearchExtractionPrompt({
       input,
@@ -655,6 +798,54 @@ function baseTarget(overrides: Partial<BookingTarget> = {}): BookingTarget {
     contacts: [],
     confidence: 0.8,
     evidence: [],
+    ...overrides
+  };
+}
+
+function baseSimilarArtist(overrides: Partial<SimilarArtist> = {}): SimilarArtist {
+  return {
+    name: "Comparable Punk Band",
+    url: "https://example.test/comparable-punk-band",
+    spotifyId: null,
+    genres: ["pop punk", "punk rock"],
+    city: "Paris",
+    country: "France",
+    source: "mock",
+    sources: ["mock"],
+    reason: "Comparable pop punk artist.",
+    confidence: 0.9,
+    artistTier: "small",
+    bookingCategory: "local_peer",
+    estimatedFollowers: 1500,
+    estimatedPopularity: 18,
+    sizeSignalSource: "manual",
+    genreRelevance: 95,
+    localRelevance: 80,
+    sizeRelevance: 85,
+    sceneRelevance: 80,
+    totalRelevance: 90,
+    relevanceToUserArtist: 90,
+    possibleUse: "booking_research",
+    estimatedLevel: "emerging",
+    evidenceNotes: ["Strong genre compatibility."],
+    sourceUrls: ["https://example.test/comparable-punk-band"],
+    genreEvidence: [],
+    locationEvidence: [],
+    sizeEvidence: [],
+    verificationStatus: "verified",
+    popularity: {
+      estimatedLevel: "small",
+      confidence: 0.8,
+      sizeSignalSource: "manual",
+      platforms: {
+        spotify: {
+          followers: 1500,
+          popularity: 18,
+          sourceUrl: "https://example.test/comparable-punk-band"
+        }
+      }
+    },
+    discardedTags: [],
     ...overrides
   };
 }

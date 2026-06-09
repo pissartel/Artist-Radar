@@ -12,6 +12,7 @@ import { gatherSearchContext } from "./services/searchService.js";
 import { normalizeOpportunityUrls } from "./services/urlNormalization.js";
 import { findVenueEventCandidates } from "./modules/venueEventFinder.js";
 import type { ArtistProfile, EventCandidate, VenueCandidate } from "./schemas.js";
+import type { SimilarArtist } from "./schemas.js";
 import { debugLog } from "./utils/logger.js";
 import type { SimilarArtistSeedRecord } from "./modules/similarArtistSeeds.js";
 import type { LastFmSimilarArtist } from "./services/lastfmService.js";
@@ -80,7 +81,8 @@ export async function runOpportunitySearch(
       target: input.target,
       links: input.links,
       limit: input.limit,
-      artistProfile: profile
+      artistProfile: profile,
+      similarArtists: flattenSimilarArtists(groupedSimilarArtists)
     }, options.bookingSearchOptions);
     debugLog("pipeline", "runOpportunitySearch booking provider summary", {
       providerCount: bookingSearch.sourceMetadata.length,
@@ -145,4 +147,15 @@ function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpportunit
 
 function countSimilarArtists(groups: SimilarArtistsByTier): number {
   return groups.local_peer.length + groups.regional_peer.length + groups.support_target.length + groups.reference.length + groups.to_verify.length + groups.unknown.length;
+}
+
+function flattenSimilarArtists(groups: SimilarArtistsByTier): SimilarArtist[] {
+  return [
+    ...groups.local_peer,
+    ...groups.regional_peer,
+    ...groups.support_target,
+    ...groups.reference,
+    ...groups.to_verify,
+    ...groups.unknown
+  ];
 }

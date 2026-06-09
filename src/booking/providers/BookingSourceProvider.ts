@@ -1,12 +1,15 @@
 import type { BookingSearchInput, BookingTarget } from "../types.js";
 import {
   buildDefaultWebExtractProvider,
+  FirecrawlExtractProvider,
+  FirecrawlSearchProvider,
   getEnabledSearchProviders,
   type WebProviderEnv
 } from "../../providers/web/providers.js";
 import { buildFirecrawlBookingSourceProvider } from "./FirecrawlBookingSourceProvider.js";
 import { buildMockBookingSourceProvider } from "./MockBookingSourceProvider.js";
 import { buildOpenAgendaBookingSourceProvider, type OpenAgendaBookingSourceProviderEnv } from "./OpenAgendaBookingSourceProvider.js";
+import { buildSimilarArtistLiveHistoryBookingSourceProvider } from "./SimilarArtistLiveHistoryBookingSourceProvider.js";
 import { buildWebSearchBookingSourceProvider } from "./WebSearchBookingSourceProvider.js";
 import { warnLog } from "../../utils/logger.js";
 
@@ -40,13 +43,32 @@ export function buildDefaultBookingSourceProviders(
 ): BookingSourceProvider[] {
   logBookingProviderStartup(env);
 
-  const providers: BookingSourceProvider[] = [
-    buildOpenAgendaBookingSourceProvider({ env, fetchImpl }),
-    buildFirecrawlBookingSourceProvider(env, fetchImpl)
-  ];
+  const providers: BookingSourceProvider[] = [];
   const webSearchProviders = getEnabledSearchProviders(env, fetchImpl)
     .filter((provider) => provider.providerName !== "firecrawl");
   const webExtractProvider = buildDefaultWebExtractProvider(env, fetchImpl);
+
+  const similarArtistSearchProvider = env.ENABLE_FIRECRAWL_CONSOLIDATION === "true" && env.FIRECRAWL_API_KEY
+    ? new FirecrawlSearchProvider(env, fetchImpl)
+    : webSearchProviders[0] ?? null;
+  const similarArtistExtractProvider = env.ENABLE_FIRECRAWL_CONSOLIDATION === "true" && env.FIRECRAWL_API_KEY
+    ? new FirecrawlExtractProvider(env, fetchImpl)
+    : webExtractProvider;
+
+  if (similarArtistSearchProvider) {
+    providers.push(buildSimilarArtistLiveHistoryBookingSourceProvider({
+      webSearchProvider: similarArtistSearchProvider,
+      webExtractProvider: similarArtistExtractProvider,
+      maxSimilarArtists: 6,
+      maxResultsPerArtist: 3,
+      maxExtractPages: 6
+    }));
+  }
+
+  providers.push(
+    buildOpenAgendaBookingSourceProvider({ env, fetchImpl }),
+    buildFirecrawlBookingSourceProvider(env, fetchImpl)
+  );
 
   for (const webSearchProvider of webSearchProviders) {
     providers.push(buildWebSearchBookingSourceProvider({

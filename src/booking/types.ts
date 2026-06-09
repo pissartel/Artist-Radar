@@ -1,4 +1,4 @@
-import type { ArtistProfile, ArtistTier } from "../schemas.js";
+import type { ArtistProfile, ArtistTier, SimilarArtist } from "../schemas.js";
 
 export type BookingTargetCategory =
   | "venue"
@@ -23,6 +23,10 @@ export type BookingSourceType =
   | "search_result"
   | "manual_seed"
   | "openagenda"
+  | "similar_artist_live_history"
+  | "venue_official_programming_page"
+  | "festival_official_page"
+  | "promoter_official_page"
   | "mock";
 
 export type ContactCandidateType = "email" | "contact_form" | "social" | "phone" | "unknown";
@@ -35,6 +39,7 @@ export interface BookingSearchInput {
   links: string[];
   limit: number;
   artistProfile?: ArtistProfile | null;
+  similarArtists?: SimilarArtist[];
 }
 
 export interface ContactCandidate {
@@ -53,13 +58,17 @@ export interface BookingTarget {
   description?: string | null;
   sourceUrl: string | null;
   sourceType: BookingSourceType;
+  sourceProvider?: string | null;
   genres: string[];
   estimatedCapacity?: number | null;
   estimatedArtistTier?: ArtistTier | null;
   pastProgramming?: string[];
   eventDate?: string | null;
+  isFutureEvent?: boolean | null;
+  ageMonths?: number | null;
   deadline?: string | null;
   recommendedAction?: BookingSuggestedAction | null;
+  derivedFromSimilarArtist?: DerivedFromSimilarArtist | null;
   contacts: ContactCandidate[];
   confidence: number;
   evidence: string[];
@@ -83,6 +92,7 @@ export interface RawBookingSource {
   url?: string | null;
   sourceUrl?: string | null;
   sourceType?: BookingSourceType;
+  sourceProvider?: string | null;
   city?: string | null;
   country?: string | null;
   text?: string | null;
@@ -93,7 +103,15 @@ export interface RawBookingSource {
   contacts?: ContactCandidate[];
   confidence?: number;
   eventDate?: string | null;
+  derivedFromSimilarArtist?: DerivedFromSimilarArtist | null;
   deadline?: string | null;
+}
+
+export interface DerivedFromSimilarArtist {
+  name: string;
+  popularityComparison: string;
+  matchedGenres: string[];
+  sourceUrl: string | null;
 }
 
 export interface BookingScore {
@@ -117,6 +135,8 @@ export interface BookingOpportunity {
   city: string | null;
   country: string | null;
   sourceUrl: string | null;
+  sourceType: BookingSourceType;
+  sourceProvider: string | null;
   contact: string | null;
   contactType: ContactCandidateType;
   score: number;
@@ -126,6 +146,10 @@ export interface BookingOpportunity {
   fitSummary: string;
   evidence: string[];
   suggestedAction: string;
+  eventDate: string | null;
+  isFutureEvent: boolean | null;
+  ageMonths: number | null;
+  derivedFromSimilarArtist?: DerivedFromSimilarArtist | null;
   target: BookingTarget;
   bookingScore: BookingScore;
 }

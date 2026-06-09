@@ -47,7 +47,8 @@ export function buildWebSearchBookingSourceProvider(
               city: input.city,
               text: [extracted.title, extracted.text, extracted.markdown].filter(Boolean).join(" "),
               links: [],
-              confidence: extracted.statusCode && extracted.statusCode >= 200 && extracted.statusCode < 300 ? 0.78 : 0.5
+              confidence: extracted.statusCode && extracted.statusCode >= 200 && extracted.statusCode < 300 ? 0.78 : 0.5,
+              eventDate: extractEventDate([extracted.title, extracted.text, extracted.markdown].filter(Boolean).join(" "))
             });
           }
         }
@@ -93,8 +94,21 @@ function webResultToRawSource(result: WebSearchResult, fallbackCity: string): Ra
     text,
     snippet: result.snippet,
     links: result.links ?? [],
-    confidence: result.confidence
+    confidence: result.confidence,
+    eventDate: extractEventDate(text)
   };
+}
+
+function extractEventDate(text: string): string | null {
+  const iso = text.match(/\b(20\d{2})[-/](0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01])\b/);
+  if (iso) {
+    return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
+  }
+  const european = text.match(/\b(0?[1-9]|[12]\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.](20\d{2})\b/);
+  if (european) {
+    return `${european[3]}-${european[2].padStart(2, "0")}-${european[1].padStart(2, "0")}`;
+  }
+  return null;
 }
 
 function isSocialOrTicketingUrl(value: string): boolean {

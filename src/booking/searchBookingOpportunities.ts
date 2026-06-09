@@ -1,13 +1,17 @@
 import { pickBestContact } from "./contactExtraction.js";
+import { filterBookingTargetsForRelevance, sourcePriorityBonus, type BookingRelevanceEnv } from "./relevance.js";
 import { recommendBookingAction, scoreBookingCompatibility } from "./scoring.js";
 import type { BookingOpportunity, BookingSearchInput, BookingSearchResult, BookingSourceMetadata, BookingSourceType, BookingTarget } from "./types.js";
 import {
   buildDefaultBookingSourceProviders,
   type BookingSourceProvider
 } from "./providers/BookingSourceProvider.js";
+import { warnLog } from "../utils/logger.js";
 
 export interface SearchBookingOpportunitiesOptions {
   providers?: BookingSourceProvider[];
+  env?: BookingRelevanceEnv;
+  now?: Date;
 }
 
 export async function searchBookingOpportunities(
@@ -21,7 +25,13 @@ export async function searchBookingOpportunities(
   const providerResults = await Promise.all(
     providers.map((provider) => provider.search({ input, maxResults: input.limit }))
   );
-  const targets = dedupeTargets(providerResults.flatMap((result) => result.targets));
+  const rawTargets = dedupeTargets(providerResults.flatMap((result) => result.targets.map((target) => ({
+    ...target,
+    sourceProvider: target.sourceProvider ?? result.sourceProvider
+  }))));
+  const relevance = filterBookingTargetsForRelevance(input, rawTargets, options.env, options.now);
+  logBookingRelevanceSummary(relevance.summary);
+  const targets = relevance.targets;
   const opportunities = targets
     .map((target) => buildOpportunity(input, target))
     .sort((left, right) => right.score - left.score)
@@ -32,7 +42,10 @@ export async function searchBookingOpportunities(
     targets,
     opportunities,
     sourcesUsed: collectSourcesUsed(targets),
-    warnings: uniqueStrings(providerResults.flatMap((result) => result.warnings)),
+    warnings: uniqueStrings([
+      ...providerResults.flatMap((result) => result.warnings),
+      ...relevance.summary.warnings
+    ]),
     sourceMetadata: providerResults.map((result): BookingSourceMetadata => ({
       providerName: result.sourceProvider,
       sourceProvider: result.sourceProvider,
@@ -48,6 +61,9 @@ function buildOpportunity(input: BookingSearchInput, target: BookingTarget): Boo
   const bookingScore = scoreBookingCompatibility(input, target);
   const suggestedAction = recommendBookingAction(input, target, bookingScore);
   const bestContact = pickBestContact(target.contacts);
+  const priorityBonus = sourcePriorityBonus(target);
+  const score = clampScore(bookingScore.total + priorityBonus);
+  const reason = buildOpportunityReason(target, bookingScore.reason, priorityBonus);
 
   return {
     name: target.name,
@@ -56,21 +72,45 @@ function buildOpportunity(input: BookingSearchInput, target: BookingTarget): Boo
     city: target.city,
     country: target.country,
     sourceUrl: target.sourceUrl,
+    sourceType: target.sourceType,
+    sourceProvider: target.sourceProvider ?? null,
     contact: bestContact?.value ?? null,
     contactType: bestContact?.type ?? "unknown",
-    score: bookingScore.total,
+    score,
     confidence: bookingScore.confidence,
-    reason: bookingScore.reason,
+    reason,
     warnings: bookingScore.warnings,
     fitSummary: buildFitSummary(target, suggestedAction, bookingScore.warnings),
     evidence: target.evidence,
     suggestedAction,
+    eventDate: target.eventDate ?? null,
+    isFutureEvent: target.isFutureEvent ?? null,
+    ageMonths: target.ageMonths ?? null,
+    derivedFromSimilarArtist: target.derivedFromSimilarArtist ?? null,
     target: {
       ...target,
       recommendedAction: suggestedAction
     },
     bookingScore
   };
+}
+
+function buildOpportunityReason(target: BookingTarget, baseReason: string, priorityBonus: number): string {
+  const derived = target.derivedFromSimilarArtist;
+  const priorityText = priorityBonus > 0
+    ? `Source priority bonus: ${priorityBonus}/100.`
+    : priorityBonus < 0
+      ? `Broad search source penalty: ${priorityBonus}/100.`
+      : null;
+  const similarArtistReasons = derived
+    ? [
+        `Similar artist ${derived.name} played or was referenced by this source recently.`,
+        `Popularity comparison: ${derived.popularityComparison}.`,
+        derived.matchedGenres.length > 0 ? `Matched genres: ${derived.matchedGenres.join(", ")}.` : null,
+        target.eventDate ? `Recent event date: ${target.eventDate}.` : null
+      ].filter(Boolean)
+    : [];
+  return [...similarArtistReasons, baseReason, priorityText].filter(Boolean).join(" ");
 }
 
 function buildFitSummary(target: BookingTarget, action: string, warnings: string[]): string {
@@ -105,6 +145,23 @@ function collectSourcesUsed(targets: BookingTarget[]): string[] {
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
+}
+
+function logBookingRelevanceSummary(summary: ReturnType<typeof filterBookingTargetsForRelevance>["summary"]): void {
+  warnLog("booking", [
+    "Booking relevance filters:",
+    `- Similar artists considered: ${summary.similarArtistsConsidered}`,
+    `- Similar artists kept for booking: ${summary.similarArtistsKept}`,
+    `- Similar artist live targets found: ${summary.similarArtistLiveTargetsFound}`,
+    `- OpenAgenda candidates found: ${summary.openAgendaCandidatesFound}`,
+    `- OpenAgenda candidates kept after date/genre filters: ${summary.openAgendaCandidatesKept}`,
+    `- Rejected old events: ${summary.rejectedOldEvents}`,
+    `- Rejected genre-mismatch events: ${summary.rejectedGenreMismatchEvents}`
+  ].join("\n"));
+}
+
+function clampScore(value: number): number {
+  return Math.max(0, Math.min(value, 100));
 }
 
 export type { BookingSourceType };

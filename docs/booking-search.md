@@ -34,7 +34,17 @@ Each provider returns:
 - provider warnings
 - provider metadata
 
-`searchBookingOpportunities()` deduplicates targets, scores them, preserves provider warnings and returns sorted booking opportunities.
+`searchBookingOpportunities()` deduplicates targets, applies booking relevance filters, scores them, preserves provider warnings and returns sorted booking opportunities.
+
+Booking discovery is similar-artist-first:
+
+1. Similar artists live history.
+2. Venue/festival pages discovered from those similar artists.
+3. Promoters/organizers attached to those events.
+4. OpenAgenda as secondary discovery.
+5. Broad web discovery as fallback.
+
+Similar artists are used as context only. They remain in `similar-artists.json` and must not be written as booking opportunities.
 
 Normalized categories:
 
@@ -51,6 +61,28 @@ Normalized categories:
 - `event`
 
 ## Enabled Providers
+
+### SimilarArtistLiveHistoryBookingSourceProvider
+
+Runs first when web search is configured and similar artists are available in memory from the same booking run.
+
+The provider keeps only similar artists with strong genre compatibility and useful popularity proximity:
+
+- same tier: strongest signal
+- up to 3x bigger: good aspirational signal
+- 3x to 10x bigger: support-slot context
+- more than 10x bigger: weak reference only
+- much smaller artists: weaker booking discovery signal
+
+It searches recent live dates, venue pages, festival pages and event pages for those artists. Booking reasons should explain the context, for example:
+
+- `Similar artist X played this venue recently`
+- `Similar artist X has comparable popularity`
+- `Venue programmed compatible pop punk / emo artists`
+- `Recent event date: YYYY-MM-DD`
+- `Good support-slot target because similar artists were slightly bigger`
+
+When available, booking opportunities include `derivedFromSimilarArtist` metadata with the similar artist name, popularity comparison, matched genres and source URL.
 
 ### MockBookingSourceProvider
 
@@ -80,6 +112,8 @@ It is disabled unless the existing Firecrawl configuration is present. It should
 
 Disabled by default in local runs. The GitHub Actions booking CLI workflow sets `ENABLE_OPENAGENDA=true` by default and uses GitHub Actions secrets for real OpenAgenda runs.
 
+OpenAgenda is secondary. It should provide candidates, not final trusted opportunities, and those candidates are filtered before ranking.
+
 Documented configuration only:
 
 - `ENABLE_OPENAGENDA=true`
@@ -100,6 +134,20 @@ Agenda UID resolution order:
 OpenAgenda discovery uses city/region/location terms, genre-aware keywords and music keywords such as concert, musiques actuelles, festival, tremplin and appel à candidature. When agenda discovery finds useful UIDs, the provider stores selected agenda UIDs, agenda source URLs, discovery locations, discovered UIDs and event source URLs in provider metadata and warnings so they can later be reviewed for the seed config. If discovery finds no relevant public agendas, the provider returns an empty result with a clear warning.
 
 When `ENABLE_OPENAGENDA=true` but `OPENAGENDA_API_KEY` is missing, the provider is disabled with a warning instead of exposing secret values or crashing unrelated booking flow.
+
+OpenAgenda candidates must pass strict relevance checks:
+
+- future events are kept
+- recent past events are kept only within the configured recent window
+- events older than the recent window are rejected
+- missing dates are rejected unless source confidence is high
+- exact or related genre evidence is required
+- `music`, `concert`, `rock` or city match alone is not enough
+- incompatible explicit genre evidence is rejected
+
+The recent event window defaults to 24 months and can be configured with:
+
+- `BOOKING_RECENT_EVENT_MONTHS=24`
 
 The manual GitHub Actions workflow can be configured with `workflow_dispatch` inputs for artist, city, genre, target, limit, `enable_openagenda` and optional `openagenda_agenda_uids`. Secrets are read from GitHub Actions secrets and must not be hardcoded or printed.
 
@@ -127,6 +175,16 @@ Future providers should implement `BookingSourceProvider` and return normalized 
 - Unknown contacts stay `null`.
 - Support slots are inferred unless the source explicitly confirms them.
 - Provider failures should return warnings, not crash the CLI.
+
+## Relevance Filters
+
+Booking relevance filters run before scoring/ranking.
+
+For pop punk, strong signals include pop punk, punk rock, emo, emo pop, easycore, skate punk and melodic punk. Medium signals such as alternative rock are accepted only with punk/emo evidence. Generic `rock`, `concert`, `musique` or `musiques actuelles` alone is insufficient.
+
+Explicit incompatible genre evidence such as jazz-only, classical, techno-only, rap-only, metal-only without punk/hardcore crossover, chanson-only, or cover-band-only programming is rejected or heavily deprioritized.
+
+Ranking applies source priority after compatibility scoring. Similar-artist live history, official venue programming pages, official festival pages and promoter/organizer official pages rank above OpenAgenda and broad search snippets. OpenAgenda can still rank well when date and genre evidence are strong, but it should not flood the shortlist.
 
 ## MCP Usage
 

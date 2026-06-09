@@ -73,6 +73,9 @@ export function scoreBookingCompatibility(input: BookingSearchInput, target: Boo
 }
 
 export function recommendBookingAction(input: BookingSearchInput, target: BookingTarget, score: BookingScore): BookingSuggestedAction {
+  if (target.derivedFromSimilarArtist?.popularityComparison === "bigger_support_slot" || target.derivedFromSimilarArtist?.popularityComparison === "massively_bigger") {
+    return "support_slot";
+  }
   if (target.category === "festival" || target.category === "springboard" || target.category === "open_call") {
     return "application";
   }

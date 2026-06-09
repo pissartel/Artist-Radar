@@ -1,0 +1,138 @@
+name: Feature request
+description: Propose a structured Artist Radar feature ticket
+title: "[AREA] Short feature name"
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issue titles must follow: `[AREA] Short feature name`
+
+        Example: `[BOOKING] Add similar artists carousel`
+
+        GitHub generates the issue number automatically after creation.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - BOOKING
+        - PROMO
+        - DATA
+        - FRONT
+        - BACK
+        - INFRA
+        - QA
+    validations:
+      required: true
+
+  - type: dropdown
+    id: work-type
+    attributes:
+      label: Work Type
+      options:
+        - feature
+        - tech
+        - fix
+        - refactor
+        - docs
+    validations:
+      required: true
+
+  - type: textarea
+    id: business-goal
+    attributes:
+      label: Business Goal
+      description: What business or product outcome should this feature support?
+    validations:
+      required: true
+
+  - type: textarea
+    id: user-story
+    attributes:
+      label: User Story
+      description: Describe the user, their need, and the expected value.
+      placeholder: As a music artist, I want to... so that...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Add relevant background, constraints, examples, or links.
+    validations:
+      required: true
+
+  - type: textarea
+    id: functional-requirements
+    attributes:
+      label: Functional Requirements
+      description: List the expected product behavior.
+      placeholder: |
+        - 
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical-requirements
+    attributes:
+      label: Technical Requirements
+      description: List implementation constraints or expected technical behavior.
+      placeholder: |
+        - 
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: List the criteria that must be checked before completion.
+      placeholder: |
+        - [ ] 
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ai-complexity
+    attributes:
+      label: AI Complexity
+      options:
+        - Low
+        - Medium
+        - High
+    validations:
+      required: true
+
+  - type: dropdown
+    id: estimated-effort
+    attributes:
+      label: Estimated Effort
+      options:
+        - < 1h
+        - 1-4h
+        - 4-8h
+        - 1+ day
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical-notes
+    attributes:
+      label: Technical Notes
+      description: Add implementation ideas, affected files, dependencies, or risks.
+    validations:
+      required: false
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of Scope
+      description: Clarify what should not be included in this ticket.
+      placeholder: |
+        - 
+    validations:
+      required: false

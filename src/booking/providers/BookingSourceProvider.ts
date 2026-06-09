@@ -9,6 +9,12 @@ import {
 import { buildFirecrawlBookingSourceProvider } from "./FirecrawlBookingSourceProvider.js";
 import { buildMockBookingSourceProvider } from "./MockBookingSourceProvider.js";
 import { buildOpenAgendaBookingSourceProvider, type OpenAgendaBookingSourceProviderEnv } from "./OpenAgendaBookingSourceProvider.js";
+import {
+  buildSceneAgendaBookingSourceProvider,
+  getSceneAgendaProviderStatus,
+  getSceneAgendaSourceStatuses,
+  type SceneAgendaProviderEnv
+} from "./SceneAgendaProvider.js";
 import { buildSimilarArtistLiveHistoryBookingSourceProvider } from "./SimilarArtistLiveHistoryBookingSourceProvider.js";
 import { buildWebSearchBookingSourceProvider } from "./WebSearchBookingSourceProvider.js";
 import { warnLog } from "../../utils/logger.js";
@@ -31,7 +37,7 @@ export interface BookingSourceProvider {
   search(context: BookingSourceProviderContext): Promise<BookingSourceProviderResult>;
 }
 
-export interface DefaultBookingProviderEnv extends WebProviderEnv, OpenAgendaBookingSourceProviderEnv {
+export interface DefaultBookingProviderEnv extends WebProviderEnv, OpenAgendaBookingSourceProviderEnv, SceneAgendaProviderEnv {
   MOCK_AI?: string;
 }
 
@@ -65,6 +71,15 @@ export function buildDefaultBookingSourceProviders(
     }));
   }
 
+  if (similarArtistSearchProvider && getSceneAgendaProviderStatus(env).enabled) {
+    providers.push(buildSceneAgendaBookingSourceProvider({
+      env,
+      webSearchProvider: similarArtistSearchProvider,
+      maxQueries: 8,
+      maxResultsPerQuery: 4
+    }));
+  }
+
   providers.push(
     buildOpenAgendaBookingSourceProvider({ env, fetchImpl }),
     buildFirecrawlBookingSourceProvider(env, fetchImpl)
@@ -88,15 +103,31 @@ export function buildDefaultBookingSourceProviders(
 }
 
 function logBookingProviderStartup(env: DefaultBookingProviderEnv): void {
+  const similarArtistLiveHistory = getSimilarArtistLiveHistoryProviderStatus(env);
+  const sceneAgendas = getSceneAgendaProviderStatus(env);
+  const sceneSources = getSceneAgendaSourceStatuses(env);
   const openAgenda = getOpenAgendaProviderStatus(env);
   const firecrawl = getFirecrawlProviderStatus(env);
   const mock = getMockProviderStatus(env);
   warnLog("booking", [
     "Booking providers:",
+    `- SimilarArtistLiveHistory: ${similarArtistLiveHistory.enabled ? "enabled" : "disabled"} (${similarArtistLiveHistory.reason})`,
+    `- SceneAgendas: ${sceneAgendas.enabled ? "enabled" : "disabled"} (${sceneAgendas.reason})`,
+    ...sceneSources.map((status) => `- ${status.label}: ${status.enabled ? "enabled" : "disabled"} (${status.reason})`),
     `- OpenAgenda: ${openAgenda.enabled ? "enabled" : "disabled"} (${openAgenda.reason})`,
     `- Firecrawl: ${firecrawl.enabled ? "enabled" : "disabled"} (${firecrawl.reason})`,
     `- Mock: ${mock.enabled ? "enabled" : "disabled"} (${mock.reason})`
   ].join("\n"));
+}
+
+function getSimilarArtistLiveHistoryProviderStatus(env: DefaultBookingProviderEnv): { enabled: boolean; reason: string } {
+  if (env.ENABLE_FIRECRAWL_CONSOLIDATION === "true" && env.FIRECRAWL_API_KEY) {
+    return { enabled: true, reason: "enabled with Firecrawl search/extract" };
+  }
+  if (env.TAVILY_API_KEY || env.EXA_API_KEY || env.JINA_API_KEY) {
+    return { enabled: true, reason: "enabled with available web provider" };
+  }
+  return { enabled: false, reason: "no web search provider is configured" };
 }
 
 function getOpenAgendaProviderStatus(env: DefaultBookingProviderEnv): { enabled: boolean; reason: string } {

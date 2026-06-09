@@ -24,6 +24,7 @@ export type BookingSourceType =
   | "manual_seed"
   | "openagenda"
   | "similar_artist_live_history"
+  | "specialized_scene_agenda"
   | "venue_official_programming_page"
   | "festival_official_page"
   | "promoter_official_page"

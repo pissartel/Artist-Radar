@@ -10,6 +10,8 @@ export interface BookingRelevanceSummary {
   similarArtistsConsidered: number;
   similarArtistsKept: number;
   similarArtistLiveTargetsFound: number;
+  sceneAgendaCandidatesFound: number;
+  sceneAgendaCandidatesKept: number;
   openAgendaCandidatesFound: number;
   openAgendaCandidatesKept: number;
   rejectedOldEvents: number;
@@ -46,6 +48,8 @@ export function filterBookingTargetsForRelevance(
     similarArtistsConsidered: input.similarArtists?.length ?? 0,
     similarArtistsKept: countBookingUsefulSimilarArtists(input),
     similarArtistLiveTargetsFound: targets.filter((target) => target.sourceType === "similar_artist_live_history").length,
+    sceneAgendaCandidatesFound: targets.filter((target) => target.sourceType === "specialized_scene_agenda").length,
+    sceneAgendaCandidatesKept: 0,
     openAgendaCandidatesFound: targets.filter((target) => target.sourceType === "openagenda").length,
     openAgendaCandidatesKept: 0,
     rejectedOldEvents: 0,
@@ -86,6 +90,9 @@ export function filterBookingTargetsForRelevance(
     if (enriched.sourceType === "openagenda") {
       summary.openAgendaCandidatesKept += 1;
     }
+    if (enriched.sourceType === "specialized_scene_agenda") {
+      summary.sceneAgendaCandidatesKept += 1;
+    }
     kept.push(enriched);
   }
 
@@ -104,6 +111,7 @@ export function filterBookingTargetsForRelevance(
 
 export function sourcePriorityBonus(target: BookingTarget): number {
   if (target.sourceType === "similar_artist_live_history") return 18;
+  if (target.sourceType === "specialized_scene_agenda") return target.derivedFromSimilarArtist ? 16 : 12;
   if (target.sourceType === "venue_official_programming_page") return 15;
   if (target.sourceType === "festival_official_page") return 15;
   if (target.sourceType === "promoter_official_page") return 12;

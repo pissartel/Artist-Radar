@@ -39,10 +39,11 @@ Each provider returns:
 Booking discovery is similar-artist-first:
 
 1. Similar artists live history.
-2. Venue/festival pages discovered from those similar artists.
-3. Promoters/organizers attached to those events.
-4. OpenAgenda as secondary discovery.
-5. Broad web discovery as fallback.
+2. Specialized punk/metal/alternative scene agendas.
+3. Venue/festival pages discovered from similar artists or scene agendas.
+4. Promoters/organizers attached to those events.
+5. OpenAgenda as secondary discovery.
+6. Broad web discovery as fallback.
 
 Similar artists are used as context only. They remain in `similar-artists.json` and must not be written as booking opportunities.
 
@@ -83,6 +84,46 @@ It searches recent live dates, venue pages, festival pages and event pages for t
 - `Good support-slot target because similar artists were slightly bigger`
 
 When available, booking opportunities include `derivedFromSimilarArtist` metadata with the similar artist name, popularity comparison, matched genres and source URL.
+
+### SceneAgendaBookingSourceProvider
+
+Runs after similar-artist live history and before OpenAgenda when `ENABLE_SCENE_AGENDAS=true` and a web search provider is configured.
+
+The provider targets specialized punk, pop punk, hardcore, metal and alternative scene agendas before broad cultural databases:
+
+- ConcertsPunk.fr
+- Punk'n Roll Agenda
+- Razibus
+- France Punk Scene
+- Concerts-metal.com is disabled by default because automated access can hit `check_bot` or bot-protection pages.
+
+Scene agenda providers normalize public search results into sourced `BookingTarget` candidates with:
+
+- `sourceType: specialized_scene_agenda`
+- provider name in `sourceProvider`
+- source URL preserved from the result
+- event date when parseable
+- venue/lineup/genre clues when detected
+- unknown contact when no public contact is present
+
+They reuse the central booking relevance filters. Future events are preferred, recent past events are kept only within `BOOKING_RECENT_EVENT_MONTHS` for venue-history context, and old or incompatible events are rejected before ranking.
+
+For pop punk, punk rock, punk, emo, emo pop, easycore, skate punk, melodic punk and hardcore punk are strong signals. Generic `rock`, `concert`, `musiques actuelles` or `alternative` alone is not enough. Metal-only events are rejected for pop punk unless the text also contains punk/hardcore crossover evidence.
+
+Support-slot opportunities are inferred only from public wording such as `+ guest`, `support TBA`, `première partie à venir`, `line-up soon` or `guests TBA`. The CLI warning must say `Support slot is inferred, not confirmed.` unless the source explicitly confirms availability.
+
+When a similar artist appears in a scene agenda lineup or source text, the provider adds `derivedFromSimilarArtist` metadata and ranking gets a source-context boost.
+
+Configuration:
+
+- `ENABLE_SCENE_AGENDAS=true`
+- `ENABLE_CONCERTS_PUNK=true`
+- `ENABLE_PUNKNROLL_AGENDA=true`
+- `ENABLE_RAZIBUS=true`
+- `ENABLE_FRANCE_PUNK_SCENE=true`
+- `ENABLE_CONCERTS_METAL=false`
+
+The GitHub Actions booking workflow exposes these flags as `workflow_dispatch` inputs. They do not require secrets.
 
 ### MockBookingSourceProvider
 
@@ -175,6 +216,10 @@ Future providers should implement `BookingSourceProvider` and return normalized 
 - Unknown contacts stay `null`.
 - Support slots are inferred unless the source explicitly confirms them.
 - Provider failures should return warnings, not crash the CLI.
+- Do not bypass bot protections, paywalls, logins, CAPTCHAs, `check_bot` pages, anti-bot pages or robots restrictions.
+- Do not scrape aggressively. Prefer existing provider abstractions, cache/rate limits and sourced public search results.
+- If a scene provider detects blocked/protected access, it must skip the result or disable the provider with a clear warning.
+- Future seed/database work may store trusted scene sources by genre and country, but no database is used in the MVP.
 
 ## Relevance Filters
 
@@ -184,7 +229,7 @@ For pop punk, strong signals include pop punk, punk rock, emo, emo pop, easycore
 
 Explicit incompatible genre evidence such as jazz-only, classical, techno-only, rap-only, metal-only without punk/hardcore crossover, chanson-only, or cover-band-only programming is rejected or heavily deprioritized.
 
-Ranking applies source priority after compatibility scoring. Similar-artist live history, official venue programming pages, official festival pages and promoter/organizer official pages rank above OpenAgenda and broad search snippets. OpenAgenda can still rank well when date and genre evidence are strong, but it should not flood the shortlist.
+Ranking applies source priority after compatibility scoring. Similar-artist live history ranks first, then strongly matched specialized scene agenda results, official venue programming pages, official festival pages and promoter/organizer official pages. OpenAgenda can still rank when date and genre evidence are strong, but it is secondary and must not flood the shortlist.
 
 ## MCP Usage
 

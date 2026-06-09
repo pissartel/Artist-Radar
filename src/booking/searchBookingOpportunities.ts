@@ -153,6 +153,8 @@ function logBookingRelevanceSummary(summary: ReturnType<typeof filterBookingTarg
     `- Similar artists considered: ${summary.similarArtistsConsidered}`,
     `- Similar artists kept for booking: ${summary.similarArtistsKept}`,
     `- Similar artist live targets found: ${summary.similarArtistLiveTargetsFound}`,
+    `- Scene agenda candidates found: ${summary.sceneAgendaCandidatesFound}`,
+    `- Scene agenda candidates kept after date/genre filters: ${summary.sceneAgendaCandidatesKept}`,
     `- OpenAgenda candidates found: ${summary.openAgendaCandidatesFound}`,
     `- OpenAgenda candidates kept after date/genre filters: ${summary.openAgendaCandidatesKept}`,
     `- Rejected old events: ${summary.rejectedOldEvents}`,

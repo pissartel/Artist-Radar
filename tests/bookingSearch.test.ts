@@ -5,6 +5,7 @@ import { getRelatedGenres, matchBookingGenres } from "../src/booking/genreMatchi
 import { buildDefaultBookingSourceProviders } from "../src/booking/providers/BookingSourceProvider.js";
 import { buildMockBookingSourceProvider } from "../src/booking/providers/MockBookingSourceProvider.js";
 import { buildOpenAgendaBookingSourceProvider } from "../src/booking/providers/OpenAgendaBookingSourceProvider.js";
+import { buildSceneAgendaBookingSourceProvider, getSceneAgendaSourceStatuses } from "../src/booking/providers/SceneAgendaProvider.js";
 import { buildWebSearchBookingSourceProvider } from "../src/booking/providers/WebSearchBookingSourceProvider.js";
 import { normalizeBookingSource } from "../src/booking/normalizeBookingTarget.js";
 import { recommendBookingAction, scoreBookingCompatibility } from "../src/booking/scoring.js";
@@ -766,6 +767,190 @@ describe("Booking Search core", () => {
     expect(result.opportunities[0]?.derivedFromSimilarArtist?.name).toBe("Comparable Punk Band");
   });
 
+  it("keeps future and recent specialized scene agenda events with strict pop punk evidence", async () => {
+    const provider = buildSceneAgendaBookingSourceProvider({
+      env: { ENABLE_SCENE_AGENDAS: "true" },
+      now: new Date("2026-06-09T12:00:00Z"),
+      maxQueries: 1,
+      maxResultsPerQuery: 3,
+      webSearchProvider: {
+        providerName: "scene-test-search",
+        async search() {
+          return [
+            sceneResult("Future Easycore Night", "Paris easycore pop punk punk rock + guest 2026-08-01", "future"),
+            sceneResult("Recent Emo Venue History", "Paris emo punk rock show 2025-06-01", "recent"),
+            sceneResult("Old Punk Archive", "Paris punk rock show 2023-01-01", "old")
+          ];
+        }
+      }
+    });
+
+    const result = await searchBookingOpportunities(input, {
+      providers: [provider],
+      now: new Date("2026-06-09T12:00:00Z")
+    });
+
+    expect(result.opportunities.map((opportunity) => opportunity.name)).toEqual(expect.arrayContaining([
+      "Future Easycore Night",
+      "Recent Emo Venue History"
+    ]));
+    expect(result.opportunities.some((opportunity) => opportunity.name === "Old Punk Archive")).toBe(false);
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      "Booking relevance rejected 1 events older than 24 months."
+    ]));
+  });
+
+  it("rejects generic rock/concert and metal-only scene events for pop punk unless crossover evidence exists", async () => {
+    const provider = buildSceneAgendaBookingSourceProvider({
+      env: { ENABLE_SCENE_AGENDAS: "true" },
+      now: new Date("2026-06-09T12:00:00Z"),
+      maxQueries: 1,
+      maxResultsPerQuery: 3,
+      webSearchProvider: {
+        providerName: "scene-test-search",
+        async search() {
+          return [
+            sceneResult("Generic Rock Concert", "Paris rock concert 2026-08-01", "generic"),
+            sceneResult("Metal Only Night", "Paris metal heavy metal concert 2026-08-01", "metal"),
+            sceneResult("Hardcore Punk Crossover", "Paris metalcore hardcore punk pop punk 2026-08-01", "crossover")
+          ];
+        }
+      }
+    });
+
+    const result = await searchBookingOpportunities(input, {
+      providers: [provider],
+      now: new Date("2026-06-09T12:00:00Z")
+    });
+
+    expect(result.opportunities.map((opportunity) => opportunity.name)).toEqual(["Hardcore Punk Crossover"]);
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      "Booking relevance rejected 2 genre-mismatch candidates."
+    ]));
+  });
+
+  it("adds inferred support-slot warning for specialized scene support TBA signals", async () => {
+    const provider = buildSceneAgendaBookingSourceProvider({
+      env: { ENABLE_SCENE_AGENDAS: "true" },
+      now: new Date("2026-06-09T12:00:00Z"),
+      maxQueries: 1,
+      maxResultsPerQuery: 1,
+      webSearchProvider: {
+        providerName: "scene-test-search",
+        async search() {
+          return [sceneResult("Pop Punk Club Show", "Paris pop punk punk rock support TBA 2026-08-01", "support")];
+        }
+      }
+    });
+
+    const result = await searchBookingOpportunities(input, {
+      providers: [provider],
+      now: new Date("2026-06-09T12:00:00Z")
+    });
+
+    expect(result.opportunities[0]?.sourceType).toBe("specialized_scene_agenda");
+    expect(result.opportunities[0]?.warnings).toContain("Support slot is inferred, not confirmed.");
+  });
+
+  it("cross-checks scene agenda lineups against similar artists", async () => {
+    const provider = buildSceneAgendaBookingSourceProvider({
+      env: { ENABLE_SCENE_AGENDAS: "true" },
+      now: new Date("2026-06-09T12:00:00Z"),
+      maxQueries: 1,
+      maxResultsPerQuery: 1,
+      webSearchProvider: {
+        providerName: "scene-test-search",
+        async search() {
+          return [sceneResult("Comparable Punk Band at Club", "Comparable Punk Band pop punk punk rock Paris 2026-08-01", "similar")];
+        }
+      }
+    });
+
+    const result = await searchBookingOpportunities({
+      ...input,
+      similarArtists: [baseSimilarArtist({ name: "Comparable Punk Band" })]
+    }, {
+      providers: [provider],
+      now: new Date("2026-06-09T12:00:00Z")
+    });
+
+    expect(result.opportunities[0]?.derivedFromSimilarArtist).toMatchObject({
+      name: "Comparable Punk Band",
+      popularityComparison: "same_tier"
+    });
+    expect(result.opportunities[0]?.reason).toContain("Similar artist Comparable Punk Band");
+  });
+
+  it("keeps ConcertsMetal disabled by default and skips protected blocked results", async () => {
+    expect(getSceneAgendaSourceStatuses({ ENABLE_SCENE_AGENDAS: "true" }).find((status) => status.key === "concerts_metal")).toMatchObject({
+      enabled: false
+    });
+
+    const provider = buildSceneAgendaBookingSourceProvider({
+      env: {
+        ENABLE_SCENE_AGENDAS: "true",
+        ENABLE_CONCERTS_PUNK: "false",
+        ENABLE_PUNKNROLL_AGENDA: "false",
+        ENABLE_RAZIBUS: "false",
+        ENABLE_FRANCE_PUNK_SCENE: "false",
+        ENABLE_CONCERTS_METAL: "true"
+      },
+      maxQueries: 1,
+      maxResultsPerQuery: 1,
+      webSearchProvider: {
+        providerName: "scene-test-search",
+        async search() {
+          return [sceneResult("check_bot", "check_bot CAPTCHA anti-bot page", "protected")];
+        }
+      }
+    });
+
+    const result = await provider.search({ input, maxResults: 5 });
+
+    expect(result.targets).toEqual([]);
+    expect(result.metadata).toMatchObject({ blockedResults: 1 });
+    expect(result.warnings.some((warning) => warning.includes("blocked/protected"))).toBe(true);
+  });
+
+  it("ranks specialized scene agenda results above matched OpenAgenda results", async () => {
+    const provider: BookingSourceProvider = {
+      providerName: "qa_scene_priority_provider",
+      async search() {
+        return {
+          sourceProvider: "qa_scene_priority_provider",
+          searchedQueries: ["priority"],
+          warnings: [],
+          metadata: {},
+          targets: [
+            baseTarget({
+              name: "OpenAgenda Matched Pop Punk Event",
+              sourceType: "openagenda",
+              sourceProvider: "openagenda_booking",
+              genres: ["pop punk"],
+              eventDate: "2026-08-01",
+              confidence: 0.9
+            }),
+            baseTarget({
+              name: "Scene Agenda Pop Punk Event",
+              sourceType: "specialized_scene_agenda",
+              sourceProvider: "concerts_punk",
+              genres: ["pop punk", "punk rock"],
+              eventDate: "2026-08-01",
+              confidence: 0.9
+            })
+          ]
+        };
+      }
+    };
+
+    const result = await searchBookingOpportunities(input, {
+      providers: [provider],
+      now: new Date("2026-06-09T12:00:00Z")
+    });
+
+    expect(result.opportunities[0]?.name).toBe("Scene Agenda Pop Punk Event");
+  });
+
   it("builds a strict source-grounded Booking Search extraction prompt", () => {
     const prompt = buildBookingSearchExtractionPrompt({
       input,
@@ -847,5 +1032,16 @@ function baseSimilarArtist(overrides: Partial<SimilarArtist> = {}): SimilarArtis
     },
     discardedTags: [],
     ...overrides
+  };
+}
+
+function sceneResult(title: string, snippet: string, slug: string) {
+  return {
+    title,
+    url: `https://example.test/scene/${slug}`,
+    snippet,
+    sourceProvider: "scene-test-search",
+    confidence: 0.82,
+    links: []
   };
 }

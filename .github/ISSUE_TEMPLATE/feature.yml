@@ -28,6 +28,19 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: work-type
+    attributes:
+      label: Work Type
+      options:
+        - feature
+        - tech
+        - fix
+        - refactor
+        - docs
+    validations:
+      required: true
+
   - type: textarea
     id: business-goal
     attributes:

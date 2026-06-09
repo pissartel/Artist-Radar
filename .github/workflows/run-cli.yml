@@ -54,6 +54,42 @@ on:
         default: ""
         type: string
 
+      enable_scene_agendas:
+        description: "ENABLE_SCENE_AGENDAS"
+        required: true
+        default: true
+        type: boolean
+
+      enable_concerts_punk:
+        description: "ENABLE_CONCERTS_PUNK"
+        required: true
+        default: true
+        type: boolean
+
+      enable_punknroll_agenda:
+        description: "ENABLE_PUNKNROLL_AGENDA"
+        required: true
+        default: true
+        type: boolean
+
+      enable_razibus:
+        description: "ENABLE_RAZIBUS"
+        required: true
+        default: true
+        type: boolean
+
+      enable_france_punk_scene:
+        description: "ENABLE_FRANCE_PUNK_SCENE"
+        required: true
+        default: true
+        type: boolean
+
+      enable_concerts_metal:
+        description: "ENABLE_CONCERTS_METAL"
+        required: true
+        default: false
+        type: boolean
+
       spotify_url:
         description: "Spotify artist URL"
         required: false
@@ -145,6 +181,12 @@ jobs:
           ENABLE_OPENAGENDA: ${{ github.event.inputs.enable_openagenda }}
           OPENAGENDA_AGENDA_UIDS: ${{ github.event.inputs.openagenda_agenda_uids }}
           OPENAGENDA_API_KEY: ${{ secrets.OPENAGENDA_API_KEY }}
+          ENABLE_SCENE_AGENDAS: ${{ github.event.inputs.enable_scene_agendas }}
+          ENABLE_CONCERTS_PUNK: ${{ github.event.inputs.enable_concerts_punk }}
+          ENABLE_PUNKNROLL_AGENDA: ${{ github.event.inputs.enable_punknroll_agenda }}
+          ENABLE_RAZIBUS: ${{ github.event.inputs.enable_razibus }}
+          ENABLE_FRANCE_PUNK_SCENE: ${{ github.event.inputs.enable_france_punk_scene }}
+          ENABLE_CONCERTS_METAL: ${{ github.event.inputs.enable_concerts_metal }}
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
 
@@ -202,6 +244,12 @@ jobs:
           echo "CONSOLIDATE_SIMILAR_ARTISTS_LIMIT=$CONSOLIDATE_SIMILAR_ARTISTS_LIMIT"
           echo "ENABLE_FIRECRAWL_CONSOLIDATION=$ENABLE_FIRECRAWL_CONSOLIDATION"
           echo "ENABLE_OPENAGENDA=$ENABLE_OPENAGENDA"
+          echo "ENABLE_SCENE_AGENDAS=$ENABLE_SCENE_AGENDAS"
+          echo "ENABLE_CONCERTS_PUNK=$ENABLE_CONCERTS_PUNK"
+          echo "ENABLE_PUNKNROLL_AGENDA=$ENABLE_PUNKNROLL_AGENDA"
+          echo "ENABLE_RAZIBUS=$ENABLE_RAZIBUS"
+          echo "ENABLE_FRANCE_PUNK_SCENE=$ENABLE_FRANCE_PUNK_SCENE"
+          echo "ENABLE_CONCERTS_METAL=$ENABLE_CONCERTS_METAL"
           echo "DEBUG_FIRECRAWL=$DEBUG_FIRECRAWL"
           echo "DEBUG_ARTIST_CONSOLIDATION=$DEBUG_ARTIST_CONSOLIDATION"
           echo "DEBUG_SIMILAR_ARTISTS=$DEBUG_SIMILAR_ARTISTS"

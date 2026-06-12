@@ -13,6 +13,11 @@ const input: ArtistInput = {
   limit: 1
 };
 
+const promoInput: ArtistInput = {
+  ...input,
+  mode: "promo"
+};
+
 const validResult: OpportunitySearchResult = {
   opportunities: [
     {
@@ -48,7 +53,7 @@ describe("runOpportunitySearch", () => {
   it("uses the injected generator and applies the requested limit", async () => {
     const generator = generatorReturning(validResult);
 
-    const result = await runOpportunitySearch(input, { generator, seedCandidates: [] });
+    const result = await runOpportunitySearch(promoInput, { generator, seedCandidates: [] });
 
     expect(result.opportunities).toHaveLength(1);
     expect(result.opportunities[0]?.name).toBe("First Venue");
@@ -73,6 +78,7 @@ describe("runOpportunitySearch", () => {
     await runOpportunitySearch(
       {
         ...input,
+        mode: "promo",
         links: ["https://www.instagram.com/fakeband"]
       },
       { generator, seedCandidates: [] }
@@ -94,7 +100,7 @@ describe("runOpportunitySearch", () => {
       ]
     } as unknown as OpportunitySearchResult);
 
-    const result = await runOpportunitySearch(input, { generator, seedCandidates: [] });
+    const result = await runOpportunitySearch(promoInput, { generator, seedCandidates: [] });
 
     expect(result.opportunities[0]?.source_url).toBeNull();
     expect(result.opportunities[0]?.contact).toBeNull();
@@ -400,7 +406,7 @@ describe("runOpportunitySearch", () => {
       ]
     } as unknown as OpportunitySearchResult);
 
-    await expect(runOpportunitySearch(input, { generator, seedCandidates: [] })).rejects.toThrow();
+    await expect(runOpportunitySearch(promoInput, { generator, seedCandidates: [] })).rejects.toThrow();
   });
 
   it("validates raw input before calling the generator", async () => {

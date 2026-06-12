@@ -16,6 +16,8 @@ export interface WebProviderEnv {
   FIRECRAWL_API_KEY?: string;
   ENABLE_TAVILY_SEARCH?: string;
   ENABLE_EXA_SEARCH?: string;
+  ENABLE_TAVILY_BOOKING?: string;
+  ENABLE_EXA_BOOKING?: string;
   ENABLE_JINA_READER?: string;
   ENABLE_FIRECRAWL_CONSOLIDATION?: string;
   DEBUG_WEB_SEARCH?: string;
@@ -280,6 +282,17 @@ export function getEnabledSearchProviders(env: WebProviderEnv = process.env, fet
   }
   if (env.ENABLE_FIRECRAWL_CONSOLIDATION === "true" && env.FIRECRAWL_API_KEY) {
     providers.push(new FirecrawlSearchProvider(env, fetchImpl));
+  }
+  return providers;
+}
+
+export function getEnabledBookingSearchProviders(env: WebProviderEnv = process.env, fetchImpl: FetchLike = fetch): WebSearchProvider[] {
+  const providers: WebSearchProvider[] = [];
+  if (env.TAVILY_API_KEY && env.ENABLE_TAVILY_BOOKING !== "false") {
+    providers.push(new TavilySearchProvider(env, fetchImpl));
+  }
+  if (env.EXA_API_KEY && env.ENABLE_EXA_BOOKING !== "false") {
+    providers.push(new ExaSearchProvider(env, fetchImpl));
   }
   return providers;
 }

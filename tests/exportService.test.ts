@@ -1,12 +1,15 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildOutputBaseName,
+  BookingOutputWriteError,
   exportOpportunities,
+  formatBookingOutputLog,
   opportunitiesToCsv,
-  similarArtistsToCsv
+  similarArtistsToCsv,
+  writeBookingRequestOutputs
 } from "../src/services/exportService.js";
 import type { OpportunitySearchRunResult } from "../src/pipeline.js";
 import type { ArtistInput, Opportunity, SimilarArtist } from "../src/schemas.js";
@@ -19,6 +22,11 @@ const input: ArtistInput = {
   target: null,
   links: [],
   limit: 1
+};
+
+const promoInput: ArtistInput = {
+  ...input,
+  mode: "promo"
 };
 
 const opportunities: Opportunity[] = [
@@ -164,7 +172,7 @@ describe("export utilities", () => {
 
   it("exports JSON, opportunities CSV, similar artists CSV and events CSV files", async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "artist-radar-"));
-    const paths = await exportOpportunities(input, result, outputDir);
+    const paths = await exportOpportunities(promoInput, result, outputDir);
 
     const json = await readFile(paths.jsonPath, "utf8");
     const csv = await readFile(paths.opportunitiesCsvPath, "utf8");
@@ -185,7 +193,7 @@ describe("export utilities", () => {
 
   it("excludes raw evidence from final JSON by default", async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "artist-radar-"));
-    const paths = await exportOpportunities(input, result, outputDir);
+    const paths = await exportOpportunities(promoInput, result, outputDir);
     const parsed = JSON.parse(await readFile(paths.jsonPath, "utf8")) as Record<string, any>;
     const artist = parsed.similarArtists.local_peer[0];
 
@@ -199,7 +207,7 @@ describe("export utilities", () => {
   it("includes debug evidence when EXPORT_DEBUG_EVIDENCE=true", async () => {
     vi.stubEnv("EXPORT_DEBUG_EVIDENCE", "true");
     const outputDir = await mkdtemp(path.join(tmpdir(), "artist-radar-"));
-    const paths = await exportOpportunities(input, result, outputDir);
+    const paths = await exportOpportunities(promoInput, result, outputDir);
     const parsed = JSON.parse(await readFile(paths.jsonPath, "utf8")) as Record<string, any>;
     const artist = parsed.similarArtists.local_peer[0];
 
@@ -207,4 +215,141 @@ describe("export utilities", () => {
     expect(artist.sizeEvidence).toHaveLength(2);
     expect(artist.discardedTags).toEqual(["singer"]);
   });
+
+  it("writes separated JSON outputs for every booking request", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "artist-radar-"));
+    const paths = await exportOpportunities({ ...input, target: "grandes villes françaises" }, {
+      ...result,
+      bookingSearch: {
+        input: {
+          artist: input.artist,
+          city: input.city,
+          genre: input.genre,
+          target: "grandes villes françaises",
+          links: [],
+          limit: 1,
+          artistProfile: result.artistProfile
+        },
+        targets: [],
+        opportunities,
+        sourcesUsed: ["https://example.test/source"],
+        warnings: ["Provider disabled warning."],
+        sourceMetadata: [{
+          providerName: "qa_provider",
+          sourceProvider: "qa_provider",
+          searchedQueries: ["qa"],
+          targetCount: 0,
+          warnings: ["Provider disabled warning."],
+          metadata: { enabled: false }
+        }]
+      }
+    }, outputDir);
+
+    expect(paths.artistJsonPath).toMatch(new RegExp(`${escapeRegExp(path.join(outputDir, "booking"))}[/\\\\]booking-fake-band-lyon-.+[/\\\\]artist\\.json$`));
+    expect(paths.similarArtistsJsonPath).toBe(path.join(path.dirname(paths.artistJsonPath!), "similar-artists.json"));
+    expect(paths.bookingJsonPath).toBe(path.join(path.dirname(paths.artistJsonPath!), "booking.json"));
+    expect(paths.jsonPath).toBe(paths.bookingJsonPath);
+    expect(paths.opportunitiesCsvPath).toBe("");
+    expect(paths.similarArtistsCsvPath).toBe("");
+    expect(paths.eventsCsvPath).toBe("");
+    expect(paths.bookingSummary).toEqual({
+      similarArtistsCount: 1,
+      bookingOpportunitiesCount: 1,
+      sourcesUsedCount: 1,
+      warningsCount: 2
+    });
+
+    const outputRootFiles = await readdir(outputDir);
+    expect(outputRootFiles.filter((file) => file.endsWith(".json"))).toEqual([]);
+    expect(outputRootFiles.filter((file) => file.endsWith(".csv"))).toEqual([]);
+
+    const bookingRunFiles = await readdir(path.dirname(paths.artistJsonPath!));
+    expect(bookingRunFiles.filter((file) => file.endsWith(".json")).sort()).toEqual([
+      "artist.json",
+      "booking.json",
+      "similar-artists.json"
+    ]);
+    expect(bookingRunFiles.filter((file) => file.endsWith(".csv"))).toEqual([]);
+
+    const artistJsonText = await readFile(paths.artistJsonPath!, "utf8");
+    const similarArtistsJsonText = await readFile(paths.similarArtistsJsonPath!, "utf8");
+    const bookingJsonText = await readFile(paths.bookingJsonPath!, "utf8");
+    const artistJson = JSON.parse(artistJsonText) as Record<string, any>;
+    const similarArtistsJson = JSON.parse(similarArtistsJsonText) as Record<string, any>;
+    const bookingJson = JSON.parse(bookingJsonText) as Record<string, any>;
+
+    expect(artistJsonText).toContain('\n  "artist":');
+    expect(similarArtistsJsonText).toContain('\n  "similarArtists":');
+    expect(bookingJsonText).toContain('\n  "booking":');
+
+    expect(artistJson.artist.name).toBe("Fake Band");
+    expect(artistJson.artist.genres).toEqual(["metalcore"]);
+    expect(artistJson.artist.confidenceScore).toBe(20);
+    expect(artistJson).toHaveProperty("warnings");
+    expect(artistJson).not.toHaveProperty("booking");
+    expect(artistJson).not.toHaveProperty("opportunities");
+
+    expect(similarArtistsJson.similarArtists).toHaveLength(1);
+    expect(similarArtistsJson.similarArtists[0].name).toBe("Sample Similar Band");
+    expect(similarArtistsJson).not.toHaveProperty("booking");
+    expect(similarArtistsJson).not.toHaveProperty("opportunities");
+
+    expect(bookingJson.booking.opportunities).toHaveLength(1);
+    expect(bookingJson.booking.opportunities[0].name).toBe("Sample Venue");
+    expect(bookingJson.booking.sourcesUsed).toEqual(["https://example.test/source"]);
+    expect(bookingJson.booking.warnings).toEqual(["Provider disabled warning."]);
+    expect(bookingJson.booking.sourceMetadata[0]).toMatchObject({
+      providerName: "qa_provider",
+      warnings: ["Provider disabled warning."]
+    });
+    expect(bookingJson).not.toHaveProperty("similarArtists");
+    expect(bookingJson.booking).not.toHaveProperty("similarArtists");
+  });
+
+  it("formats booking output logs with paths and summary counts without env values", () => {
+    const output = formatBookingOutputLog({
+      artistJsonPath: "outputs/booking/run-1/artist.json",
+      similarArtistsJsonPath: "outputs/booking/run-1/similar-artists.json",
+      bookingJsonPath: "outputs/booking/run-1/booking.json",
+      bookingSummary: {
+        similarArtistsCount: 3,
+        bookingOpportunitiesCount: 2,
+        sourcesUsedCount: 1,
+        warningsCount: 0
+      }
+    });
+
+    expect(output).toContain("Booking outputs written:");
+    expect(output).toContain("- Artist data JSON: outputs/booking/run-1/artist.json");
+    expect(output).toContain("- Similar artists JSON: outputs/booking/run-1/similar-artists.json");
+    expect(output).toContain("- Booking opportunities JSON: outputs/booking/run-1/booking.json");
+    expect(output).toContain("Booking output summary:");
+    expect(output).toContain("- Similar artists: 3");
+    expect(output).toContain("- Booking opportunities: 2");
+    expect(output).toContain("- Sources used: 1");
+    expect(output).toContain("- Warnings: 0");
+    expect(output).not.toContain("CSV");
+    expect(output).not.toMatch(/api[_-]?key|token|client_secret|\.env/i);
+  });
+
+  it("reports the intended booking output file path when a JSON write fails", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "artist-radar-"));
+    const artistJsonPath = path.join(outputDir, "artist.json");
+    await mkdir(artistJsonPath);
+
+    await expect(writeBookingRequestOutputs({
+      artistData: result.artistProfile,
+      similarArtists: result.similarArtists,
+      bookingResult: result,
+      outputDir
+    })).rejects.toMatchObject({
+      name: "BookingOutputWriteError",
+      file: "artist.json",
+      intendedPath: artistJsonPath
+    } satisfies Partial<BookingOutputWriteError>);
+  });
 });
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

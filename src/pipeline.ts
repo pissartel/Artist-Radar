@@ -12,10 +12,13 @@ import { gatherSearchContext } from "./services/searchService.js";
 import { normalizeOpportunityUrls } from "./services/urlNormalization.js";
 import { findVenueEventCandidates } from "./modules/venueEventFinder.js";
 import type { ArtistProfile, EventCandidate, VenueCandidate } from "./schemas.js";
+import type { SimilarArtist } from "./schemas.js";
 import { debugLog } from "./utils/logger.js";
 import type { SimilarArtistSeedRecord } from "./modules/similarArtistSeeds.js";
 import type { LastFmSimilarArtist } from "./services/lastfmService.js";
 import type { MusicBrainzArtistMetadata } from "./services/musicBrainzService.js";
+import { searchBookingOpportunities, type SearchBookingOpportunitiesOptions } from "./booking/searchBookingOpportunities.js";
+import type { BookingOpportunity, BookingSearchResult } from "./booking/types.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
@@ -25,6 +28,7 @@ export interface RunOpportunitySearchOptions {
   lastfmSimilarArtists?: (artistName: string, limit: number) => Promise<LastFmSimilarArtist[]>;
   musicBrainzSearch?: (artistName: string) => Promise<MusicBrainzArtistMetadata | null>;
   seedCandidates?: SimilarArtistSeedRecord[];
+  bookingSearchOptions?: SearchBookingOpportunitiesOptions;
 }
 
 export interface OpportunitySearchRunResult {
@@ -33,6 +37,7 @@ export interface OpportunitySearchRunResult {
   venueCandidates: VenueCandidate[];
   eventCandidates: EventCandidate[];
   opportunities: Opportunity[];
+  bookingSearch?: BookingSearchResult;
 }
 
 export async function runOpportunitySearch(
@@ -68,6 +73,34 @@ export async function runOpportunitySearch(
   });
   await gatherSearchContext(input);
 
+  if (input.mode === "booking") {
+    const bookingSearch = await searchBookingOpportunities({
+      artist: input.artist,
+      city: input.city,
+      genre: input.genre,
+      target: input.target,
+      links: input.links,
+      limit: input.limit,
+      artistProfile: profile,
+      similarArtists: flattenSimilarArtists(groupedSimilarArtists)
+    }, options.bookingSearchOptions);
+    debugLog("pipeline", "runOpportunitySearch booking provider summary", {
+      providerCount: bookingSearch.sourceMetadata.length,
+      targetsCount: bookingSearch.targets.length,
+      opportunitiesCount: bookingSearch.opportunities.length,
+      warningsCount: bookingSearch.warnings.length
+    });
+
+    return {
+      artistProfile: profile,
+      similarArtists: groupedSimilarArtists,
+      venueCandidates,
+      eventCandidates,
+      opportunities: bookingSearch.opportunities.map(mapBookingOpportunityToLegacyOpportunity),
+      bookingSearch
+    };
+  }
+
   const generator = options.generator ?? new OpenAIOpportunityGenerator();
   const prompt = buildOpportunityPrompt(input, profile);
   const result = await generator.generate(prompt);
@@ -98,6 +131,31 @@ export async function runOpportunitySearch(
   };
 }
 
+function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpportunity): Opportunity {
+  return {
+    name: opportunity.name,
+    type: opportunity.type,
+    city: opportunity.city,
+    country: opportunity.country,
+    source_url: opportunity.sourceUrl,
+    contact: opportunity.contact,
+    reason: opportunity.reason,
+    score: opportunity.score,
+    suggested_message: opportunity.fitSummary
+  };
+}
+
 function countSimilarArtists(groups: SimilarArtistsByTier): number {
   return groups.local_peer.length + groups.regional_peer.length + groups.support_target.length + groups.reference.length + groups.to_verify.length + groups.unknown.length;
+}
+
+function flattenSimilarArtists(groups: SimilarArtistsByTier): SimilarArtist[] {
+  return [
+    ...groups.local_peer,
+    ...groups.regional_peer,
+    ...groups.support_target,
+    ...groups.reference,
+    ...groups.to_verify,
+    ...groups.unknown
+  ];
 }

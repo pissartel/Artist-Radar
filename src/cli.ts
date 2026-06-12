@@ -3,7 +3,7 @@ import "dotenv/config";
 import { Command } from "commander";
 import { runOpportunitySearch } from "./pipeline.js";
 import { ArtistInputSchema, type Mode } from "./schemas.js";
-import { exportOpportunities } from "./services/exportService.js";
+import { BookingOutputWriteError, exportOpportunities, formatBookingOutputLog } from "./services/exportService.js";
 
 interface CliOptions {
   artist: string;
@@ -28,6 +28,16 @@ addOpportunityCommand("booking", "Find venues, festivals, local artists and book
 addOpportunityCommand("promo", "Find playlists, blogs, curators, media and communities.");
 
 program.parseAsync(process.argv).catch((error: unknown) => {
+  if (error instanceof BookingOutputWriteError) {
+    const originalMessage = error.originalError instanceof Error ? error.originalError.message : String(error.originalError);
+    console.error("Booking output write failed:");
+    console.error(`- File: ${error.file}`);
+    console.error(`- Intended path: ${error.intendedPath}`);
+    console.error(`- Error: ${originalMessage}`);
+    process.exitCode = 1;
+    return;
+  }
+
   const message = error instanceof Error ? error.message : String(error);
   console.error(`Error: ${message}`);
   process.exitCode = 1;
@@ -63,10 +73,19 @@ function addOpportunityCommand(mode: Mode, description: string): void {
       const result = await runOpportunitySearch(input);
       const paths = await exportOpportunities(input, result);
 
-      console.log(`JSON: ${paths.jsonPath}`);
-      console.log(`Opportunities CSV: ${paths.opportunitiesCsvPath}`);
-      console.log(`Similar artists CSV: ${paths.similarArtistsCsvPath}`);
-      console.log(`Events CSV: ${paths.eventsCsvPath}`);
+      if (input.mode === "booking" && paths.artistJsonPath && paths.similarArtistsJsonPath && paths.bookingJsonPath && paths.bookingSummary) {
+        console.log(formatBookingOutputLog({
+          artistJsonPath: paths.artistJsonPath,
+          similarArtistsJsonPath: paths.similarArtistsJsonPath,
+          bookingJsonPath: paths.bookingJsonPath,
+          bookingSummary: paths.bookingSummary
+        }));
+      } else {
+        console.log(`JSON: ${paths.jsonPath}`);
+        console.log(`Opportunities CSV: ${paths.opportunitiesCsvPath}`);
+        console.log(`Similar artists CSV: ${paths.similarArtistsCsvPath}`);
+        console.log(`Events CSV: ${paths.eventsCsvPath}`);
+      }
     });
 }
 

@@ -57,6 +57,25 @@ export {
   getEnabledSearchProviders
 } from "./providers/web/providers.js";
 export {
+  buildDefaultBookingSourceProviders,
+  buildNoopBookingSourceProvider
+} from "./booking/providers/BookingSourceProvider.js";
+export { buildFirecrawlBookingSourceProvider } from "./booking/providers/FirecrawlBookingSourceProvider.js";
+export { buildMockBookingSourceProvider } from "./booking/providers/MockBookingSourceProvider.js";
+export { buildOpenAgendaBookingSourceProvider } from "./booking/providers/OpenAgendaBookingSourceProvider.js";
+export { buildWebSearchBookingSourceProvider } from "./booking/providers/WebSearchBookingSourceProvider.js";
+export { classifyBookingTarget } from "./booking/classifyTarget.js";
+export { extractPublicContactSignals, pickBestContact } from "./booking/contactExtraction.js";
+export { getRelatedGenres, matchBookingGenres } from "./booking/genreMatching.js";
+export { normalizeBookingSource } from "./booking/normalizeBookingTarget.js";
+export { recommendBookingAction, scoreBookingCompatibility } from "./booking/scoring.js";
+export { searchBookingOpportunities } from "./booking/searchBookingOpportunities.js";
+export {
+  BookingOutputWriteError,
+  formatBookingOutputLog,
+  writeBookingRequestOutputs
+} from "./booking/output/writeBookingRequestOutputs.js";
+export {
   extractSpotifyArtistId,
   createSpotifyCapabilities,
   getSpotifyArtistProfile,
@@ -135,6 +154,23 @@ export type {
   WebExtractResult
 } from "./providers/web/WebExtractProvider.js";
 export type { WebProviderEnv } from "./providers/web/providers.js";
+export type {
+  BookingOpportunity,
+  BookingScore,
+  BookingSearchInput,
+  BookingSearchResult,
+  BookingSourceType,
+  BookingSourceMetadata,
+  BookingTarget,
+  BookingTargetCategory,
+  ContactCandidate,
+  ContactCandidateType
+} from "./booking/types.js";
+export type {
+  BookingSourceProvider,
+  BookingSourceProviderContext,
+  BookingSourceProviderResult
+} from "./booking/providers/BookingSourceProvider.js";
 export {
   ArtistTierSchema,
   ArtistInputSchema,
@@ -159,4 +195,9 @@ export {
   VerificationStatusSchema,
   VenueCandidateSchema
 } from "./schemas.js";
-export { eventsToCsv, exportOpportunities, opportunitiesToCsv, similarArtistsToCsv } from "./services/exportService.js";
+export {
+  eventsToCsv,
+  exportOpportunities,
+  opportunitiesToCsv,
+  similarArtistsToCsv
+} from "./services/exportService.js";

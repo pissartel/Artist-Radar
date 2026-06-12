@@ -6,6 +6,14 @@ import { buildDefaultBookingSourceProviders } from "../src/booking/providers/Boo
 import { buildMockBookingSourceProvider } from "../src/booking/providers/MockBookingSourceProvider.js";
 import { buildOpenAgendaBookingSourceProvider } from "../src/booking/providers/OpenAgendaBookingSourceProvider.js";
 import { buildSceneAgendaBookingSourceProvider, getSceneAgendaSourceStatuses } from "../src/booking/providers/SceneAgendaProvider.js";
+import {
+  buildSimilarArtistLiveHistoryBookingSourceProvider,
+  buildSupportSlotDiscoveryQueries,
+  getSupportSlotRelatedGenres
+} from "../src/booking/providers/SimilarArtistLiveHistoryBookingSourceProvider.js";
+import { buildNativeFetchSceneAgendaProvider, getNativeFetchSceneAgendaStatus } from "../src/booking/providers/NativeFetchSceneAgendaProvider.js";
+import { buildFirecrawlBookingSourceProvider, isFirecrawlBookingEnabled } from "../src/booking/providers/FirecrawlBookingSourceProvider.js";
+import { getEnabledBookingSearchProviders } from "../src/providers/web/providers.js";
 import { buildWebSearchBookingSourceProvider } from "../src/booking/providers/WebSearchBookingSourceProvider.js";
 import { normalizeBookingSource } from "../src/booking/normalizeBookingTarget.js";
 import { recommendBookingAction, scoreBookingCompatibility } from "../src/booking/scoring.js";
@@ -965,6 +973,552 @@ describe("Booking Search core", () => {
     expect(prompt).toContain("warnings");
     expect(prompt).toContain("recommendedNextAction");
     expect(prompt).toContain("must be written in French");
+  });
+});
+
+describe("Similar artist live-history query improvements", () => {
+  it("similar artist city queries quote artist name but not city", async () => {
+    const provider = buildSimilarArtistLiveHistoryBookingSourceProvider({
+      maxSimilarArtists: 1,
+      maxResultsPerArtist: 0,
+      webSearchProvider: {
+        providerName: "test",
+        async search() { return []; }
+      }
+    });
+
+    const result = await provider.search({
+      input: { ...input, similarArtists: [baseSimilarArtist({ name: "Thru It All" })] },
+      maxResults: 5
+    });
+
+    const artistCityQueries = result.searchedQueries.filter((q) => q.includes("Thru It All") && q.includes("Paris"));
+    expect(artistCityQueries.length).toBeGreaterThan(0);
+    expect(artistCityQueries.some((q) => q.includes('"Paris"'))).toBe(false);
+    expect(artistCityQueries.every((q) => q.includes('"Thru It All"'))).toBe(true);
+  });
+
+  it("similar artist queries include France-level variants when city queries return zero results", async () => {
+    const provider = buildSimilarArtistLiveHistoryBookingSourceProvider({
+      maxSimilarArtists: 1,
+      maxResultsPerArtist: 3,
+      webSearchProvider: {
+        providerName: "test",
+        async search(query) {
+          if (query.includes("France") && !query.includes("Paris")) {
+            return [{ title: "France Venue", url: "https://example.test/fr", snippet: "Concert France pop punk", sourceProvider: "test", confidence: 0.8, links: [] }];
+          }
+          return [];
+        }
+      }
+    });
+
+    const result = await provider.search({
+      input: {
+        ...input,
+        city: "Paris",
+        artistProfile: { ...input.artistProfile!, country: "France" },
+        similarArtists: [baseSimilarArtist({ name: "Thru It All" })]
+      },
+      maxResults: 5
+    });
+
+    expect(result.metadata.countryFallbackUsed).toBe(true);
+    expect(result.metadata.locationMode).toBe("city_and_country");
+    expect(result.searchedQueries.some((q) => q.includes("France") && q.includes("Thru It All"))).toBe(true);
+  });
+
+  it("Paris target generates both Paris and France queries in support-slot discovery", () => {
+    const queries = buildSupportSlotDiscoveryQueries("pop punk", "Paris", "France");
+    expect(queries.some((q) => q.includes("Paris"))).toBe(true);
+    expect(queries.some((q) => q.includes("France"))).toBe(true);
+  });
+
+  it("support-slot discovery queries are generated without similar artist names", async () => {
+    const provider = buildSimilarArtistLiveHistoryBookingSourceProvider({
+      maxSimilarArtists: 0,
+      maxResultsPerArtist: 0,
+      webSearchProvider: {
+        providerName: "test",
+        async search() { return []; }
+      }
+    });
+
+    const result = await provider.search({ input, maxResults: 5 });
+
+    const supportSlotQueries = result.searchedQueries.filter(
+      (q) => q.includes("première partie") || (q.includes("support") && !q.includes("searchedQueries"))
+    );
+    expect(supportSlotQueries.length).toBeGreaterThan(0);
+    expect(supportSlotQueries.some((q) => q.includes("pop punk"))).toBe(true);
+  });
+
+  it("pop punk support-slot related genres include punk, emo, and easycore", () => {
+    const genres = getSupportSlotRelatedGenres("pop punk");
+    expect(genres).toContain("punk rock");
+    expect(genres).toContain("emo");
+    expect(genres).toContain("easycore");
+  });
+
+  it("pop punk support-slot discovery queries include punk rock and emo variants", () => {
+    const queries = buildSupportSlotDiscoveryQueries("pop punk", "Paris", "France");
+    const queryText = queries.join(" | ");
+    expect(queryText).toContain("punk rock");
+    expect(queryText).toContain("emo");
+    expect(queryText).toContain("punk");
+  });
+
+  it("support signal in support-slot discovery creates support_slot opportunity warning", async () => {
+    const provider = buildSimilarArtistLiveHistoryBookingSourceProvider({
+      maxSimilarArtists: 0,
+      maxResultsPerArtist: 3,
+      webSearchProvider: {
+        providerName: "test",
+        async search() {
+          return [{
+            title: "Pop Punk Paris Concert",
+            url: "https://example.test/concert-pp",
+            snippet: "pop punk concert Paris première partie à venir 2026-09-01",
+            sourceProvider: "test",
+            confidence: 0.82,
+            links: []
+          }];
+        }
+      }
+    });
+
+    const result = await searchBookingOpportunities(input, {
+      providers: [provider],
+      now: new Date("2026-06-12T12:00:00Z")
+    });
+
+    expect((result.sourceMetadata[0]?.metadata.supportSignalCount as number) ?? 0).toBeGreaterThan(0);
+    const supportSlotOpportunity = result.opportunities.find((opp) =>
+      opp.warnings.includes("Support slot is inferred, not confirmed.")
+    );
+    expect(supportSlotOpportunity).toBeDefined();
+  });
+
+  it("metadata reports generatedQueryCount, supportSignalCount, locationMode, and resolvedLocations", async () => {
+    const provider = buildSimilarArtistLiveHistoryBookingSourceProvider({
+      maxSimilarArtists: 1,
+      maxResultsPerArtist: 3,
+      webSearchProvider: {
+        providerName: "test",
+        async search() { return []; }
+      }
+    });
+
+    // Use 0 similar artists so no city queries run → no fallback → locationMode stays "city"
+    const result = await provider.search({
+      input: { ...input, similarArtists: [] },
+      maxResults: 5
+    });
+
+    expect(typeof result.metadata.generatedQueryCount).toBe("number");
+    expect((result.metadata.generatedQueryCount as number)).toBeGreaterThan(0);
+    expect(typeof result.metadata.supportSignalCount).toBe("number");
+    expect(result.metadata.locationMode).toBe("city");
+    expect(Array.isArray(result.metadata.resolvedLocations)).toBe(true);
+    expect((result.metadata.resolvedLocations as string[])).toContain("Paris");
+    expect((result.metadata.resolvedLocations as string[])).toContain("France");
+    expect(typeof result.metadata.countryFallbackUsed).toBe("boolean");
+    expect(result.metadata.countryFallbackUsed).toBe(false);
+  });
+
+  it("web search booking queries do not over-quote genre or city", async () => {
+    const capturedQueries: string[] = [];
+    const provider = buildWebSearchBookingSourceProvider({
+      maxQueries: 7,
+      maxResultsPerQuery: 0,
+      webSearchProvider: {
+        providerName: "test",
+        async search(query) {
+          capturedQueries.push(query);
+          return [];
+        }
+      }
+    });
+
+    // Use target: null so the city (Paris) is used as location, not target (France)
+    await provider.search({ input: { ...input, target: null }, maxResults: 5 });
+
+    expect(capturedQueries.some((q) => q.includes('"pop punk"'))).toBe(false);
+    expect(capturedQueries.some((q) => q.includes('"Paris"'))).toBe(false);
+    expect(capturedQueries.some((q) => q.includes("pop punk"))).toBe(true);
+    expect(capturedQueries.some((q) => q.includes("Paris"))).toBe(true);
+  });
+});
+
+describe("Firecrawl-free fallback (native fetch scene agendas)", () => {
+  it("booking works when Firecrawl is disabled and no other web search provider is configured", async () => {
+    const provider = buildNativeFetchSceneAgendaProvider({
+      env: { ENABLE_SCENE_AGENDAS: "true", ENABLE_CONCERTS_PUNK: "true", CONCERTS_PUNK_URL: "https://example.test/feed" },
+      fetchImpl: vi.fn(async () => new Response(
+        `<?xml version="1.0"?>
+        <rss><channel>
+          <item>
+            <title>Pop Punk Paris Night</title>
+            <link>https://example.test/concert-pp</link>
+            <description>Concert pop punk punk rock emo Paris 2026-09-15</description>
+            <pubDate>2026-09-15</pubDate>
+          </item>
+        </channel></rss>`,
+        { status: 200 }
+      ) as unknown as Response)
+    });
+
+    const result = await searchBookingOpportunities(input, {
+      providers: [provider],
+      now: new Date("2026-06-12T00:00:00Z")
+    });
+
+    expect(result.opportunities.length).toBeGreaterThan(0);
+    expect(result.opportunities[0]?.sourceType).toBe("specialized_scene_agenda");
+  });
+
+  it("native fetch scene agenda provider parses RSS entries and returns normalized targets", async () => {
+    const provider = buildNativeFetchSceneAgendaProvider({
+      env: { ENABLE_SCENE_AGENDAS: "true", CONCERTS_PUNK_URL: "https://example.test/feed" },
+      fetchImpl: async () => new Response(
+        `<rss><channel>
+          <item>
+            <title>Festival Pop Punk France</title>
+            <link>https://example.test/festival</link>
+            <description>festival pop punk punk rock emo easycore France 2026-07-20</description>
+            <pubDate>2026-07-20</pubDate>
+          </item>
+        </channel></rss>`,
+        { status: 200 }
+      ) as unknown as Response,
+      now: new Date("2026-06-12T00:00:00Z")
+    });
+
+    const result = await provider.search({ input, maxResults: 5 });
+
+    expect(result.targets.length).toBeGreaterThan(0);
+    expect(result.targets[0]?.sourceType).toBe("specialized_scene_agenda");
+    expect(result.targets[0]?.sourceUrl).toBe("https://example.test/festival");
+    expect(result.metadata.enabled).toBe(true);
+    expect((result.metadata.rawEventsFound as number)).toBeGreaterThan(0);
+  });
+
+  it("native fetch scene agenda provider skips blocked pages and adds warning", async () => {
+    const provider = buildNativeFetchSceneAgendaProvider({
+      env: { ENABLE_SCENE_AGENDAS: "true", CONCERTS_PUNK_URL: "https://example.test/blocked" },
+      fetchImpl: async () => new Response(
+        "Please wait while we check your browser... check_bot",
+        { status: 200 }
+      ) as unknown as Response
+    });
+
+    const result = await provider.search({ input, maxResults: 5 });
+
+    expect(result.targets).toEqual([]);
+    expect(result.warnings.some((w) => w.includes("blocked"))).toBe(true);
+  });
+
+  it("native fetch scene agenda provider handles fetch errors gracefully", async () => {
+    const provider = buildNativeFetchSceneAgendaProvider({
+      env: { ENABLE_SCENE_AGENDAS: "true", CONCERTS_PUNK_URL: "https://example.test/unreachable" },
+      fetchImpl: async () => { throw new Error("network unavailable"); }
+    });
+
+    const result = await provider.search({ input, maxResults: 5 });
+
+    expect(result.targets).toEqual([]);
+    expect(result.warnings.some((w) => w.includes("ConcertsPunk fetch failed"))).toBe(true);
+  });
+
+  it("native fetch scene agenda provider is disabled when ENABLE_SCENE_AGENDAS is explicitly false", async () => {
+    const provider = buildNativeFetchSceneAgendaProvider({
+      env: { ENABLE_SCENE_AGENDAS: "false", CONCERTS_PUNK_URL: "https://example.test/feed" }
+    });
+
+    const result = await provider.search({ input, maxResults: 5 });
+
+    expect(result.targets).toEqual([]);
+    expect(result.metadata.enabled).toBe(false);
+  });
+
+  it("native fetch scene agenda status reports disabled when no URL is configured", () => {
+    const status = getNativeFetchSceneAgendaStatus({
+      ENABLE_SCENE_AGENDAS: "true",
+      ENABLE_CONCERTS_PUNK: "false",
+      ENABLE_RAZIBUS: "false",
+      ENABLE_PUNKNROLL_AGENDA: "false",
+      ENABLE_FRANCE_PUNK_SCENE: "false"
+    });
+    expect(status.enabled).toBe(false);
+    expect(status.reason).toContain("no scene agenda fetch URLs are configured");
+  });
+
+  it("native fetch scene agenda detects support signals and creates support_slot warnings", async () => {
+    const provider = buildNativeFetchSceneAgendaProvider({
+      env: { ENABLE_SCENE_AGENDAS: "true", CONCERTS_PUNK_URL: "https://example.test/feed" },
+      fetchImpl: async () => new Response(
+        `<rss><channel>
+          <item>
+            <title>Big Pop Punk Night</title>
+            <link>https://example.test/big-night</link>
+            <description>pop punk punk rock Paris première partie à venir 2026-09-01</description>
+            <pubDate>2026-09-01</pubDate>
+          </item>
+        </channel></rss>`,
+        { status: 200 }
+      ) as unknown as Response,
+      now: new Date("2026-06-12T00:00:00Z")
+    });
+
+    const result = await searchBookingOpportunities(input, {
+      providers: [provider],
+      now: new Date("2026-06-12T00:00:00Z")
+    });
+
+    const slotOpp = result.opportunities.find((opp) =>
+      opp.warnings.includes("Support slot is inferred, not confirmed.")
+    );
+    expect(slotOpp).toBeDefined();
+  });
+});
+
+describe("Firecrawl quota handling", () => {
+  it("Firecrawl booking is disabled when no API key is present", () => {
+    expect(isFirecrawlBookingEnabled({})).toBe(false);
+    expect(isFirecrawlBookingEnabled({ ENABLE_FIRECRAWL_BOOKING: "true" })).toBe(false);
+  });
+
+  it("Firecrawl booking is enabled by ENABLE_FIRECRAWL_BOOKING=true with API key", () => {
+    expect(isFirecrawlBookingEnabled({ ENABLE_FIRECRAWL_BOOKING: "true", FIRECRAWL_API_KEY: "key" })).toBe(true);
+  });
+
+  it("Firecrawl booking is enabled by ENABLE_FIRECRAWL_CONSOLIDATION=true with API key", () => {
+    expect(isFirecrawlBookingEnabled({ ENABLE_FIRECRAWL_CONSOLIDATION: "true", FIRECRAWL_API_KEY: "key" })).toBe(true);
+  });
+
+  it("Firecrawl booking is disabled by ENABLE_FIRECRAWL_BOOKING=false even with API key", () => {
+    expect(isFirecrawlBookingEnabled({ ENABLE_FIRECRAWL_BOOKING: "false", FIRECRAWL_API_KEY: "key", ENABLE_FIRECRAWL_CONSOLIDATION: "true" })).toBe(false);
+  });
+
+  it("Firecrawl quota 402 disables Firecrawl for the run and adds warning", async () => {
+    const provider = buildFirecrawlBookingSourceProvider(
+      { ENABLE_FIRECRAWL_BOOKING: "true", FIRECRAWL_API_KEY: "test-key" },
+      async () => new Response("quota exceeded - payment required", { status: 402 }) as unknown as Response
+    );
+
+    const result = await provider.search({ input, maxResults: 5 });
+
+    expect(result.targets).toEqual([]);
+    expect(result.warnings.some((w) => w.includes("quota or credits unavailable"))).toBe(true);
+    expect(result.metadata.enabled).toBe(false);
+  });
+
+  it("Firecrawl returns disabled warning when no key is configured", async () => {
+    const provider = buildFirecrawlBookingSourceProvider({});
+    const result = await provider.search({ input, maxResults: 5 });
+
+    expect(result.targets).toEqual([]);
+    expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.metadata.enabled).toBe(false);
+  });
+
+  it("scene agendas are enabled by default without explicit ENABLE_SCENE_AGENDAS=true", () => {
+    const status = getSceneAgendaSourceStatuses({});
+    const concertsPunk = status.find((s) => s.key === "concerts_punk");
+    expect(concertsPunk?.enabled).toBe(true);
+    expect(concertsPunk?.reason).toContain("default");
+  });
+
+  it("booking startup log includes SceneAgendas status when no Firecrawl is configured", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    buildDefaultBookingSourceProviders({
+      ENABLE_SCENE_AGENDAS: "true",
+      MOCK_AI: "false"
+    });
+
+    const message = warn.mock.calls[0]?.[0] ?? "";
+    expect(message).toContain("[booking] Booking providers:");
+    expect(message).toContain("SceneAgendas: enabled");
+    expect(message).toContain("Firecrawl: disabled");
+    expect(message).not.toContain("secret");
+
+    vi.restoreAllMocks();
+  });
+});
+
+describe("Scene agenda URL fixes", () => {
+  it("ConcertsPunk uses /?country=fr listing URL by default, not /feed/", async () => {
+    const fetchedUrls: string[] = [];
+    const provider = buildNativeFetchSceneAgendaProvider({
+      env: { ENABLE_SCENE_AGENDAS: "true" },
+      fetchImpl: async (url: RequestInfo | URL) => {
+        fetchedUrls.push(String(url));
+        return new Response("", { status: 200 }) as unknown as Response;
+      },
+      now: new Date("2026-06-12T00:00:00Z")
+    });
+
+    await provider.search({ input, maxResults: 5 });
+
+    expect(fetchedUrls.some((u) => u.includes("concertspunk.fr/?country=fr"))).toBe(true);
+    expect(fetchedUrls.every((u) => !u.includes("/feed/"))).toBe(true);
+  });
+
+  it("Razibus uses /evenements-a-venir.php listing URL by default", async () => {
+    const fetchedUrls: string[] = [];
+    const provider = buildNativeFetchSceneAgendaProvider({
+      env: { ENABLE_SCENE_AGENDAS: "true" },
+      fetchImpl: async (url: RequestInfo | URL) => {
+        fetchedUrls.push(String(url));
+        return new Response("", { status: 200 }) as unknown as Response;
+      },
+      now: new Date("2026-06-12T00:00:00Z")
+    });
+
+    await provider.search({ input, maxResults: 5 });
+
+    expect(fetchedUrls.some((u) => u.includes("razibus.net/evenements-a-venir.php"))).toBe(true);
+  });
+
+  it("PunknRollAgenda uses agenda.punknroll.fr listing URL by default", async () => {
+    const fetchedUrls: string[] = [];
+    const provider = buildNativeFetchSceneAgendaProvider({
+      env: { ENABLE_SCENE_AGENDAS: "true" },
+      fetchImpl: async (url: RequestInfo | URL) => {
+        fetchedUrls.push(String(url));
+        return new Response("", { status: 200 }) as unknown as Response;
+      },
+      now: new Date("2026-06-12T00:00:00Z")
+    });
+
+    await provider.search({ input, maxResults: 5 });
+
+    expect(fetchedUrls.some((u) => u.includes("agenda.punknroll.fr"))).toBe(true);
+  });
+
+  it("pop punk genre auto-selects ConcertsPunk, Razibus, and PunknRollAgenda without explicit env flags", async () => {
+    const fetchedUrls: string[] = [];
+    const provider = buildNativeFetchSceneAgendaProvider({
+      env: { ENABLE_SCENE_AGENDAS: "true" },
+      fetchImpl: async (url: RequestInfo | URL) => {
+        fetchedUrls.push(String(url));
+        return new Response("", { status: 200 }) as unknown as Response;
+      },
+      now: new Date("2026-06-12T00:00:00Z")
+    });
+
+    const result = await provider.search({ input, maxResults: 5 });
+
+    expect(fetchedUrls.length).toBeGreaterThanOrEqual(3);
+    const statuses = result.metadata.sourceStatuses as Array<{ key: string; enabled: boolean; reason: string }>;
+    const concertsPunk = statuses.find((s) => s.key === "concerts_punk");
+    expect(concertsPunk?.enabled).toBe(true);
+    expect(concertsPunk?.reason).toContain("genre");
+  });
+
+  it("non-punk genre does not auto-select punk scene agendas", async () => {
+    const fetchedUrls: string[] = [];
+    const provider = buildNativeFetchSceneAgendaProvider({
+      env: { ENABLE_SCENE_AGENDAS: "true" },
+      fetchImpl: async (url: RequestInfo | URL) => {
+        fetchedUrls.push(String(url));
+        return new Response("", { status: 200 }) as unknown as Response;
+      }
+    });
+
+    const jazzInput = { ...input, genre: "jazz" };
+    const result = await provider.search({ input: jazzInput, maxResults: 5 });
+
+    expect(fetchedUrls.length).toBe(0);
+    const statuses = result.metadata.sourceStatuses as Array<{ key: string; enabled: boolean; reason: string }>;
+    const concertsPunk = statuses.find((s) => s.key === "concerts_punk");
+    expect(concertsPunk?.enabled).toBe(false);
+    expect(concertsPunk?.reason).toContain("not selected for genre");
+  });
+
+  it("FrancePunkScene is disabled with a descriptive message when no URL is configured", async () => {
+    const provider = buildNativeFetchSceneAgendaProvider({
+      env: { ENABLE_SCENE_AGENDAS: "true" }
+    });
+
+    const result = await provider.search({ input, maxResults: 5 });
+
+    const statuses = result.metadata.sourceStatuses as Array<{ key: string; enabled: boolean; reason: string }>;
+    const francePunk = statuses.find((s) => s.key === "france_punk_scene");
+    expect(francePunk?.enabled).toBe(false);
+    expect(francePunk?.reason).toContain("no public event listing URL");
+  });
+});
+
+describe("Optional booking search providers (Tavily, Exa, Jina)", () => {
+  it("Tavily booking is enabled when TAVILY_API_KEY is present and not explicitly disabled", () => {
+    const providers = getEnabledBookingSearchProviders({ TAVILY_API_KEY: "test-key" });
+    expect(providers.some((p) => p.providerName === "tavily")).toBe(true);
+  });
+
+  it("Tavily booking is disabled when TAVILY_API_KEY is missing", () => {
+    const providers = getEnabledBookingSearchProviders({});
+    expect(providers.some((p) => p.providerName === "tavily")).toBe(false);
+  });
+
+  it("Tavily booking is disabled when ENABLE_TAVILY_BOOKING=false even with API key", () => {
+    const providers = getEnabledBookingSearchProviders({ TAVILY_API_KEY: "test-key", ENABLE_TAVILY_BOOKING: "false" });
+    expect(providers.some((p) => p.providerName === "tavily")).toBe(false);
+  });
+
+  it("Exa booking is enabled when EXA_API_KEY is present and not explicitly disabled", () => {
+    const providers = getEnabledBookingSearchProviders({ EXA_API_KEY: "test-key" });
+    expect(providers.some((p) => p.providerName === "exa")).toBe(true);
+  });
+
+  it("Exa booking is disabled when ENABLE_EXA_BOOKING=false even with API key", () => {
+    const providers = getEnabledBookingSearchProviders({ EXA_API_KEY: "test-key", ENABLE_EXA_BOOKING: "false" });
+    expect(providers.some((p) => p.providerName === "exa")).toBe(false);
+  });
+
+  it("Jina Reader is enabled by default without an API key", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    buildDefaultBookingSourceProviders({ ENABLE_SCENE_AGENDAS: "false", MOCK_AI: "false" });
+
+    const message = warn.mock.calls[0]?.[0] ?? "";
+    expect(message).toContain("JinaReader: enabled");
+
+    vi.restoreAllMocks();
+  });
+
+  it("Jina Reader is disabled when ENABLE_JINA_READER=false", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    buildDefaultBookingSourceProviders({ ENABLE_JINA_READER: "false", ENABLE_SCENE_AGENDAS: "false", MOCK_AI: "false" });
+
+    const message = warn.mock.calls[0]?.[0] ?? "";
+    expect(message).toContain("JinaReader: disabled");
+
+    vi.restoreAllMocks();
+  });
+
+  it("booking startup log shows Tavily, Exa, JinaReader status and does not expose API keys", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    buildDefaultBookingSourceProviders({
+      TAVILY_API_KEY: "super-secret-tavily-key",
+      EXA_API_KEY: "super-secret-exa-key",
+      JINA_API_KEY: "super-secret-jina-key",
+      ENABLE_SCENE_AGENDAS: "false",
+      MOCK_AI: "false"
+    });
+
+    const message = warn.mock.calls[0]?.[0] ?? "";
+    expect(message).toContain("Tavily: enabled");
+    expect(message).toContain("Exa: enabled");
+    expect(message).toContain("JinaReader: enabled");
+    expect(message).not.toContain("super-secret-tavily-key");
+    expect(message).not.toContain("super-secret-exa-key");
+    expect(message).not.toContain("super-secret-jina-key");
+
+    vi.restoreAllMocks();
   });
 });
 

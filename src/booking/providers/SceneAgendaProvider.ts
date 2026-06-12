@@ -171,10 +171,13 @@ export function buildSceneAgendaBookingSourceProvider(options: SceneAgendaBookin
 }
 
 export function getSceneAgendaProviderStatus(env: SceneAgendaProviderEnv = process.env): { enabled: boolean; reason: string } {
-  if (env.ENABLE_SCENE_AGENDAS !== "true") {
-    return { enabled: false, reason: "ENABLE_SCENE_AGENDAS is not true" };
+  if (env.ENABLE_SCENE_AGENDAS === "false") {
+    return { enabled: false, reason: "ENABLE_SCENE_AGENDAS is explicitly false" };
   }
-  return { enabled: true, reason: "enabled by ENABLE_SCENE_AGENDAS" };
+  if (env.ENABLE_SCENE_AGENDAS === "true") {
+    return { enabled: true, reason: "enabled by ENABLE_SCENE_AGENDAS" };
+  }
+  return { enabled: true, reason: "enabled by default" };
 }
 
 export function getSceneAgendaSourceStatuses(env: SceneAgendaProviderEnv = process.env): SceneAgendaSourceStatus[] {

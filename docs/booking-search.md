@@ -87,7 +87,7 @@ When available, booking opportunities include `derivedFromSimilarArtist` metadat
 
 ### SceneAgendaBookingSourceProvider
 
-Runs after similar-artist live history and before OpenAgenda when `ENABLE_SCENE_AGENDAS=true` and a web search provider is configured.
+Runs after similar-artist live history and before OpenAgenda when scene agendas are enabled and a web search provider (Tavily, Exa, Jina, or Firecrawl) is configured.
 
 The provider targets specialized punk, pop punk, hardcore, metal and alternative scene agendas before broad cultural databases:
 
@@ -114,16 +114,45 @@ Support-slot opportunities are inferred only from public wording such as `+ gues
 
 When a similar artist appears in a scene agenda lineup or source text, the provider adds `derivedFromSimilarArtist` metadata and ranking gets a source-context boost.
 
+Scene agendas are **enabled by default**. Set `ENABLE_SCENE_AGENDAS=false` to disable them explicitly.
+
 Configuration:
 
-- `ENABLE_SCENE_AGENDAS=true`
-- `ENABLE_CONCERTS_PUNK=true`
-- `ENABLE_PUNKNROLL_AGENDA=true`
-- `ENABLE_RAZIBUS=true`
-- `ENABLE_FRANCE_PUNK_SCENE=true`
-- `ENABLE_CONCERTS_METAL=false`
+- `ENABLE_SCENE_AGENDAS` — defaults to `true`; set to `false` to disable
+- `ENABLE_CONCERTS_PUNK` — override; punk genres auto-select this source
+- `ENABLE_PUNKNROLL_AGENDA` — override; punk genres auto-select this source
+- `ENABLE_RAZIBUS` — override; punk genres auto-select this source
+- `ENABLE_FRANCE_PUNK_SCENE` — override; requires a URL to be useful
+- `ENABLE_CONCERTS_METAL=false` (default, disabled to avoid bot protection)
 
 The GitHub Actions booking workflow exposes these flags as `workflow_dispatch` inputs. They do not require secrets.
+
+### NativeFetchSceneAgendaProvider
+
+Fetches public RSS feeds directly from scene agenda sites using plain HTTP. **Does not require any web search API key.** Runs whenever scene agendas are enabled, regardless of whether a web search provider is configured.
+
+This provider is the primary fallback when Firecrawl is unavailable and no paid search provider (Tavily, Exa, Jina) is configured.
+
+It fetches configured URLs, parses HTML event listings (and RSS/Atom when available), and applies the same genre/location relevance filters as the search-based provider.
+
+**Genre-based auto-selection:** for pop punk, punk, emo, easycore, skate punk, melodic punk, and hardcore punk, ConcertsPunk, Razibus, and PunknRollAgenda are selected automatically without requiring env flags. Env flags are overrides only.
+
+Configuration:
+
+- `CONCERTS_PUNK_URL` — Listing URL for ConcertsPunk. Defaults to `https://www.concertspunk.fr/?country=fr`.
+- `RAZIBUS_URL` — Listing URL for Razibus. Defaults to `https://razibus.net/evenements-a-venir.php`.
+- `PUNKNROLL_AGENDA_URL` — Listing URL for Punk'n Roll Agenda. Defaults to `https://agenda.punknroll.fr/`.
+- `FRANCE_PUNK_SCENE_URL` — Listing URL for France Punk Scene. No default; set explicitly to enable.
+
+Only sources with a configured URL (default or explicit) and a compatible genre are fetched. FrancePunkScene is disabled with a descriptive warning when no URL is configured — it is not silently skipped.
+
+Safety rules:
+
+- Only public pages are fetched; no login, CAPTCHA bypass, or paywall.
+- Fetch timeout is 10 seconds.
+- Blocked/protected pages are skipped with a warning.
+- Bot-protection signals in response body trigger a skip.
+- User-Agent header: `ArtistRadar/1.0 (booking search)`.
 
 ### MockBookingSourceProvider
 
@@ -131,23 +160,56 @@ Used only when explicitly enabled by the existing mock/dev convention, such as `
 
 Mock data must stay in the mock provider or tests.
 
-### WebSearchBookingSourceProvider
+### WebSearchBookingSourceProvider (Tavily, Exa)
 
-Wraps the existing internal web search and extraction abstractions when a web search provider is configured.
+Runs web search queries through configured search providers. **Tavily and Exa are optional.** If an API key is present and the provider is not explicitly disabled, it is enabled automatically — no explicit `true` flag required.
 
-Representative query patterns:
+**Tavily configuration:**
 
-- `<genre> concert venue <city> programmation`
-- `<genre> café-concert <city>`
-- `<genre> association concerts <city>`
-- `<genre> festival appel à candidature`
-- `<genre> support TBA <city>`
+- `TAVILY_API_KEY` — required to enable Tavily
+- `ENABLE_TAVILY_BOOKING=false` — explicitly disable even when key is present
+
+**Exa configuration:**
+
+- `EXA_API_KEY` — required to enable Exa
+- `ENABLE_EXA_BOOKING=false` — explicitly disable even when key is present
+
+Representative query patterns for pop punk booking:
+
+- `pop punk concert Paris première partie`
+- `punk rock concert Paris support`
+- `pop punk concerts France 2026`
+- `site:concertspunk.fr pop punk France`
+
+### JinaReader
+
+Jina Reader is used for extraction of known URLs (turning a venue or event page into readable markdown). **Does not require an API key for basic use.**
+
+- `JINA_API_KEY` — optional; set to authenticate and increase rate limits
+- `ENABLE_JINA_READER=false` — explicitly disable
 
 ### FirecrawlBookingSourceProvider
 
-Composes the existing Firecrawl-backed web search and extraction abstractions.
+Composes the existing Firecrawl-backed web search and extraction abstractions. **Firecrawl is optional.** Booking search works without it using scene agendas and other configured providers.
 
-It is disabled unless the existing Firecrawl configuration is present. It should be used for official venue pages, programming pages, contact pages, application pages and event pages.
+It should be used for official venue pages, programming pages, contact pages, application pages and event pages.
+
+**Enabling Firecrawl for booking:**
+
+- `ENABLE_FIRECRAWL_BOOKING=true` with `FIRECRAWL_API_KEY` set → Firecrawl booking enabled.
+- `ENABLE_FIRECRAWL_BOOKING=false` → Firecrawl booking disabled, even if `FIRECRAWL_API_KEY` is present.
+- `ENABLE_FIRECRAWL_CONSOLIDATION=true` with `FIRECRAWL_API_KEY` set → Firecrawl booking enabled (backward-compatible alias).
+- Neither flag set → Firecrawl booking disabled.
+
+**Quota and credit handling:**
+
+If Firecrawl returns HTTP 402, 429, or 503 with a quota/credits error body, the provider automatically disables itself for the rest of the run and emits the warning:
+
+```
+Firecrawl disabled for this run: quota or credits unavailable (HTTP <status>).
+```
+
+No crash, no silent failure — the booking run continues using the remaining providers (scene agendas, OpenAgenda, web search).
 
 ### OpenAgendaBookingSourceProvider
 
@@ -194,12 +256,42 @@ The manual GitHub Actions workflow can be configured with `workflow_dispatch` in
 
 Do not add these values to `.env` in code changes.
 
+## Provider Priority
+
+For pop punk booking, providers run in this order:
+
+1. **Direct scene agenda fetch** (NativeFetchSceneAgendaProvider) — ConcertsPunk, Razibus, PunknRollAgenda auto-selected; no API key required
+2. **Similar artist live history** — uses first available search provider (Tavily → Exa → Firecrawl)
+3. **Scene agenda web search** — uses first available search provider against scene agenda sites
+4. **Web search providers** — one provider per enabled Tavily/Exa key
+5. **OpenAgenda** — secondary; requires `ENABLE_OPENAGENDA=true` and `OPENAGENDA_API_KEY`
+6. **Firecrawl** — optional; requires `ENABLE_FIRECRAWL_BOOKING=true` and `FIRECRAWL_API_KEY`
+
+Booking search works with zero API keys — native scene agenda fetch runs by default for punk genres.
+
+## Environment Variable Reference
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `TAVILY_API_KEY` | Enables Tavily search for booking | — |
+| `EXA_API_KEY` | Enables Exa semantic search for booking | — |
+| `JINA_API_KEY` | Authenticates Jina Reader extract | — (works without) |
+| `FIRECRAWL_API_KEY` | Enables Firecrawl search/extract | — |
+| `ENABLE_TAVILY_BOOKING` | `false` to disable Tavily even with key | enabled if key present |
+| `ENABLE_EXA_BOOKING` | `false` to disable Exa even with key | enabled if key present |
+| `ENABLE_JINA_READER` | `false` to disable Jina Reader | `true` |
+| `ENABLE_FIRECRAWL_BOOKING` | `true` to enable Firecrawl booking | `false` |
+| `ENABLE_SCENE_AGENDAS` | `false` to disable scene agendas | `true` |
+| `CONCERTS_PUNK_URL` | Override ConcertsPunk listing URL | `https://www.concertspunk.fr/?country=fr` |
+| `RAZIBUS_URL` | Override Razibus listing URL | `https://razibus.net/evenements-a-venir.php` |
+| `PUNKNROLL_AGENDA_URL` | Override Punk'n Roll Agenda listing URL | `https://agenda.punknroll.fr/` |
+| `FRANCE_PUNK_SCENE_URL` | Set France Punk Scene listing URL | — (disabled by default) |
+
 ## Future Providers
 
 These are documented extension points, not active dependencies:
 
 - `ApifyProvider`
-- `TavilyProvider`
 - `BandsintownProvider`
 - `EventbriteProvider`
 - `PublicCultureDataProvider`

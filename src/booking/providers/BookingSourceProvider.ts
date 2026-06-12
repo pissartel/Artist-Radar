@@ -3,10 +3,10 @@ import {
   buildDefaultWebExtractProvider,
   FirecrawlExtractProvider,
   FirecrawlSearchProvider,
-  getEnabledSearchProviders,
+  getEnabledBookingSearchProviders,
   type WebProviderEnv
 } from "../../providers/web/providers.js";
-import { buildFirecrawlBookingSourceProvider } from "./FirecrawlBookingSourceProvider.js";
+import { buildFirecrawlBookingSourceProvider, isFirecrawlBookingEnabled, type FirecrawlBookingEnv } from "./FirecrawlBookingSourceProvider.js";
 import { buildMockBookingSourceProvider } from "./MockBookingSourceProvider.js";
 import { buildOpenAgendaBookingSourceProvider, type OpenAgendaBookingSourceProviderEnv } from "./OpenAgendaBookingSourceProvider.js";
 import {
@@ -15,6 +15,11 @@ import {
   getSceneAgendaSourceStatuses,
   type SceneAgendaProviderEnv
 } from "./SceneAgendaProvider.js";
+import {
+  buildNativeFetchSceneAgendaProvider,
+  getNativeFetchSceneAgendaStatus,
+  type NativeFetchSceneAgendaEnv
+} from "./NativeFetchSceneAgendaProvider.js";
 import { buildSimilarArtistLiveHistoryBookingSourceProvider } from "./SimilarArtistLiveHistoryBookingSourceProvider.js";
 import { buildWebSearchBookingSourceProvider } from "./WebSearchBookingSourceProvider.js";
 import { warnLog } from "../../utils/logger.js";
@@ -37,7 +42,7 @@ export interface BookingSourceProvider {
   search(context: BookingSourceProviderContext): Promise<BookingSourceProviderResult>;
 }
 
-export interface DefaultBookingProviderEnv extends WebProviderEnv, OpenAgendaBookingSourceProviderEnv, SceneAgendaProviderEnv {
+export interface DefaultBookingProviderEnv extends WebProviderEnv, OpenAgendaBookingSourceProviderEnv, SceneAgendaProviderEnv, NativeFetchSceneAgendaEnv, FirecrawlBookingEnv {
   MOCK_AI?: string;
 }
 
@@ -50,8 +55,7 @@ export function buildDefaultBookingSourceProviders(
   logBookingProviderStartup(env);
 
   const providers: BookingSourceProvider[] = [];
-  const webSearchProviders = getEnabledSearchProviders(env, fetchImpl)
-    .filter((provider) => provider.providerName !== "firecrawl");
+  const webSearchProviders = getEnabledBookingSearchProviders(env, fetchImpl);
   const webExtractProvider = buildDefaultWebExtractProvider(env, fetchImpl);
 
   const similarArtistSearchProvider = env.ENABLE_FIRECRAWL_CONSOLIDATION === "true" && env.FIRECRAWL_API_KEY
@@ -80,6 +84,11 @@ export function buildDefaultBookingSourceProviders(
     }));
   }
 
+  // Native fetch scene agendas run regardless of web search provider availability
+  if (getSceneAgendaProviderStatus(env).enabled) {
+    providers.push(buildNativeFetchSceneAgendaProvider({ env, fetchImpl }));
+  }
+
   providers.push(
     buildOpenAgendaBookingSourceProvider({ env, fetchImpl }),
     buildFirecrawlBookingSourceProvider(env, fetchImpl)
@@ -103,31 +112,57 @@ export function buildDefaultBookingSourceProviders(
 }
 
 function logBookingProviderStartup(env: DefaultBookingProviderEnv): void {
-  const similarArtistLiveHistory = getSimilarArtistLiveHistoryProviderStatus(env);
   const sceneAgendas = getSceneAgendaProviderStatus(env);
   const sceneSources = getSceneAgendaSourceStatuses(env);
+  const nativeFetch = getNativeFetchSceneAgendaStatus(env);
+  const tavily = getTavilyBookingStatus(env);
+  const exa = getExaBookingStatus(env);
+  const jina = getJinaReaderStatus(env);
   const openAgenda = getOpenAgendaProviderStatus(env);
   const firecrawl = getFirecrawlProviderStatus(env);
   const mock = getMockProviderStatus(env);
   warnLog("booking", [
     "Booking providers:",
-    `- SimilarArtistLiveHistory: ${similarArtistLiveHistory.enabled ? "enabled" : "disabled"} (${similarArtistLiveHistory.reason})`,
     `- SceneAgendas: ${sceneAgendas.enabled ? "enabled" : "disabled"} (${sceneAgendas.reason})`,
     ...sceneSources.map((status) => `- ${status.label}: ${status.enabled ? "enabled" : "disabled"} (${status.reason})`),
+    `- NativeFetchAgendas: ${nativeFetch.enabled ? "enabled" : "disabled"} (${nativeFetch.reason})`,
+    `- Tavily: ${tavily.enabled ? "enabled" : "disabled"} (${tavily.reason})`,
+    `- Exa: ${exa.enabled ? "enabled" : "disabled"} (${exa.reason})`,
+    `- JinaReader: ${jina.enabled ? "enabled" : "disabled"} (${jina.reason})`,
     `- OpenAgenda: ${openAgenda.enabled ? "enabled" : "disabled"} (${openAgenda.reason})`,
     `- Firecrawl: ${firecrawl.enabled ? "enabled" : "disabled"} (${firecrawl.reason})`,
     `- Mock: ${mock.enabled ? "enabled" : "disabled"} (${mock.reason})`
   ].join("\n"));
 }
 
-function getSimilarArtistLiveHistoryProviderStatus(env: DefaultBookingProviderEnv): { enabled: boolean; reason: string } {
-  if (env.ENABLE_FIRECRAWL_CONSOLIDATION === "true" && env.FIRECRAWL_API_KEY) {
-    return { enabled: true, reason: "enabled with Firecrawl search/extract" };
+function getTavilyBookingStatus(env: DefaultBookingProviderEnv): { enabled: boolean; reason: string } {
+  if (env.ENABLE_TAVILY_BOOKING === "false") {
+    return { enabled: false, reason: "ENABLE_TAVILY_BOOKING is false" };
   }
-  if (env.TAVILY_API_KEY || env.EXA_API_KEY || env.JINA_API_KEY) {
-    return { enabled: true, reason: "enabled with available web provider" };
+  if (!env.TAVILY_API_KEY) {
+    return { enabled: false, reason: "TAVILY_API_KEY is missing" };
   }
-  return { enabled: false, reason: "no web search provider is configured" };
+  return { enabled: true, reason: "enabled (TAVILY_API_KEY present)" };
+}
+
+function getExaBookingStatus(env: DefaultBookingProviderEnv): { enabled: boolean; reason: string } {
+  if (env.ENABLE_EXA_BOOKING === "false") {
+    return { enabled: false, reason: "ENABLE_EXA_BOOKING is false" };
+  }
+  if (!env.EXA_API_KEY) {
+    return { enabled: false, reason: "EXA_API_KEY is missing" };
+  }
+  return { enabled: true, reason: "enabled (EXA_API_KEY present)" };
+}
+
+function getJinaReaderStatus(env: DefaultBookingProviderEnv): { enabled: boolean; reason: string } {
+  if (env.ENABLE_JINA_READER === "false") {
+    return { enabled: false, reason: "ENABLE_JINA_READER is false" };
+  }
+  if (env.JINA_API_KEY) {
+    return { enabled: true, reason: "enabled (JINA_API_KEY present)" };
+  }
+  return { enabled: true, reason: "enabled (no key required for basic use)" };
 }
 
 function getOpenAgendaProviderStatus(env: DefaultBookingProviderEnv): { enabled: boolean; reason: string } {
@@ -144,11 +179,17 @@ function getOpenAgendaProviderStatus(env: DefaultBookingProviderEnv): { enabled:
 }
 
 function getFirecrawlProviderStatus(env: DefaultBookingProviderEnv): { enabled: boolean; reason: string } {
-  if (env.ENABLE_FIRECRAWL_CONSOLIDATION !== "true") {
-    return { enabled: false, reason: "ENABLE_FIRECRAWL_CONSOLIDATION is not true" };
+  if (!isFirecrawlBookingEnabled(env)) {
+    if (env.ENABLE_FIRECRAWL_BOOKING === "false") {
+      return { enabled: false, reason: "ENABLE_FIRECRAWL_BOOKING is false" };
+    }
+    if (!env.FIRECRAWL_API_KEY) {
+      return { enabled: false, reason: "FIRECRAWL_API_KEY is missing" };
+    }
+    return { enabled: false, reason: "ENABLE_FIRECRAWL_BOOKING and ENABLE_FIRECRAWL_CONSOLIDATION are both not set" };
   }
-  if (!env.FIRECRAWL_API_KEY) {
-    return { enabled: false, reason: "FIRECRAWL_API_KEY is missing" };
+  if (env.ENABLE_FIRECRAWL_BOOKING === "true") {
+    return { enabled: true, reason: "enabled by ENABLE_FIRECRAWL_BOOKING" };
   }
   return { enabled: true, reason: "enabled by ENABLE_FIRECRAWL_CONSOLIDATION" };
 }

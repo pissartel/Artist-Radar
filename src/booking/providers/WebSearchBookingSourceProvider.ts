@@ -74,12 +74,15 @@ export function buildWebSearchBookingSourceProvider(
 
 function buildBookingSearchQueries(genre: string, city: string, target: string | null): string[] {
   const location = target ?? city;
+  const year = new Date().getFullYear();
   return [
-    `"${genre}" concert venue "${location}" programmation`,
-    `"${genre}" café-concert "${location}"`,
-    `"${genre}" association concerts "${location}"`,
-    `"${genre}" festival appel à candidature`,
-    `"${genre}" support TBA "${location}"`
+    `${genre} concert venue ${location} programmation`,
+    `${genre} café-concert ${location}`,
+    `${genre} concerts ${location} ${year}`,
+    `${genre} première partie ${location}`,
+    `${genre} support TBA ${location}`,
+    `${genre} association concerts ${location}`,
+    `${genre} festival appel à candidature`
   ];
 }
 

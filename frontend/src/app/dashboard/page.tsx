@@ -30,7 +30,7 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-3">
           {bookingOpportunities.map((opportunity) => (
             <BookingOpportunityCard
-              key={opportunity.venue}
+              key={opportunity.id}
               opportunity={opportunity}
             />
           ))}

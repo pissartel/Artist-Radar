@@ -6,10 +6,10 @@ interface SimilarArtistsSectionProps {
 
 function SimilarArtistCard({ artist }: { artist: SimilarArtist }) {
   return (
-    <div className="bg-card-alt rounded-lg p-4 border border-white/5 flex flex-col gap-2">
-      <div className="flex items-start justify-between">
-        <div className="w-9 h-9 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center flex-shrink-0">
-          <span className="text-accent-light text-sm font-semibold">
+    <div className="bg-card-alt rounded-lg p-4 border border-white/5 flex flex-col gap-3 min-w-[188px] flex-shrink-0">
+      <div className="flex items-start justify-between gap-2">
+        <div className="w-10 h-10 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center flex-shrink-0">
+          <span className="text-accent-light text-base font-semibold">
             {artist.name.charAt(0)}
           </span>
         </div>
@@ -31,10 +31,18 @@ export default function SimilarArtistsSection({
 }: SimilarArtistsSectionProps) {
   return (
     <section className="mb-8">
-      <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
-        Similar Artists
-      </h2>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+          Similar Artists
+        </h2>
+        <button
+          type="button"
+          className="text-xs text-accent-light hover:text-white transition-colors"
+        >
+          View all
+        </button>
+      </div>
+      <div className="flex flex-row gap-3 overflow-x-auto pb-2 flex-wrap sm:flex-nowrap">
         {artists.map((artist) => (
           <SimilarArtistCard key={artist.id} artist={artist} />
         ))}

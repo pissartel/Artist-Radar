@@ -112,6 +112,20 @@ Each command writes one JSON result and CSV files to `outputs/`:
 - Similar artists CSV named `{slug}-similar-artists.csv`
 - Events CSV named `{slug}-events.csv`
 
+## Frontend
+
+The dashboard UI is a Next.js app located in `frontend/`.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) — it redirects automatically to `/dashboard`.
+
+The frontend is fully static and does not require a backend or any API keys.
+
 ## Notes
 
 - Contacts must be `null` when uncertain.

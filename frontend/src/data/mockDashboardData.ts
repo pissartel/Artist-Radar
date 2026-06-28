@@ -125,31 +125,54 @@ const bookingOpportunities: BookingOpportunity[] = [
 ];
 
 const topCities: CityOpportunityStat[] = [
-  { city: "Bordeaux", country: "France", opportunityCount: 4, topVenueCount: 2 },
-  { city: "Paris", country: "France", opportunityCount: 8, topVenueCount: 5 },
-  { city: "Lyon", country: "France", opportunityCount: 5, topVenueCount: 3 },
-  { city: "Nantes", country: "France", opportunityCount: 3, topVenueCount: 2 },
-  { city: "Toulouse", country: "France", opportunityCount: 3, topVenueCount: 2 },
+  { city: "Bordeaux", country: "France", opportunityCount: 4, topVenueCount: 2, percentage: 28 },
+  { city: "Paris", country: "France", opportunityCount: 8, topVenueCount: 5, percentage: 18 },
+  { city: "Lyon", country: "France", opportunityCount: 5, topVenueCount: 3, percentage: 16 },
+  { city: "Nantes", country: "France", opportunityCount: 3, topVenueCount: 2, percentage: 12 },
+  { city: "Toulouse", country: "France", opportunityCount: 3, topVenueCount: 2, percentage: 9 },
 ];
 
 const sources: BookingSource[] = [
-  {
-    id: "songkick",
-    name: "Songkick",
-    url: "https://www.songkick.com",
-    type: "concert_discovery",
-  },
   {
     id: "bandsintown",
     name: "Bandsintown",
     url: "https://www.bandsintown.com",
     type: "concert_discovery",
+    opportunityCount: 18,
   },
   {
-    id: "manual",
-    name: "Manual Research",
-    type: "manual",
+    id: "songkick",
+    name: "Songkick",
+    url: "https://www.songkick.com",
+    type: "concert_discovery",
+    opportunityCount: 14,
   },
+  {
+    id: "venue-websites",
+    name: "Venue websites",
+    type: "manual",
+    opportunityCount: 9,
+  },
+  {
+    id: "festivals-official-sites",
+    name: "Festivals official sites",
+    type: "manual",
+    opportunityCount: 7,
+  },
+  {
+    id: "news-blogs",
+    name: "News / Blogs",
+    type: "manual",
+    opportunityCount: 4,
+  },
+];
+
+const matchExplanations: string[] = [
+  "Similar music style",
+  "Comparable audience",
+  "Similar venue history",
+  "Geographic relevance",
+  "Active in the same circuit",
 ];
 
 export const mockDashboardData: DashboardData = {
@@ -159,4 +182,5 @@ export const mockDashboardData: DashboardData = {
   bookingOpportunities,
   topCities,
   sources,
+  matchExplanations,
 };

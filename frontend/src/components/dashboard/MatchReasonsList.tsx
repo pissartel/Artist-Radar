@@ -1,0 +1,17 @@
+interface MatchReasonsListProps {
+  reasons: string[];
+}
+
+export default function MatchReasonsList({ reasons }: MatchReasonsListProps) {
+  if (reasons.length === 0) return null;
+  return (
+    <ul className="flex flex-col gap-1 mt-2">
+      {reasons.map((reason) => (
+        <li key={reason} className="flex items-center gap-1.5 text-xs text-gray-400">
+          <span className="w-1 h-1 rounded-full bg-accent-light flex-shrink-0" />
+          {reason}
+        </li>
+      ))}
+    </ul>
+  );
+}

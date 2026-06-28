@@ -17,13 +17,22 @@ const artist: ArtistProfile = {
   country: "France",
   monthlyListeners: 24500,
   growthPercent: 12,
+  verified: true,
+  platforms: [
+    { type: "spotify" },
+    { type: "instagram" },
+    { type: "youtube" },
+    { type: "website" },
+  ],
 };
 
 const kpis: KpiMetric[] = [
-  { id: "similar-artists", label: "Similar Artists Found", value: 8 },
-  { id: "booking-opportunities", label: "Booking Opportunities", value: 6 },
-  { id: "venues-nearby", label: "Venues Nearby", value: 14 },
-  { id: "monthly-listeners", label: "Monthly Listeners", value: "24.5K" },
+  { id: "compatible-venues", label: "Compatible Venues", value: 14 },
+  { id: "concerts-found", label: "Concerts Found", value: 6 },
+  { id: "festivals", label: "Festivals", value: 3 },
+  { id: "similar-artists", label: "Similar Artists", value: 8 },
+  { id: "contacts-found", label: "Contacts Found", value: 11 },
+  { id: "avg-match-score", label: "Avg Match Score", value: 76, unit: "%" },
 ];
 
 const similarArtists: SimilarArtist[] = [

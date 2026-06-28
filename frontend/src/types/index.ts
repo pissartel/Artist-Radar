@@ -12,6 +12,13 @@ export interface KPICard {
 }
 
 // Dashboard API-aligned types
+export type PlatformType = "spotify" | "instagram" | "youtube" | "website";
+
+export interface Platform {
+  type: PlatformType;
+  url?: string;
+}
+
 export interface ArtistProfile {
   id: string;
   name: string;
@@ -22,6 +29,8 @@ export interface ArtistProfile {
   monthlyListeners: number;
   growthPercent: number;
   imageUrl?: string;
+  verified?: boolean;
+  platforms?: Platform[];
 }
 
 export interface KpiMetric {

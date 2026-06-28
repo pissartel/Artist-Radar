@@ -1,10 +1,10 @@
-import type { Artist } from "@/types";
+import type { SimilarArtist } from "@/types";
 
 interface SimilarArtistsSectionProps {
-  artists: Artist[];
+  artists: SimilarArtist[];
 }
 
-function SimilarArtistCard({ artist }: { artist: Artist }) {
+function SimilarArtistCard({ artist }: { artist: SimilarArtist }) {
   return (
     <div className="bg-card-alt rounded-lg p-4 border border-white/5 flex flex-col gap-2">
       <div className="flex items-start justify-between">
@@ -13,16 +13,14 @@ function SimilarArtistCard({ artist }: { artist: Artist }) {
             {artist.name.charAt(0)}
           </span>
         </div>
-        {artist.score !== undefined && (
-          <span className="text-xs font-medium text-accent-light bg-accent/10 px-2 py-0.5 rounded-full">
-            {artist.score}%
-          </span>
-        )}
+        <span className="text-xs font-medium text-accent-light bg-accent/10 px-2 py-0.5 rounded-full">
+          {artist.matchScore}%
+        </span>
       </div>
       <div>
         <p className="text-sm font-semibold text-white">{artist.name}</p>
-        <p className="text-xs text-gray-400 mt-0.5">{artist.genre}</p>
-        <p className="text-xs text-gray-600 mt-0.5">{artist.city}</p>
+        <p className="text-xs text-gray-400 mt-0.5">{artist.genres.join(", ")}</p>
+        <p className="text-xs text-gray-600 mt-0.5">{artist.location}</p>
       </div>
     </div>
   );
@@ -38,7 +36,7 @@ export default function SimilarArtistsSection({
       </h2>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {artists.map((artist) => (
-          <SimilarArtistCard key={artist.name} artist={artist} />
+          <SimilarArtistCard key={artist.id} artist={artist} />
         ))}
       </div>
     </section>

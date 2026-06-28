@@ -27,13 +27,13 @@ export default function BookingOpportunityCard({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <p className="text-sm font-semibold text-white truncate">
-            {opportunity.venue}
+            {opportunity.title}
           </p>
-          <ScoreBadge score={opportunity.score} />
+          <ScoreBadge score={opportunity.matchScore} />
         </div>
-        <p className="text-xs text-gray-500 mb-2">{opportunity.city}</p>
+        <p className="text-xs text-gray-500 mb-2">{opportunity.city ?? opportunity.location}</p>
         <p className="text-xs text-gray-400 leading-relaxed">
-          {opportunity.reason}
+          {opportunity.description}
         </p>
       </div>
     </div>

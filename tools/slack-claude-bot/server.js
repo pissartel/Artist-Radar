@@ -4,8 +4,14 @@ import { WebClient } from "@slack/web-api";
 import { exec } from "child_process";
 import util from "util";
 import fs from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
 
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+dotenv.config({
+  path: path.join(__dirname, "../../.env")
+});
 
 const app = express();
 const execAsync = util.promisify(exec);
@@ -46,6 +52,7 @@ app.post("/slack/command", async (req, res) => {
 });
 
 app.post("/run-issue", async (req, res) => {
+  
   const issueNumber = req.body.issueNumber;
 
   if (!issueNumber) {
@@ -67,6 +74,21 @@ app.post("/run-issue", async (req, res) => {
 
 async function runClaudeForIssue(issueNumber, channel) {
   running = true;
+
+   const resolvedChannel = channel || process.env.SLACK_CHANNEL_ID;
+
+  console.log("==========");
+  console.log("issue:", issueNumber);
+  console.log("channel arg:", channel);
+  console.log("env channel:", process.env.SLACK_CHANNEL_ID);
+  console.log("resolved channel:", resolvedChannel);
+  console.log("==========");
+
+  if (!resolvedChannel) {
+    console.error("Missing Slack channel. Set SLACK_CHANNEL_ID in .env.");
+    running = false;
+    return;
+  }
 
   try {
     const { baseBranch, previousBranchFound } = await prepareGitBase(issueNumber);

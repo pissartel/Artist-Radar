@@ -79,6 +79,7 @@ export interface BookingSource {
   name: string;
   url?: string;
   type: string;
+  opportunityCount?: number;
 }
 
 export interface CityOpportunityStat {
@@ -86,6 +87,7 @@ export interface CityOpportunityStat {
   country: string;
   opportunityCount: number;
   topVenueCount: number;
+  percentage?: number;
 }
 
 export interface DashboardData {
@@ -95,4 +97,5 @@ export interface DashboardData {
   bookingOpportunities: BookingOpportunity[];
   topCities: CityOpportunityStat[];
   sources: BookingSource[];
+  matchExplanations: string[];
 }

@@ -6,7 +6,7 @@ import BookingSection from "@/components/dashboard/BookingSection";
 import { mockDashboardData } from "@/data/mockDashboardData";
 
 export default function DashboardPage() {
-  const { artist, kpis, similarArtists, bookingOpportunities } =
+  const { artist, kpis, similarArtists, bookingOpportunities, topCities, matchExplanations, sources } =
     mockDashboardData;
 
   return (
@@ -15,7 +15,12 @@ export default function DashboardPage() {
       <KpiGrid metrics={kpis} />
       <SimilarArtistsSection artists={similarArtists} />
 
-      <BookingSection opportunities={bookingOpportunities} />
+      <BookingSection
+        opportunities={bookingOpportunities}
+        topCities={topCities}
+        matchExplanations={matchExplanations}
+        sources={sources}
+      />
     </MainLayout>
   );
 }

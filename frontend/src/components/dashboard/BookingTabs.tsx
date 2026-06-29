@@ -24,7 +24,7 @@ interface BookingTabsProps {
 function EmptyTabState({ tab }: { tab: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="w-10 h-10 rounded-full bg-white/5 border border-white/8 flex items-center justify-center mb-3">
+      <div className="w-10 h-10 rounded-full bg-white/5 border border-slate-400/12 flex items-center justify-center mb-3">
         <span className="text-gray-600 text-lg">—</span>
       </div>
       <p className="text-sm text-gray-500">No {tab.toLowerCase()} yet.</p>
@@ -37,7 +37,7 @@ function EmptyTabState({ tab }: { tab: string }) {
 
 function RawJsonTab({ data }: { data: DashboardData }) {
   return (
-    <pre className="bg-[#0d1117] rounded-xl p-4 border border-white/8 text-xs text-emerald-400 overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed font-mono shadow-card">
+    <pre className="bg-[#0d1117] rounded-xl p-4 border border-slate-400/12 text-xs text-emerald-400 overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed font-mono shadow-card">
       {JSON.stringify(data, null, 2)}
     </pre>
   );
@@ -48,7 +48,7 @@ export default function BookingTabs({ opportunities, dashboardData }: BookingTab
 
   return (
     <div>
-      <div className="flex gap-1 mb-4 overflow-x-auto pb-1 bg-card-alt/50 rounded-xl p-1.5 border border-white/5">
+      <div className="flex gap-1 mb-4 overflow-x-auto pb-1 bg-card-alt/50 rounded-xl p-1.5 border border-slate-400/10">
         {TABS.map((tab) => (
           <button
             key={tab}

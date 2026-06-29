@@ -4,7 +4,7 @@ interface MatchExplanationPanelProps {
 
 export default function MatchExplanationPanel({ explanations }: MatchExplanationPanelProps) {
   return (
-    <div className="bg-card rounded-xl p-4 border border-white/8 shadow-card">
+    <div className="bg-card rounded-xl p-4 border border-slate-400/12 shadow-card">
       <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest mb-3">
         Why these matches?
       </h3>

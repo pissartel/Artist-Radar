@@ -267,6 +267,67 @@ async function prepareGitBase(issueNumber) {
   };
 }
 
+async function setProjectItemStatus(projectItemId, optionId) {
+  if (!projectItemId) return;
+
+  const requiredEnv = [
+    "GITHUB_TOKEN",
+    "GITHUB_PROJECT_ID",
+    "GITHUB_STATUS_FIELD_ID"
+  ];
+
+  for (const key of requiredEnv) {
+    if (!process.env[key]) {
+      throw new Error(`Missing ${key} in .env`);
+    }
+  }
+
+  if (!optionId) {
+    throw new Error("Missing GitHub Project status option id.");
+  }
+
+  const query = `
+    mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+      updateProjectV2ItemFieldValue(input: {
+        projectId: $projectId,
+        itemId: $itemId,
+        fieldId: $fieldId,
+        value: { singleSelectOptionId: $optionId }
+      }) {
+        projectV2Item {
+          id
+        }
+      }
+    }
+  `;
+
+  const response = await fetch("https://api.github.com/graphql", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+      "Content-Type": "application/json",
+      Accept: "application/vnd.github+json"
+    },
+    body: JSON.stringify({
+      query,
+      variables: {
+        projectId: process.env.GITHUB_PROJECT_ID,
+        itemId: projectItemId,
+        fieldId: process.env.GITHUB_STATUS_FIELD_ID,
+        optionId
+      }
+    })
+  });
+
+  const json = await response.json();
+
+  if (json.errors) {
+    throw new Error(JSON.stringify(json.errors));
+  }
+
+  return json;
+}
+
 app.listen(3000, () => {
   console.log("Slack Claude bot listening on port 3000");
 });

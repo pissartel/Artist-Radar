@@ -7,7 +7,7 @@ interface KpiGridProps {
 
 export default function KpiGrid({ metrics }: KpiGridProps) {
   return (
-    <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+    <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
       {metrics.map((metric) => (
         <KpiCard key={metric.id} metric={metric} />
       ))}

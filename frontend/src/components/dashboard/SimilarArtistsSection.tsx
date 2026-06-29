@@ -6,20 +6,20 @@ interface SimilarArtistsSectionProps {
 
 function SimilarArtistCard({ artist }: { artist: SimilarArtist }) {
   return (
-    <div className="bg-card-alt rounded-lg p-4 border border-white/5 flex flex-col gap-3 min-w-[188px] flex-shrink-0">
+    <div className="bg-card-alt rounded-xl p-4 border border-white/8 shadow-card flex flex-col gap-3 min-w-[176px] flex-shrink-0 hover:bg-card-hover hover:border-accent/20 hover:shadow-card-hover transition-all duration-200 cursor-default">
       <div className="flex items-start justify-between gap-2">
-        <div className="w-10 h-10 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center flex-shrink-0">
+        <div className="w-10 h-10 rounded-full bg-accent/15 border border-accent/25 flex items-center justify-center flex-shrink-0">
           <span className="text-accent-light text-base font-semibold">
             {artist.name.charAt(0)}
           </span>
         </div>
-        <span className="text-xs font-medium text-accent-light bg-accent/10 px-2 py-0.5 rounded-full">
+        <span className="text-xs font-semibold text-accent-light bg-accent/15 border border-accent/25 px-2 py-0.5 rounded-full tabular-nums">
           {artist.matchScore}%
         </span>
       </div>
       <div>
-        <p className="text-sm font-semibold text-white">{artist.name}</p>
-        <p className="text-xs text-gray-400 mt-0.5">{artist.genres.join(", ")}</p>
+        <p className="text-sm font-semibold text-white truncate">{artist.name}</p>
+        <p className="text-xs text-gray-400 mt-0.5 truncate">{artist.genres.join(", ")}</p>
         <p className="text-xs text-gray-600 mt-0.5">{artist.location}</p>
       </div>
     </div>
@@ -30,9 +30,9 @@ export default function SimilarArtistsSection({
   artists,
 }: SimilarArtistsSectionProps) {
   return (
-    <section className="mb-8">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+    <section className="mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
           Similar Artists
         </h2>
         <button
@@ -42,7 +42,7 @@ export default function SimilarArtistsSection({
           View all
         </button>
       </div>
-      <div className="flex flex-row gap-3 overflow-x-auto pb-2 flex-wrap sm:flex-nowrap">
+      <div className="flex flex-row gap-3 overflow-x-auto pb-2 scrollbar-thin">
         {artists.map((artist) => (
           <SimilarArtistCard key={artist.id} artist={artist} />
         ))}

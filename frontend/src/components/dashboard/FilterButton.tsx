@@ -2,11 +2,11 @@ export default function FilterButton() {
   return (
     <button
       type="button"
-      className="flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-white border border-white/10 hover:border-white/20 px-3 py-1.5 rounded transition-colors"
+      className="flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-white border border-white/10 hover:border-white/20 hover:bg-white/5 px-2.5 py-1.5 rounded-lg transition-all duration-150"
     >
       <svg
-        width="12"
-        height="12"
+        width="11"
+        height="11"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"

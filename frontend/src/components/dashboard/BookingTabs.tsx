@@ -24,6 +24,9 @@ interface BookingTabsProps {
 function EmptyTabState({ tab }: { tab: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="w-10 h-10 rounded-full bg-white/5 border border-white/8 flex items-center justify-center mb-3">
+        <span className="text-gray-600 text-lg">—</span>
+      </div>
       <p className="text-sm text-gray-500">No {tab.toLowerCase()} yet.</p>
       <p className="text-xs text-gray-600 mt-1">
         This section will be available soon.
@@ -34,7 +37,7 @@ function EmptyTabState({ tab }: { tab: string }) {
 
 function RawJsonTab({ data }: { data: DashboardData }) {
   return (
-    <pre className="bg-[#0d1117] rounded-lg p-4 border border-white/5 text-xs text-green-400 overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed font-mono">
+    <pre className="bg-[#0d1117] rounded-xl p-4 border border-white/8 text-xs text-emerald-400 overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed font-mono shadow-card">
       {JSON.stringify(data, null, 2)}
     </pre>
   );
@@ -45,16 +48,16 @@ export default function BookingTabs({ opportunities, dashboardData }: BookingTab
 
   return (
     <div>
-      <div className="flex gap-1 mb-4 overflow-x-auto pb-1">
+      <div className="flex gap-1 mb-4 overflow-x-auto pb-1 bg-card-alt/50 rounded-xl p-1.5 border border-white/5">
         {TABS.map((tab) => (
           <button
             key={tab}
             type="button"
             onClick={() => setActiveTab(tab)}
-            className={`text-xs font-medium px-3 py-1.5 rounded whitespace-nowrap transition-colors ${
+            className={`text-xs font-medium px-3 py-1.5 rounded-lg whitespace-nowrap transition-all duration-150 flex-shrink-0 ${
               activeTab === tab
-                ? "bg-accent/20 text-accent-light border border-accent/30"
-                : "text-gray-500 hover:text-gray-300 border border-transparent"
+                ? "bg-accent/25 text-accent-light border border-accent/35 shadow-sm"
+                : "text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent"
             }`}
           >
             {tab}

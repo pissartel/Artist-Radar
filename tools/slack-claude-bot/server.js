@@ -329,12 +329,12 @@ async function setProjectItemStatus(projectItemId, optionId) {
 }
 
 app.post("/run-pr-feedback", async (req, res) => {
-  const { prNumber, commentBody, branchName } = req.body;
+  const { prNumber, branchName, feedbacks } = req.body;
 
-  if (!prNumber || !commentBody || !branchName) {
+  if (!prNumber || !branchName || !Array.isArray(feedbacks) || feedbacks.length === 0) {
     return res.status(400).json({
       success: false,
-      error: "Missing prNumber, commentBody, or branchName"
+      error: "Missing prNumber, branchName, or feedbacks"
     });
   }
 
@@ -348,8 +348,8 @@ app.post("/run-pr-feedback", async (req, res) => {
   try {
     await runClaudeForPrFeedback({
       prNumber,
-      commentBody,
       branchName,
+      feedbacks,
       channel: process.env.SLACK_CHANNEL_ID
     });
 
@@ -366,8 +366,7 @@ app.post("/run-pr-feedback", async (req, res) => {
 async function runClaudeForPrFeedback({
   prNumber,
   branchName,
-  commentBody,
-  commentUrl,
+  feedbacks,
   channel
 }) {
   const resolvedChannel = channel || process.env.SLACK_CHANNEL_ID;
@@ -379,9 +378,20 @@ async function runClaudeForPrFeedback({
   running = true;
 
   try {
+    const feedbackText = feedbacks
+      .map((feedback, index) => {
+        return `Feedback ${index + 1}
+ID: ${feedback.id}
+Author: ${feedback.author}
+URL: ${feedback.url}
+
+${feedback.body}`;
+      })
+      .join("\n\n---\n\n");
+
     await slack.chat.postMessage({
       channel: resolvedChannel,
-      text: `Claude PR feedback started for PR #${prNumber}\nBranch: ${branchName}`
+      text: `Claude PR feedback started for PR #${prNumber}\nBranch: ${branchName}\nFeedback comments: ${feedbacks.length}`
     });
 
     const { stdout: status } = await execAsync(
@@ -422,16 +432,15 @@ Pull request:
 Branch:
 ${branchName}
 
-Feedback comment URL:
-${commentUrl || "(none)"}
-
-Feedback to address:
-${commentBody}
+Feedback comments to address:
+${feedbackText}
 
 Instructions:
 - Work on the existing PR branch only.
 - Do not create a new branch.
 - Do not open a new PR.
+- Address all feedback comments in one pass.
+- Make one cohesive commit if changes are needed.
 - Modify only what is requested by the feedback.
 - Preserve the existing scope and architecture.
 - Run relevant lint/tests/build if available.
@@ -453,10 +462,20 @@ cat "${promptFile}" | "${process.env.CLAUDE_BIN}" -p --allowedTools "Read,Write,
       timeout: 1000 * 60 * 60
     });
 
+    const processedIds = feedbacks.map((feedback) => `- ${feedback.id}`).join("\n");
+
+    await execAsync(
+      `"${process.env.GH_BIN}" pr comment ${prNumber} --repo "${repo}" --body ${JSON.stringify(
+        `✅ Claude processed feedback\n\nProcessed comment IDs:\n${processedIds}`
+      )}`,
+      { timeout: 1000 * 30 }
+    );
+
     await slack.chat.postMessage({
       channel: resolvedChannel,
       text:
         `Claude PR feedback finished for PR #${prNumber}.\n\n` +
+        `Processed comments: ${feedbacks.length}\n\n` +
         `Stdout:\n\`\`\`${stdout.slice(-2500)}\`\`\`\n\n` +
         `Stderr:\n\`\`\`${stderr.slice(-1500)}\`\`\``
     });

@@ -52,28 +52,44 @@ app.post("/slack/command", async (req, res) => {
 });
 
 app.post("/run-issue", async (req, res) => {
-  
-  const issueNumber = req.body.issueNumber;
+  const { issueNumber, projectItemId } = req.body;
 
   if (!issueNumber) {
-    return res.status(400).send("Missing issueNumber");
+    return res.status(400).json({
+      success: false,
+      error: "Missing issueNumber"
+    });
   }
 
   if (running) {
-    return res.status(409).send("Claude already running");
+    return res.status(409).json({
+      success: false,
+      issueNumber,
+      error: "Claude already running"
+    });
   }
 
-  res.send(`Starting Claude Code for issue #${issueNumber}...`);
+  try {
+    await runClaudeForIssue(
+      String(issueNumber),
+      process.env.SLACK_CHANNEL_ID,
+      projectItemId
+    );
 
-  runClaudeForIssue(String(issueNumber), process.env.SLACK_CHANNEL_ID).catch(
-    (error) => {
-      console.error("Unhandled Claude task error:", error);
-    }
-  );
+    return res.json({
+      success: true,
+      issueNumber
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      issueNumber,
+      error: String(error.message)
+    });
+  }
 });
 
-async function runClaudeForIssue(issueNumber, channel) {
-  running = true;
+async function runClaudeForIssue(issueNumber, channel, projectItemId) {  running = true;
 
    const resolvedChannel = channel || process.env.SLACK_CHANNEL_ID;
 
@@ -168,6 +184,11 @@ Do not claim tests passed if they were not executed.
     const promptFile = `/tmp/artist-radar-claude-issue-${issueNumber}.txt`;
     await fs.writeFile(promptFile, prompt, "utf8");
 
+    await setProjectItemStatus(
+      projectItemId,
+      process.env.GITHUB_AI_PROGRESS_OPTION_ID
+    );
+
     await slack.chat.postMessage({
       channel,
       text: `Claude Code started for issue #${issueNumber}: ${issue.title}\nBase branch: ${baseBranch}`
@@ -249,3 +270,48 @@ async function prepareGitBase(issueNumber) {
 app.listen(3000, () => {
   console.log("Slack Claude bot listening on port 3000");
 });
+
+async function setProjectItemStatus(projectItemId, optionId) {
+  if (!projectItemId) return;
+
+  const query = `
+    mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+      updateProjectV2ItemFieldValue(input: {
+        projectId: $projectId,
+        itemId: $itemId,
+        fieldId: $fieldId,
+        value: { singleSelectOptionId: $optionId }
+      }) {
+        projectV2Item {
+          id
+        }
+      }
+    }
+  `;
+
+  const response = await fetch("https://api.github.com/graphql", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+      "Content-Type": "application/json",
+      Accept: "application/vnd.github+json"
+    },
+    body: JSON.stringify({
+      query,
+      variables: {
+        projectId: process.env.GITHUB_PROJECT_ID,
+        itemId: projectItemId,
+        fieldId: process.env.GITHUB_STATUS_FIELD_ID,
+        optionId
+      }
+    })
+  });
+
+  const json = await response.json();
+
+  if (json.errors) {
+    throw new Error(JSON.stringify(json.errors));
+  }
+
+  return json;
+}

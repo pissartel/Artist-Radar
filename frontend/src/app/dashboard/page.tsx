@@ -20,6 +20,7 @@ export default function DashboardPage() {
         topCities={topCities}
         matchExplanations={matchExplanations}
         sources={sources}
+        dashboardData={mockDashboardData}
       />
     </MainLayout>
   );

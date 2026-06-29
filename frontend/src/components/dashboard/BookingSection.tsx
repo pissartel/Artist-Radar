@@ -1,4 +1,4 @@
-import type { BookingOpportunity, BookingSource, CityOpportunityStat } from "@/types";
+import type { BookingOpportunity, BookingSource, CityOpportunityStat, DashboardData } from "@/types";
 import BookingTabs from "./BookingTabs";
 import BookingInsightsPanel from "./BookingInsightsPanel";
 
@@ -7,6 +7,7 @@ interface BookingSectionProps {
   topCities: CityOpportunityStat[];
   matchExplanations: string[];
   sources: BookingSource[];
+  dashboardData: DashboardData;
 }
 
 export default function BookingSection({
@@ -14,6 +15,7 @@ export default function BookingSection({
   topCities,
   matchExplanations,
   sources,
+  dashboardData,
 }: BookingSectionProps) {
   return (
     <section className="mb-8">
@@ -24,7 +26,7 @@ export default function BookingSection({
         <span className="text-xs text-gray-600">{opportunities.length} found</span>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
-        <BookingTabs opportunities={opportunities} />
+        <BookingTabs opportunities={opportunities} dashboardData={dashboardData} />
         <BookingInsightsPanel
           topCities={topCities}
           matchExplanations={matchExplanations}

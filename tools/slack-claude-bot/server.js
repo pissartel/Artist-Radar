@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 dotenv.config({
-  path: path.join(__dirname, "../../.env")
+  path: path.join(__dirname, ".env")
 });
 
 const app = express();
@@ -89,28 +89,20 @@ app.post("/run-issue", async (req, res) => {
   }
 });
 
-async function runClaudeForIssue(issueNumber, channel, projectItemId) {  running = true;
-
-   const resolvedChannel = channel || process.env.SLACK_CHANNEL_ID;
-
-  console.log("==========");
-  console.log("issue:", issueNumber);
-  console.log("channel arg:", channel);
-  console.log("env channel:", process.env.SLACK_CHANNEL_ID);
-  console.log("resolved channel:", resolvedChannel);
-  console.log("==========");
+async function runClaudeForIssue(issueNumber, channel, projectItemId) {
+  const resolvedChannel = channel || process.env.SLACK_CHANNEL_ID;
 
   if (!resolvedChannel) {
-    console.error("Missing Slack channel. Set SLACK_CHANNEL_ID in .env.");
-    running = false;
-    return;
+    throw new Error("Missing Slack channel. Set SLACK_CHANNEL_ID in .env.");
   }
+
+  running = true;
 
   try {
     const { baseBranch, previousBranchFound } = await prepareGitBase(issueNumber);
 
     await slack.chat.postMessage({
-      channel,
+      channel: resolvedChannel,
       text: `Fetching GitHub issue #${issueNumber}...`
     });
 
@@ -190,7 +182,7 @@ Do not claim tests passed if they were not executed.
     );
 
     await slack.chat.postMessage({
-      channel,
+      channel: resolvedChannel,
       text: `Claude Code started for issue #${issueNumber}: ${issue.title}\nBase branch: ${baseBranch}`
     });
 
@@ -204,19 +196,27 @@ cat "${promptFile}" | "${process.env.CLAUDE_BIN}" -p --allowedTools "Read,Write,
     });
 
     await slack.chat.postMessage({
-      channel,
+      channel: resolvedChannel,
       text:
         `Claude Code finished issue #${issueNumber}.\n\n` +
         `Stdout:\n\`\`\`${stdout.slice(-2500)}\`\`\`\n\n` +
         `Stderr:\n\`\`\`${stderr.slice(-1500)}\`\`\``
     });
+
+    return {
+      issueNumber,
+      stdout,
+      stderr
+    };
   } catch (error) {
     await slack.chat.postMessage({
-      channel,
+      channel: resolvedChannel,
       text: `Claude Code failed for issue #${issueNumber}.\n\`\`\`${String(
         error.message
       ).slice(0, 2500)}\`\`\``
     });
+
+    throw error;
   } finally {
     running = false;
   }

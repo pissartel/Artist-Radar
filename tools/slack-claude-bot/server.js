@@ -328,6 +328,41 @@ async function setProjectItemStatus(projectItemId, optionId) {
   return json;
 }
 
+app.post("/run-pr-feedback", async (req, res) => {
+  const { prNumber, commentBody, branchName } = req.body;
+
+  if (!prNumber || !commentBody || !branchName) {
+    return res.status(400).json({
+      success: false,
+      error: "Missing prNumber, commentBody, or branchName"
+    });
+  }
+
+  if (running) {
+    return res.status(409).json({
+      success: false,
+      error: "Claude already running"
+    });
+  }
+
+  try {
+    await runClaudeForPrFeedback({
+      prNumber,
+      commentBody,
+      branchName,
+      channel: process.env.SLACK_CHANNEL_ID
+    });
+
+    return res.json({ success: true, prNumber });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      prNumber,
+      error: String(error.message)
+    });
+  }
+});
+
 app.listen(3000, () => {
   console.log("Slack Claude bot listening on port 3000");
 });

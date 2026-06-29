@@ -41,7 +41,7 @@ export default function BookingOpportunityCard({
     TYPE_COLORS[opportunity.type] ?? "text-gray-400 bg-gray-400/10 border-gray-400/20";
 
   return (
-    <div className="bg-card rounded-xl p-4 border border-slate-400/12 shadow-card hover:bg-card-hover hover:border-accent/30 hover:shadow-card-hover transition-all duration-200 flex gap-4">
+    <div className="bg-card rounded-xl p-4 border border-slate-400/10 shadow-card hover:bg-card-hover hover:border-accent/30 hover:shadow-card-hover transition-all duration-200 flex gap-4">
       <div className="w-11 h-11 rounded-xl bg-accent/15 border border-accent/25 flex items-center justify-center flex-shrink-0">
         <span className="text-accent-light text-base font-semibold">
           {opportunity.title.charAt(0)}

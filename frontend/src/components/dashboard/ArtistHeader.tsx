@@ -22,7 +22,7 @@ export default function ArtistHeader({ artist }: ArtistHeaderProps) {
     artist.growthPercent >= 0 ? "text-emerald-400" : "text-red-400";
 
   return (
-    <div className="bg-card rounded-xl border border-slate-400/12 shadow-card-glow p-5 mb-6 flex items-start gap-4 sm:gap-5">
+    <div className="bg-card rounded-xl border border-slate-400/10 shadow-card-glow p-5 mb-6 flex items-start gap-4 sm:gap-5">
       <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-accent/20 border-2 border-accent/30 flex items-center justify-center flex-shrink-0 overflow-hidden">
         {artist.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -87,7 +87,7 @@ export default function ArtistHeader({ artist }: ArtistHeaderProps) {
               {artist.platforms.map((platform) => (
                 <span
                   key={platform.type}
-                  className="text-xs px-2 py-1 rounded-md bg-white/5 border border-slate-400/15 text-gray-400 font-medium hover:text-gray-200 hover:border-accent/35 transition-colors"
+                  className="text-xs px-2 py-1 rounded-md bg-white/5 border border-slate-400/10 text-gray-400 font-medium hover:text-gray-200 hover:border-accent/35 transition-colors"
                 >
                   {PLATFORM_LABELS[platform.type]}
                 </span>

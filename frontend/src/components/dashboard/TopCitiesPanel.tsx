@@ -6,7 +6,7 @@ interface TopCitiesPanelProps {
 
 export default function TopCitiesPanel({ cities }: TopCitiesPanelProps) {
   return (
-    <div className="bg-card rounded-xl p-4 border border-slate-400/12 shadow-card">
+    <div className="bg-card rounded-xl p-4 border border-slate-400/10 shadow-card">
       <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest mb-3">
         Top Cities
       </h3>

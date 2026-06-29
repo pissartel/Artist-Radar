@@ -6,7 +6,7 @@ interface SimilarArtistsSectionProps {
 
 function SimilarArtistCard({ artist }: { artist: SimilarArtist }) {
   return (
-    <div className="bg-card-alt rounded-xl p-4 border border-slate-400/12 shadow-card flex flex-col gap-3 min-w-[176px] flex-shrink-0 hover:bg-card-hover hover:border-accent/35 hover:shadow-card-hover transition-all duration-200 cursor-default">
+    <div className="bg-card-alt rounded-xl p-4 border border-slate-400/10 shadow-card flex flex-col gap-3 min-w-[176px] flex-shrink-0 hover:bg-card-hover hover:border-accent/35 hover:shadow-card-hover transition-all duration-200 cursor-default">
       <div className="flex items-start justify-between gap-2">
         <div className="w-10 h-10 rounded-full bg-accent/15 border border-accent/25 flex items-center justify-center flex-shrink-0">
           <span className="text-accent-light text-base font-semibold">

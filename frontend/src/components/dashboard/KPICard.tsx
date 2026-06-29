@@ -84,7 +84,7 @@ export default function KpiCard({ metric }: KpiCardProps) {
   const iconConfig = KPI_ICONS[metric.id];
 
   return (
-    <div className="bg-card rounded-xl p-4 border border-slate-400/15 shadow-card hover:bg-card-hover hover:border-accent/30 transition-all duration-200 group">
+    <div className="bg-card rounded-xl p-4 border border-slate-400/10 shadow-card hover:bg-card-hover hover:border-accent/30 transition-all duration-200 group">
       {iconConfig && (
         <div
           className={`inline-flex items-center justify-center w-7 h-7 rounded-lg ${iconConfig.bg} ${iconConfig.color} mb-2.5`}

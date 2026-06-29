@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { BookingOpportunity } from "@/types";
+import type { BookingOpportunity, DashboardData } from "@/types";
 import BookingOpportunityCard from "./BookingOpportunityCard";
 
 const TABS = [
@@ -18,6 +18,7 @@ type TabName = (typeof TABS)[number];
 
 interface BookingTabsProps {
   opportunities: BookingOpportunity[];
+  dashboardData: DashboardData;
 }
 
 function EmptyTabState({ tab }: { tab: string }) {
@@ -31,15 +32,15 @@ function EmptyTabState({ tab }: { tab: string }) {
   );
 }
 
-function RawJsonTab({ opportunities }: { opportunities: BookingOpportunity[] }) {
+function RawJsonTab({ data }: { data: DashboardData }) {
   return (
-    <pre className="bg-card rounded-lg p-4 border border-white/5 text-xs text-gray-400 overflow-x-auto leading-relaxed">
-      {JSON.stringify(opportunities, null, 2)}
+    <pre className="bg-[#0d1117] rounded-lg p-4 border border-white/5 text-xs text-green-400 overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed font-mono">
+      {JSON.stringify(data, null, 2)}
     </pre>
   );
 }
 
-export default function BookingTabs({ opportunities }: BookingTabsProps) {
+export default function BookingTabs({ opportunities, dashboardData }: BookingTabsProps) {
   const [activeTab, setActiveTab] = useState<TabName>("Opportunities");
 
   return (
@@ -68,9 +69,7 @@ export default function BookingTabs({ opportunities }: BookingTabsProps) {
           ))}
         </div>
       )}
-      {activeTab === "Raw JSON" && (
-        <RawJsonTab opportunities={opportunities} />
-      )}
+      {activeTab === "Raw JSON" && <RawJsonTab data={dashboardData} />}
       {activeTab !== "Opportunities" && activeTab !== "Raw JSON" && (
         <EmptyTabState tab={activeTab} />
       )}

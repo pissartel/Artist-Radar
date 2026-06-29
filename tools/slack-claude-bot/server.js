@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 dotenv.config({
-  path: path.join(__dirname, "../../.env")
+  path: path.join(__dirname, ".env")
 });
 
 const app = express();
@@ -52,7 +52,7 @@ app.post("/slack/command", async (req, res) => {
 });
 
 app.post("/run-issue", async (req, res) => {
-  const issueNumber = req.body.issueNumber;
+  const { issueNumber, projectItemId } = req.body;
 
   if (!issueNumber) {
     return res.status(400).json({
@@ -70,7 +70,11 @@ app.post("/run-issue", async (req, res) => {
   }
 
   try {
-    await runClaudeForIssue(String(issueNumber), process.env.SLACK_CHANNEL_ID);
+    await runClaudeForIssue(
+      String(issueNumber),
+      process.env.SLACK_CHANNEL_ID,
+      projectItemId
+    );
 
     return res.json({
       success: true,
@@ -85,7 +89,7 @@ app.post("/run-issue", async (req, res) => {
   }
 });
 
-async function runClaudeForIssue(issueNumber, channel) {
+async function runClaudeForIssue(issueNumber, channel, projectItemId) {
   const resolvedChannel = channel || process.env.SLACK_CHANNEL_ID;
 
   if (!resolvedChannel) {
@@ -172,6 +176,11 @@ Do not claim tests passed if they were not executed.
     const promptFile = `/tmp/artist-radar-claude-issue-${issueNumber}.txt`;
     await fs.writeFile(promptFile, prompt, "utf8");
 
+    await setProjectItemStatus(
+      projectItemId,
+      process.env.GITHUB_AI_PROGRESS_OPTION_ID
+    );
+
     await slack.chat.postMessage({
       channel: resolvedChannel,
       text: `Claude Code started for issue #${issueNumber}: ${issue.title}\nBase branch: ${baseBranch}`
@@ -256,6 +265,67 @@ async function prepareGitBase(issueNumber) {
     baseBranch,
     previousBranchFound: Boolean(previousBranch)
   };
+}
+
+async function setProjectItemStatus(projectItemId, optionId) {
+  if (!projectItemId) return;
+
+  const requiredEnv = [
+    "GITHUB_TOKEN",
+    "GITHUB_PROJECT_ID",
+    "GITHUB_STATUS_FIELD_ID"
+  ];
+
+  for (const key of requiredEnv) {
+    if (!process.env[key]) {
+      throw new Error(`Missing ${key} in .env`);
+    }
+  }
+
+  if (!optionId) {
+    throw new Error("Missing GitHub Project status option id.");
+  }
+
+  const query = `
+    mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+      updateProjectV2ItemFieldValue(input: {
+        projectId: $projectId,
+        itemId: $itemId,
+        fieldId: $fieldId,
+        value: { singleSelectOptionId: $optionId }
+      }) {
+        projectV2Item {
+          id
+        }
+      }
+    }
+  `;
+
+  const response = await fetch("https://api.github.com/graphql", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+      "Content-Type": "application/json",
+      Accept: "application/vnd.github+json"
+    },
+    body: JSON.stringify({
+      query,
+      variables: {
+        projectId: process.env.GITHUB_PROJECT_ID,
+        itemId: projectItemId,
+        fieldId: process.env.GITHUB_STATUS_FIELD_ID,
+        optionId
+      }
+    })
+  });
+
+  const json = await response.json();
+
+  if (json.errors) {
+    throw new Error(JSON.stringify(json.errors));
+  }
+
+  return json;
 }
 
 app.listen(3000, () => {

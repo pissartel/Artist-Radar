@@ -9,10 +9,10 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const TYPE_COLORS: Record<string, string> = {
-  venue: "text-blue-400 bg-blue-400/10",
-  festival: "text-purple-400 bg-purple-400/10",
-  concert: "text-yellow-400 bg-yellow-400/10",
-  opening_slot: "text-green-400 bg-green-400/10",
+  venue: "text-blue-400 bg-blue-400/10 border-blue-400/20",
+  festival: "text-purple-400 bg-purple-400/10 border-purple-400/20",
+  concert: "text-yellow-400 bg-yellow-400/10 border-yellow-400/20",
+  opening_slot: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
 };
 
 interface BookingOpportunityCardProps {
@@ -22,13 +22,13 @@ interface BookingOpportunityCardProps {
 function ScoreBadge({ score }: { score: number }) {
   const color =
     score >= 85
-      ? "text-green-400 bg-green-400/10"
+      ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/25"
       : score >= 70
-        ? "text-accent-light bg-accent/10"
-        : "text-yellow-400 bg-yellow-400/10";
+        ? "text-accent-light bg-accent/10 border-accent/25"
+        : "text-yellow-400 bg-yellow-400/10 border-yellow-400/25";
 
   return (
-    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${color}`}>
+    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border tabular-nums ${color}`}>
       {score}%
     </span>
   );
@@ -38,24 +38,24 @@ export default function BookingOpportunityCard({
   opportunity,
 }: BookingOpportunityCardProps) {
   const typeBadgeClass =
-    TYPE_COLORS[opportunity.type] ?? "text-gray-400 bg-gray-400/10";
+    TYPE_COLORS[opportunity.type] ?? "text-gray-400 bg-gray-400/10 border-gray-400/20";
 
   return (
-    <div className="bg-card rounded-lg p-4 border border-white/5 flex gap-4">
-      <div className="w-12 h-12 rounded-md bg-accent/10 border border-accent/20 flex items-center justify-center flex-shrink-0">
-        <span className="text-accent-light text-lg font-semibold">
+    <div className="bg-card rounded-xl p-4 border border-slate-400/10 shadow-card hover:bg-card-hover hover:border-accent/30 hover:shadow-card-hover transition-all duration-200 flex gap-4">
+      <div className="w-11 h-11 rounded-xl bg-accent/15 border border-accent/25 flex items-center justify-center flex-shrink-0">
+        <span className="text-accent-light text-base font-semibold">
           {opportunity.title.charAt(0)}
         </span>
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2 mb-1">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <p className="text-sm font-semibold text-white truncate">
               {opportunity.title}
             </p>
             <span
-              className={`text-[10px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap flex-shrink-0 ${typeBadgeClass}`}
+              className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md border whitespace-nowrap flex-shrink-0 ${typeBadgeClass}`}
             >
               {TYPE_LABELS[opportunity.type] ?? opportunity.type}
             </span>
@@ -65,7 +65,7 @@ export default function BookingOpportunityCard({
             <button
               type="button"
               aria-label="Bookmark"
-              className="text-gray-600 hover:text-gray-400 transition-colors"
+              className="text-gray-600 hover:text-accent-light transition-colors"
             >
               <svg
                 width="14"
@@ -90,11 +90,11 @@ export default function BookingOpportunityCard({
         </p>
 
         {opportunity.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-1">
+          <div className="flex flex-wrap gap-1 mb-1.5">
             {opportunity.tags.map((tag) => (
               <span
                 key={tag}
-                className="text-[10px] text-gray-500 bg-white/5 border border-white/5 px-1.5 py-0.5 rounded"
+                className="text-[10px] text-gray-500 bg-white/5 border border-slate-400/10 px-1.5 py-0.5 rounded-md"
               >
                 {tag}
               </span>
@@ -107,7 +107,7 @@ export default function BookingOpportunityCard({
         <div className="mt-3">
           <button
             type="button"
-            className="text-xs text-accent-light hover:text-white border border-accent/30 hover:border-accent-light px-3 py-1.5 rounded transition-colors"
+            className="text-xs text-accent-light hover:text-white border border-accent/30 hover:border-accent-light hover:bg-accent/10 px-3 py-1.5 rounded-lg transition-all duration-150"
           >
             View details
           </button>

@@ -363,6 +363,119 @@ app.post("/run-pr-feedback", async (req, res) => {
   }
 });
 
+async function runClaudeForPrFeedback({
+  prNumber,
+  branchName,
+  commentBody,
+  commentUrl,
+  channel
+}) {
+  const resolvedChannel = channel || process.env.SLACK_CHANNEL_ID;
+
+  if (!resolvedChannel) {
+    throw new Error("Missing Slack channel. Set SLACK_CHANNEL_ID in .env.");
+  }
+
+  running = true;
+
+  try {
+    await slack.chat.postMessage({
+      channel: resolvedChannel,
+      text: `Claude PR feedback started for PR #${prNumber}\nBranch: ${branchName}`
+    });
+
+    const { stdout: status } = await execAsync(
+      `cd "${process.env.REPO_PATH}" && git status --porcelain`,
+      { timeout: 1000 * 30 }
+    );
+
+    if (status.trim()) {
+      throw new Error(
+        "Working tree is not clean. Commit, stash, or discard local changes before running Claude."
+      );
+    }
+
+    await execAsync(
+      `cd "${process.env.REPO_PATH}" && git fetch origin --prune`,
+      { timeout: 1000 * 60 }
+    );
+
+    await execAsync(
+      `cd "${process.env.REPO_PATH}" && git checkout "${branchName}"`,
+      { timeout: 1000 * 30 }
+    );
+
+    await execAsync(
+      `cd "${process.env.REPO_PATH}" && git pull --rebase origin "${branchName}"`,
+      { timeout: 1000 * 60 }
+    );
+
+    const prompt = `
+You are updating an existing GitHub pull request after review feedback.
+
+Repository:
+Artist-Radar
+
+Pull request:
+#${prNumber}
+
+Branch:
+${branchName}
+
+Feedback comment URL:
+${commentUrl || "(none)"}
+
+Feedback to address:
+${commentBody}
+
+Instructions:
+- Work on the existing PR branch only.
+- Do not create a new branch.
+- Do not open a new PR.
+- Modify only what is requested by the feedback.
+- Preserve the existing scope and architecture.
+- Run relevant lint/tests/build if available.
+- Commit the changes to the same branch.
+- Push the same branch.
+- Report honestly what changed and which tests were run.
+- Do not claim tests passed if they were not executed.
+`;
+
+    const promptFile = `/tmp/artist-radar-claude-pr-${prNumber}.txt`;
+    await fs.writeFile(promptFile, prompt, "utf8");
+
+    const claudeCommand = `
+cd "${process.env.REPO_PATH}" &&
+cat "${promptFile}" | "${process.env.CLAUDE_BIN}" -p --allowedTools "Read,Write,Edit,MultiEdit,Glob,Grep,Bash(git:*),Bash(gh:*),Bash(npm:*),Bash(pnpm:*),Bash(yarn:*),Bash(node:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(rg:*),Bash(mkdir:*),Bash(cp:*),Bash(mv:*),Bash(rm:*),Bash(touch:*)"
+`;
+
+    const { stdout, stderr } = await execAsync(claudeCommand, {
+      timeout: 1000 * 60 * 60
+    });
+
+    await slack.chat.postMessage({
+      channel: resolvedChannel,
+      text:
+        `Claude PR feedback finished for PR #${prNumber}.\n\n` +
+        `Stdout:\n\`\`\`${stdout.slice(-2500)}\`\`\`\n\n` +
+        `Stderr:\n\`\`\`${stderr.slice(-1500)}\`\`\``
+    });
+
+    return { prNumber, stdout, stderr };
+  } catch (error) {
+    await slack.chat.postMessage({
+      channel: resolvedChannel,
+      text: `Claude PR feedback failed for PR #${prNumber}.\n\`\`\`${String(
+        error.message
+      ).slice(0, 2500)}\`\`\``
+    });
+
+    throw error;
+  } finally {
+    running = false;
+  }
+}
+
 app.listen(3000, () => {
   console.log("Slack Claude bot listening on port 3000");
 });

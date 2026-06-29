@@ -52,49 +52,53 @@ app.post("/slack/command", async (req, res) => {
 });
 
 app.post("/run-issue", async (req, res) => {
-  
   const issueNumber = req.body.issueNumber;
 
   if (!issueNumber) {
-    return res.status(400).send("Missing issueNumber");
+    return res.status(400).json({
+      success: false,
+      error: "Missing issueNumber"
+    });
   }
 
   if (running) {
-    return res.status(409).send("Claude already running");
+    return res.status(409).json({
+      success: false,
+      issueNumber,
+      error: "Claude already running"
+    });
   }
 
-  res.send(`Starting Claude Code for issue #${issueNumber}...`);
+  try {
+    await runClaudeForIssue(String(issueNumber), process.env.SLACK_CHANNEL_ID);
 
-  runClaudeForIssue(String(issueNumber), process.env.SLACK_CHANNEL_ID).catch(
-    (error) => {
-      console.error("Unhandled Claude task error:", error);
-    }
-  );
+    return res.json({
+      success: true,
+      issueNumber
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      issueNumber,
+      error: String(error.message)
+    });
+  }
 });
 
 async function runClaudeForIssue(issueNumber, channel) {
-  running = true;
-
-   const resolvedChannel = channel || process.env.SLACK_CHANNEL_ID;
-
-  console.log("==========");
-  console.log("issue:", issueNumber);
-  console.log("channel arg:", channel);
-  console.log("env channel:", process.env.SLACK_CHANNEL_ID);
-  console.log("resolved channel:", resolvedChannel);
-  console.log("==========");
+  const resolvedChannel = channel || process.env.SLACK_CHANNEL_ID;
 
   if (!resolvedChannel) {
-    console.error("Missing Slack channel. Set SLACK_CHANNEL_ID in .env.");
-    running = false;
-    return;
+    throw new Error("Missing Slack channel. Set SLACK_CHANNEL_ID in .env.");
   }
+
+  running = true;
 
   try {
     const { baseBranch, previousBranchFound } = await prepareGitBase(issueNumber);
 
     await slack.chat.postMessage({
-      channel,
+      channel: resolvedChannel,
       text: `Fetching GitHub issue #${issueNumber}...`
     });
 
@@ -169,7 +173,7 @@ Do not claim tests passed if they were not executed.
     await fs.writeFile(promptFile, prompt, "utf8");
 
     await slack.chat.postMessage({
-      channel,
+      channel: resolvedChannel,
       text: `Claude Code started for issue #${issueNumber}: ${issue.title}\nBase branch: ${baseBranch}`
     });
 
@@ -183,19 +187,27 @@ cat "${promptFile}" | "${process.env.CLAUDE_BIN}" -p --allowedTools "Read,Write,
     });
 
     await slack.chat.postMessage({
-      channel,
+      channel: resolvedChannel,
       text:
         `Claude Code finished issue #${issueNumber}.\n\n` +
         `Stdout:\n\`\`\`${stdout.slice(-2500)}\`\`\`\n\n` +
         `Stderr:\n\`\`\`${stderr.slice(-1500)}\`\`\``
     });
+
+    return {
+      issueNumber,
+      stdout,
+      stderr
+    };
   } catch (error) {
     await slack.chat.postMessage({
-      channel,
+      channel: resolvedChannel,
       text: `Claude Code failed for issue #${issueNumber}.\n\`\`\`${String(
         error.message
       ).slice(0, 2500)}\`\`\``
     });
+
+    throw error;
   } finally {
     running = false;
   }

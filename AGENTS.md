@@ -88,3 +88,29 @@ The CLI should export:
   - commands run
   - tests/build status
   - next recommended step
+
+## Naming conventions
+
+Issue titles, PR titles, and commit messages use one or more area tags.
+
+Allowed areas: FRONT, BACK, DATA, AI, CLI, UX, INFRA, QA, DOCS, BOOKING, PROMO
+
+Single area:
+
+[AREA][#NUMBER] Short description
+
+Multiple areas:
+
+[AREA][AREA][#NUMBER] Short description
+
+Examples:
+
+[BOOKING][#42] Add similar artists carousel
+[FRONT][BACK][#47] Connect dashboard to generated booking data
+[BACK][DATA][#48] Export unified dashboard JSON
+
+Branch naming uses lowercase area slugs joined by hyphens for multi-area work:
+
+feature/booking-42_similar_artists_carousel
+feature/front-back-47_connect_dashboard_to_booking_data
+tech/back-data-48_export_unified_dashboard_json

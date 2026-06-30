@@ -49,7 +49,17 @@ Do not invent requirements not present in the issue.
 
 Issue title format:
 
+One or more area tags followed by a short title.
+
+Single area:
+
 [AREA] Short title
+
+Multiple areas:
+
+[AREA][AREA] Short title
+
+Allowed areas: FRONT, BACK, DATA, AI, CLI, UX, INFRA, QA, DOCS, BOOKING, PROMO
 
 Examples:
 
@@ -59,11 +69,19 @@ Examples:
 
 [INFRA] Improve GitHub workflow
 
+[FRONT][BACK] Connect dashboard to generated booking data
+
+[FRONT][DATA] Add similar artists page from pipeline results
+
+[BACK][DATA] Export unified dashboard JSON
+
 ---
 
 ## Branch Naming
 
 Use the Work Type field from the issue.
+
+For a single area, use the area slug. For multiple areas, join slugs with a hyphen.
 
 Examples:
 
@@ -77,6 +95,12 @@ refactor/back-45_booking_pipeline
 
 docs/infra-46_codex_workflow
 
+feature/front-back-47_connect_dashboard_to_booking_data
+
+tech/back-data-48_export_unified_dashboard_json
+
+fix/front-ux-49_artist_onboarding_flow
+
 ---
 
 ## Pull Request Naming
@@ -85,9 +109,15 @@ Format:
 
 [AREA][#ISSUE_NUMBER] Short title
 
-Example:
+For multiple areas:
+
+[AREA][AREA][#ISSUE_NUMBER] Short title
+
+Examples:
 
 [BOOKING][#42] Add similar artists carousel
+
+[FRONT][BACK][#47] Connect dashboard to generated booking data
 
 ---
 
@@ -97,9 +127,15 @@ Format:
 
 [AREA][#ISSUE_NUMBER] Short description
 
-Example:
+For multiple areas:
+
+[AREA][AREA][#ISSUE_NUMBER] Short description
+
+Examples:
 
 [BOOKING][#42] Add similar artists carousel
+
+[FRONT][BACK][#47] Connect dashboard to generated booking data
 
 ---
 

@@ -3,11 +3,11 @@ import ArtistHeader from "@/components/dashboard/ArtistHeader";
 import KpiGrid from "@/components/dashboard/KpiGrid";
 import SimilarArtistsSection from "@/components/dashboard/SimilarArtistsSection";
 import BookingSection from "@/components/dashboard/BookingSection";
-import { mockDashboardData } from "@/data/mockDashboardData";
+import { getDashboardData } from "@/lib/getDashboardData";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
   const { artist, kpis, similarArtists, bookingOpportunities, topCities, matchExplanations, sources } =
-    mockDashboardData;
+    await getDashboardData();
 
   return (
     <MainLayout>

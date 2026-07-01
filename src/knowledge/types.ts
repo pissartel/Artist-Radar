@@ -13,3 +13,8 @@ export interface KnowledgeDocumentFilter {
   city?: string;
   url?: string;
 }
+
+export interface KnowledgeChunkFilter {
+  domain?: KnowledgeDomain;
+  documentId?: string;
+}

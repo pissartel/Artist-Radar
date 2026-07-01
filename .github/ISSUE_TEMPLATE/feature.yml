@@ -21,6 +21,7 @@ body:
         - BOOKING
         - PROMO
         - DATA
+        - AI
         - FRONT
         - BACK
         - INFRA

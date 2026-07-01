@@ -21,6 +21,12 @@ src/
   pipeline.ts
   schemas.ts
   prompts.ts
+  ai/
+    pipeline/
+      types.ts
+      aiPipeline.ts
+      domainConfig.ts
+      index.ts
   modules/
     profileCollector.ts
     similarArtistsFinder.ts
@@ -197,6 +203,28 @@ Instagram is not a discovery provider for the MVP. Artist Radar may extract Inst
 Direct Instagram scraping is intentionally excluded because it is fragile, often requires login or proxies, and may violate platform terms. Future discovery should use Firecrawl or search providers against non-Instagram pages first, then pass the fetched page text or HTML to `InstagramHandleExtractor`.
 
 `ArtistVerificationService` may also inspect public web search result URLs/snippets for Instagram profile URLs. It normalizes handles and ignores posts, reels, stories and explore links. It must not log in to Instagram, use proxies, bypass access controls or scrape follower/post data.
+
+## Shared AI Pipeline
+
+`src/ai/pipeline/` is a framework-free, reusable foundation so booking, similar artists, promotion and mix analysis can share the same AI research architecture instead of duplicating ad-hoc OpenAI calls. It introduces the architecture only; no feature is wired into it yet.
+
+`AiResearchDomain` identifies the feature a pipeline run belongs to: `booking`, `similar-artists`, `promotion` or `mix-analysis`.
+
+`runAiPipeline(input, config)` in `aiPipeline.ts` orchestrates eight stages defined per domain in an `AiDomainPipelineConfig`:
+1. `collectSources` — gather raw source documents
+2. `normalizeDocuments` — reduce them to clean text
+3. `retrieveContext` — select the relevant documents/notes for the prompt
+4. `buildPrompt` — build the system/user prompt payload
+5. `callModel` — call the LLM
+6. `validateOutput` — validate the raw model output
+7. `scoreResults` — score the validated output
+8. `formatResult` — shape the final domain result
+
+The orchestrator returns a domain-agnostic `AiPipelineResult<T>` with `result`, `sourcesUsed`, `warnings` and `generatedAt`.
+
+`domainConfig.ts` provides a small in-memory registry (`registerAiDomainPipeline`, `getAiDomainPipeline`, `hasAiDomainPipeline`) so a domain's pipeline config can be registered once and looked up by CLI commands without importing every domain implementation module directly.
+
+No LangChain or vector database is introduced. Booking and similar artists will plug into this architecture in follow-up tickets.
 
 ## Future SaaS reuse
 

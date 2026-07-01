@@ -13,6 +13,8 @@ Create a `.env` file with:
 ```bash
 OPENAI_API_KEY=your_api_key
 OPENAI_MODEL=gpt-4.1-mini
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+RAG_RETRIEVAL_LIMIT=12
 APP_USER_AGENT=ArtistRadar/0.1.0 ( https://github.com/pissartel/Artist-Radar )
 LASTFM_API_KEY=your_lastfm_api_key
 LASTFM_SIMILAR_LIMIT=50
@@ -26,6 +28,8 @@ FIRECRAWL_API_KEY=your_firecrawl_api_key
 ```
 
 Last.fm, Spotify and YouTube credentials are optional. When they are missing, the CLI still runs and the artist profile is created without those audience metrics. Spotify artist followers, popularity and genres may also be unavailable for some artist requests, and Spotify Related Artists can return 403 depending on app access. Spotify is treated as a lightweight ID/search provider by default: deep enrichment, Related Artists and top-track lookups are opt-in through `ENABLE_SPOTIFY_DEEP_ENRICHMENT`, `ENABLE_SPOTIFY_RELATED_ARTISTS` and `ENABLE_SPOTIFY_TOP_TRACKS`. Last.fm is used for musical similarity. MusicBrainz is used for metadata enrichment such as country, area and tags, and every request should send a meaningful `APP_USER_AGENT`. Size estimation now combines Spotify artist metrics, Spotify top-track popularity, YouTube channel stats and MusicBrainz metadata when available, and falls back conservatively when signals conflict. Similar artists in real mode therefore combine Last.fm, Spotify search, verified manual seeds and metadata enrichment; placeholder seed data is mock-only and will not appear in real output. Set `MOCK_AI=true` to use deterministic mock Spotify, YouTube, venue and event data during local mock runs. Set `DEBUG_YOUTUBE=true` to log YouTube parsing and API status.
+
+Stored knowledge documents (`src/knowledge`) can be chunked and embedded with OpenAI embeddings for retrieval-augmented context. `OPENAI_EMBEDDING_MODEL` selects the embedding model (defaults to `text-embedding-3-small`), and `RAG_RETRIEVAL_LIMIT` caps how many chunks `retrieveRelevantContext` returns per query (defaults to 12). Chunk ids are derived from the document id, chunk index and content hash, so re-embedding an unchanged chunk is a no-op cache hit.
 
 Debug flags are available per provider and pipeline scope:
 

@@ -206,7 +206,7 @@ Direct Instagram scraping is intentionally excluded because it is fragile, often
 
 ## Shared AI Pipeline
 
-`src/ai/pipeline/` is a framework-free, reusable foundation so booking, similar artists, promotion and mix analysis can share the same AI research architecture instead of duplicating ad-hoc OpenAI calls. It introduces the architecture only; no feature is wired into it yet.
+`src/ai/pipeline/` is a framework-free, reusable foundation so booking, similar artists, promotion and mix analysis can share the same AI research architecture instead of duplicating ad-hoc OpenAI calls.
 
 `AiResearchDomain` identifies the feature a pipeline run belongs to: `booking`, `similar-artists`, `promotion` or `mix-analysis`.
 
@@ -224,7 +224,20 @@ The orchestrator returns a domain-agnostic `AiPipelineResult<T>` with `result`, 
 
 `domainConfig.ts` provides a small in-memory registry (`registerAiDomainPipeline`, `getAiDomainPipeline`, `hasAiDomainPipeline`) so a domain's pipeline config can be registered once and looked up by CLI commands without importing every domain implementation module directly.
 
-No LangChain or vector database is introduced. Booking and similar artists will plug into this architecture in follow-up tickets.
+No LangChain or vector database is introduced. Similar artists will plug into this architecture in a follow-up ticket.
+
+### Booking RAG workflow
+
+`src/booking/bookingAiWorkflow.ts` (`runBookingAiWorkflow`) is the first domain wired into the shared pipeline. It grounds every booking opportunity in RAG context instead of letting the model invent venues, dates, contacts or URLs:
+
+- `collectSources` retrieves chunks from the knowledge base (`retrieveRelevantContext`) for artist/genre/venue/festival/scene queries built from the search input, merges and ranks them by similarity.
+- `retrieveContext` adds a warning note when no context, or too little context, was found for the search — the model is not called at all when zero context is retrieved.
+- `buildPrompt` uses `src/ai/prompts/booking-rag.prompt.ts`, which instructs the model to use only the provided context, cite evidence for every opportunity, and reject genre-incompatible results (for pop punk searches, generic rock/pop mentions without punk/emo/easycore evidence are treated as incompatible).
+- `validateOutput` reuses `AiBookingOpportunitySchema`, which requires at least one evidence entry per opportunity.
+- `scoreResults` drops any opportunity whose evidence URL is not among the retrieved sources (a hallucination guard), rejects genre-incompatible opportunities via `matchBookingGenres`, penalizes weak/generic genre matches, and clears any contact string that cannot be found in the cited evidence text instead of trusting it.
+- `formatResult` returns the accepted opportunities, a rejected count, the deduplicated sources actually cited, and all warnings collected along the way.
+
+A fresh pipeline config is built per call (not registered in the shared domain registry) because retrieval results for a run are held in a closure-scoped map; sharing one config across concurrent searches would leak context between them. The existing rule-based `searchBookingOpportunities()` pipeline and the booking CLI are unchanged; this RAG-grounded workflow is an additive capability for a later CLI/API wiring ticket.
 
 ## Future SaaS reuse
 

@@ -11,6 +11,9 @@ export interface BuildBookingRagPromptInput {
   contextDocuments: BookingRagContextDocument[];
 }
 
+/** Bumped whenever the booking RAG system/user prompt content changes. */
+export const BOOKING_RAG_PROMPT_VERSION = "booking-rag-v1";
+
 const BOOKING_OUTPUT_SHAPE = {
   opportunities: [
     {

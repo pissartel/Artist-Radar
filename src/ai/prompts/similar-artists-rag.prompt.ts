@@ -11,6 +11,9 @@ export interface BuildSimilarArtistsRagPromptInput {
   contextDocuments: SimilarArtistRagContextDocument[];
 }
 
+/** Bumped whenever the similar artists RAG system/user prompt content changes. */
+export const SIMILAR_ARTISTS_RAG_PROMPT_VERSION = "similar-artists-rag-v1";
+
 const SIMILAR_ARTIST_OUTPUT_SHAPE = {
   similarArtists: [
     {

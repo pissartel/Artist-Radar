@@ -87,14 +87,47 @@ describe("scoreGenreCompatibility - pop punk", () => {
     expect(second).toEqual(first);
   });
 
-  it("rejects with an explanatory reason when no rule set exists for the target genre", () => {
-    const result = scoreGenreCompatibility("jazz", { declaredGenres: ["bebop"] });
-    expect(result.level).toBe("reject");
-    expect(result.debug.rejectionReasons[0]).toMatch(/no rule set/i);
-  });
-
   it("rejects when no genre evidence at all is provided", () => {
     const result = scoreGenreCompatibility("pop punk", {});
     expect(result.level).toBe("reject");
+  });
+
+  it("uses the explicit rule set rather than the generic fallback", () => {
+    const result = scoreGenreCompatibility("pop punk", { declaredGenres: ["pop punk"] });
+    expect(result.debug.usedGenericFallback).toBe(false);
+  });
+});
+
+describe("scoreGenreCompatibility - generic fallback for unknown genres", () => {
+  const unknownGenres = ["shoegaze", "hyperpop", "deathcore", "folk punk", "bedroom pop"];
+
+  it.each(unknownGenres)("treats an exact declared match for %s as strong", (genre) => {
+    const result = scoreGenreCompatibility(genre, { declaredGenres: [genre] });
+    expect(result.level).toBe("strong");
+    expect(result.matchedGenres).toContain(genre);
+  });
+
+  it.each(unknownGenres)("flags usedGenericFallback for %s", (genre) => {
+    const result = scoreGenreCompatibility(genre, { declaredGenres: [genre] });
+    expect(result.debug.usedGenericFallback).toBe(true);
+  });
+
+  it("does not guess that an unrelated genre is compatible with an unknown target genre", () => {
+    const result = scoreGenreCompatibility("shoegaze", { declaredGenres: ["dream pop"] });
+    expect(result.level).toBe("reject");
+    expect(result.debug.usedGenericFallback).toBe(true);
+  });
+
+  it("rejects with an explanatory reason when relying on the generic fallback", () => {
+    const result = scoreGenreCompatibility("jazz", { declaredGenres: ["bebop"] });
+    expect(result.level).toBe("reject");
+    expect(result.debug.usedGenericFallback).toBe(true);
+    expect(result.debug.rejectionReasons.some((reason) => /no explicit genre rules/i.test(reason))).toBe(true);
+  });
+
+  it("rejects when no genre evidence at all is provided for an unknown genre", () => {
+    const result = scoreGenreCompatibility("hyperpop", {});
+    expect(result.level).toBe("reject");
+    expect(result.debug.usedGenericFallback).toBe(true);
   });
 });

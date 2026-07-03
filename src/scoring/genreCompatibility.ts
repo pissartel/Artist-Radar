@@ -29,6 +29,7 @@ export interface GenreCompatibilityResult {
     targetGenre: string;
     consideredGenres: string[];
     rejectionReasons: string[];
+    usedGenericFallback: boolean;
   };
 }
 
@@ -43,20 +44,6 @@ export function scoreGenreCompatibility(targetGenre: string, signals: GenreSigna
   const ruleSet = findGenreRuleSet(targetGenre);
   const declared = normalizeList(signals.declaredGenres ?? []);
   const text = normalizeText(buildSignalText(signals));
-
-  if (!ruleSet) {
-    return {
-      level: "reject",
-      score: LEVEL_SCORE.reject,
-      matchedGenres: [],
-      explanation: `No genre compatibility rules are configured for "${targetGenre}".`,
-      debug: {
-        targetGenre,
-        consideredGenres: declared,
-        rejectionReasons: [`No rule set found for target genre "${targetGenre}".`]
-      }
-    };
-  }
 
   const mentionedGenres = findMentionedGenres(ruleSet, text);
   const consideredGenres = uniqueStrings([...declared, ...mentionedGenres]);
@@ -136,6 +123,9 @@ function buildRejectionReasons(
         : `None of the considered genres (${consideredGenres.join(", ")}) match any strong, medium, or weak rule for "${targetGenre}".`
     );
   }
+  if (ruleSet.isGenericFallback) {
+    reasons.push(`"${targetGenre}" has no explicit genre rules configured, so only an exact genre match is treated as compatible.`);
+  }
   return reasons;
 }
 
@@ -159,7 +149,8 @@ function buildResult(
     debug: {
       targetGenre: ruleSet.genre,
       consideredGenres,
-      rejectionReasons
+      rejectionReasons,
+      usedGenericFallback: ruleSet.isGenericFallback === true
     }
   };
 }

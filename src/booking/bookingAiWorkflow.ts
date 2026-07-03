@@ -5,6 +5,7 @@ import { AiBookingOpportunitySchema, type AiBookingOpportunity } from "../ai/sch
 import type { AiEvidence } from "../ai/schemas/evidence.schema.js";
 import { validateAiOutputList, type AiValidationListResult } from "../ai/validation/validateAiOutput.js";
 import { buildBookingRagPrompt, type BookingRagContextDocument } from "../ai/prompts/booking-rag.prompt.js";
+import { normalizeComparableName, runAiJudge, type AiJudgeDeps, type AiJudgeVerdict } from "../ai/judge/aiJudge.js";
 import type { ChunkStore } from "../knowledge/chunkStore.js";
 import type { EmbeddingProvider } from "../knowledge/embeddings.js";
 import { OpenAIEmbeddingProvider } from "../knowledge/embeddings.js";
@@ -14,6 +15,7 @@ import {
   retrieveRelevantContext,
   type RetrievedContext
 } from "../knowledge/retrieveRelevantContext.js";
+import { scoreBookingRelevance, type BookingScoreComponents } from "../scoring/bookingScore.js";
 import { matchBookingGenres } from "./genreMatching.js";
 import type { BookingSearchInput } from "./types.js";
 
@@ -30,6 +32,13 @@ export interface BookingAiOpportunity {
   contact: string | null;
   risks: string[];
   confidence: "high" | "medium" | "low";
+  /** Deterministic score (0-100) computed in code, per issue #48 — independent of the AI-provided relevanceScore above. */
+  deterministicScore: number;
+  /** The seven score components behind deterministicScore, visible for debugging. */
+  scoreBreakdown: BookingScoreComponents;
+  scoreExplanation: string;
+  /** Set only when ENABLE_AI_JUDGE=true and the judge returned a verdict for this opportunity. */
+  judgeVerdict: AiJudgeVerdict | null;
 }
 
 export interface BookingAiSourceUsed {
@@ -45,6 +54,7 @@ export interface BookingAiWorkflowResult {
   sourcesUsed: BookingAiSourceUsed[];
   warnings: string[];
   generatedAt: string;
+  aiJudgeEnabled: boolean;
 }
 
 export interface BookingAiWorkflowDeps {
@@ -55,6 +65,8 @@ export interface BookingAiWorkflowDeps {
   retrievalLimit?: number;
   openaiClient?: OpenAI;
   model?: string;
+  /** Optional AI judge overrides; primarily for tests. Falls back to ENABLE_AI_JUDGE and the main model config. */
+  aiJudge?: AiJudgeDeps;
 }
 
 interface RawBookingModelOutput {
@@ -189,6 +201,7 @@ export function createBookingAiWorkflowConfig(
 
       scoreResults: (validatedOutput) => {
         const retrievedUrls = new Set([...retrievedByChunkId.values()].map((result) => result.url));
+        const retrievedByUrl = new Map([...retrievedByChunkId.values()].map((result) => [result.url, result]));
         const opportunities: BookingAiOpportunity[] = [];
         const warnings = [...validatedOutput.warnings];
         let rejectedCount = 0;
@@ -230,6 +243,26 @@ export function createBookingAiWorkflowConfig(
           const relevanceScore = clampScore(Math.round(opportunity.relevanceScore * penaltyMultiplier));
           const genreCompatibility = clampScore(Math.round(opportunity.genreCompatibility * penaltyMultiplier));
 
+          const deterministic = scoreBookingRelevance({
+            targetGenre: bookingInput.genre,
+            artistCity: bookingInput.city,
+            artistTarget: bookingInput.target,
+            artistLevel: bookingInput.artistProfile?.estimatedLevel ?? "unknown",
+            opportunity: {
+              type: opportunity.type,
+              city: opportunity.city,
+              reason: opportunity.reason,
+              contact: verifiedContact,
+              evidence: groundedEvidence.map((evidence) => ({
+                sourceUrl: evidence.sourceUrl,
+                snippet: evidence.snippet,
+                confidence: evidence.confidence,
+                createdAt: evidence.sourceUrl ? retrievedByUrl.get(evidence.sourceUrl)?.createdAt : undefined,
+                sourceType: evidence.sourceUrl ? retrievedByUrl.get(evidence.sourceUrl)?.sourceType : undefined
+              }))
+            }
+          });
+
           opportunities.push({
             name: opportunity.name,
             type: opportunity.type,
@@ -240,7 +273,11 @@ export function createBookingAiWorkflowConfig(
             evidence: groundedEvidence,
             contact: verifiedContact,
             risks: opportunity.risks,
-            confidence: confidenceLabel(relevanceScore, penaltyMultiplier)
+            confidence: confidenceLabel(relevanceScore, penaltyMultiplier),
+            deterministicScore: deterministic.score,
+            scoreBreakdown: deterministic.components,
+            scoreExplanation: deterministic.explanation,
+            judgeVerdict: null
           });
         }
 
@@ -249,7 +286,7 @@ export function createBookingAiWorkflowConfig(
         return { opportunities: opportunities.slice(0, bookingInput.limit), rejectedCount, warnings };
       },
 
-      formatResult: (scoredOutput, context) => {
+      formatResult: async (scoredOutput, context) => {
         const sourcesUsedByUrl = new Map<string, BookingAiSourceUsed>();
         for (const opportunity of scoredOutput.opportunities) {
           for (const evidence of opportunity.evidence) {
@@ -267,13 +304,42 @@ export function createBookingAiWorkflowConfig(
           }
         }
 
+        const judgeResult = await runAiJudge(
+          {
+            domain: "booking",
+            artistName: bookingInput.artist,
+            genre: bookingInput.genre,
+            items: scoredOutput.opportunities.map((opportunity) => ({
+              name: opportunity.name,
+              deterministicScore: opportunity.deterministicScore,
+              reason: opportunity.reason,
+              evidence: opportunity.evidence.map((evidence) => ({
+                source: evidence.source,
+                sourceUrl: evidence.sourceUrl,
+                snippet: evidence.snippet ?? null
+              }))
+            }))
+          },
+          {
+            openaiClient: deps.openaiClient,
+            model: deps.model,
+            ...deps.aiJudge
+          }
+        );
+
+        const opportunities = scoredOutput.opportunities.map((opportunity) => ({
+          ...opportunity,
+          judgeVerdict: judgeResult.verdictsByItemName.get(normalizeComparableName(opportunity.name)) ?? null
+        }));
+
         return {
           input: bookingInput,
-          opportunities: scoredOutput.opportunities,
+          opportunities,
           rejectedCount: scoredOutput.rejectedCount,
           sourcesUsed: [...sourcesUsedByUrl.values()],
-          warnings: [...context.notes, ...scoredOutput.warnings],
-          generatedAt: new Date().toISOString()
+          warnings: [...context.notes, ...scoredOutput.warnings, ...judgeResult.warnings],
+          generatedAt: new Date().toISOString(),
+          aiJudgeEnabled: judgeResult.enabled
         };
       }
     }

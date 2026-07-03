@@ -13,6 +13,7 @@ export interface RetrievedContext {
   url: string;
   text: string;
   similarityScore: number;
+  createdAt: string;
 }
 
 export interface RetrieveRelevantContextOptions {
@@ -48,7 +49,8 @@ export async function retrieveRelevantContext(
       sourceType: chunk.sourceType,
       url: chunk.url,
       text: chunk.text,
-      similarityScore: cosineSimilarity(queryEmbedding, chunk.embedding)
+      similarityScore: cosineSimilarity(queryEmbedding, chunk.embedding),
+      createdAt: chunk.createdAt
     }))
     .sort((a, b) => b.similarityScore - a.similarityScore)
     .slice(0, limit);

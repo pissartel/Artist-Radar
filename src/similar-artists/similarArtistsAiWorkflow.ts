@@ -13,12 +13,15 @@ import type { AiEvidence } from "../ai/schemas/evidence.schema.js";
 import { validateAiOutputList, type AiValidationListResult } from "../ai/validation/validateAiOutput.js";
 import {
   buildSimilarArtistsRagPrompt,
+  SIMILAR_ARTISTS_RAG_PROMPT_VERSION,
   type SimilarArtistRagContextDocument
 } from "../ai/prompts/similar-artists-rag.prompt.js";
 import { normalizeComparableName as normalizeComparableJudgeName, runAiJudge, type AiJudgeDeps, type AiJudgeVerdict } from "../ai/judge/aiJudge.js";
+import { createAiRunMetadata, AI_PIPELINE_VERSION, type AiRunMetadata } from "../ai/metadata/aiRunMetadata.js";
+import { writeAiDebugReport } from "../ai/debug/writeAiDebugReport.js";
 import type { ChunkStore } from "../knowledge/chunkStore.js";
 import type { EmbeddingProvider } from "../knowledge/embeddings.js";
-import { OpenAIEmbeddingProvider } from "../knowledge/embeddings.js";
+import { DEFAULT_EMBEDDING_MODEL, OpenAIEmbeddingProvider } from "../knowledge/embeddings.js";
 import { LocalChunkStore } from "../knowledge/localChunkStore.js";
 import {
   DEFAULT_RETRIEVAL_LIMIT,
@@ -29,6 +32,8 @@ import { scoreSimilarArtistRelevance, type SimilarArtistScoreComponents } from "
 import { matchBookingGenres, type BookingGenreMatchLevel } from "../booking/genreMatching.js";
 import { debugLog } from "../utils/logger.js";
 import type { SimilarArtistRagCandidate, SimilarArtistRagSearchInput } from "./types.js";
+
+const DEFAULT_MODEL = "gpt-4.1-mini";
 
 const MIN_STRONG_CONTEXT_DOCUMENTS = 3;
 const GENRE_COMPATIBILITY_RANK: Record<AiGenreCompatibility, number> = { reject: 0, weak: 1, medium: 2, strong: 3 };
@@ -76,6 +81,7 @@ export interface SimilarArtistAiWorkflowResult {
   warnings: string[];
   generatedAt: string;
   aiJudgeEnabled: boolean;
+  metadata: AiRunMetadata;
 }
 
 export interface SimilarArtistsAiWorkflowDeps {
@@ -133,17 +139,21 @@ export function createSimilarArtistsAiWorkflowConfig(
   const retrieve = deps.retrieveRelevantContext ?? retrieveRelevantContext;
   const retrievalLimit = deps.retrievalLimit ?? DEFAULT_RETRIEVAL_LIMIT;
   const callModel = deps.callModel ?? buildDefaultCallModel(deps);
+  const model = deps.model ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL;
+  const embeddingModel = process.env.OPENAI_EMBEDDING_MODEL ?? DEFAULT_EMBEDDING_MODEL;
+  const retrievalQueries = buildSimilarArtistRetrievalQueries(searchInput);
 
   const retrievedByChunkId = new Map<string, RetrievedContext>();
   const candidatesByName = new Map(
     searchInput.candidates.map((candidate) => [normalizeComparableName(candidate.name), candidate])
   );
+  let lastPrompt: AiPromptPayload | undefined;
 
   return {
     domain: "similar-artists",
     stages: {
       collectSources: async () => {
-        const queries = buildSimilarArtistRetrievalQueries(searchInput);
+        const queries = retrievalQueries;
         const merged = new Map<string, RetrievedContext>();
 
         for (const query of queries) {
@@ -195,7 +205,9 @@ export function createSimilarArtistsAiWorkflowConfig(
           };
         });
 
-        return buildSimilarArtistsRagPrompt({ input: searchInput, contextDocuments });
+        const prompt = buildSimilarArtistsRagPrompt({ input: searchInput, contextDocuments });
+        lastPrompt = prompt;
+        return prompt;
       },
 
       callModel: async (prompt) => {
@@ -384,15 +396,46 @@ export function createSimilarArtistsAiWorkflowConfig(
           judgeVerdict: judgeResult.verdictsByItemName.get(normalizeComparableJudgeName(artist.name)) ?? null
         }));
 
+        const warnings = [...context.notes, ...scoredOutput.warnings, ...judgeResult.warnings];
+        const retrievedSources = [...retrievedByChunkId.values()].map((result) => ({
+          sourceName: result.sourceName,
+          sourceType: result.sourceType,
+          url: result.url
+        }));
+
+        const metadata = createAiRunMetadata({
+          domain: "similar-artists",
+          model,
+          embeddingModel,
+          promptVersion: SIMILAR_ARTISTS_RAG_PROMPT_VERSION,
+          pipelineVersion: AI_PIPELINE_VERSION,
+          retrievalQuery: retrievalQueries.join(" | "),
+          retrievedChunkCount: retrievedByChunkId.size,
+          sourcesUsed: [...sourcesUsedByUrl.values()].map((source) => source.url),
+          warnings
+        });
+
+        await writeAiDebugReport(
+          {
+            metadata,
+            retrievedSources,
+            validationWarnings: warnings,
+            scoringSummary: { acceptedCount: similarArtists.length, rejectedCount: scoredOutput.rejectedCount },
+            prompt: lastPrompt
+          },
+          { artistName: searchInput.artist }
+        );
+
         return {
           input: searchInput,
           similarArtists,
           rejectedCount: scoredOutput.rejectedCount,
           rejectedCandidates: scoredOutput.rejectedCandidates,
           sourcesUsed: [...sourcesUsedByUrl.values()],
-          warnings: [...context.notes, ...scoredOutput.warnings, ...judgeResult.warnings],
-          generatedAt: new Date().toISOString(),
-          aiJudgeEnabled: judgeResult.enabled
+          warnings,
+          generatedAt: metadata.generatedAt,
+          aiJudgeEnabled: judgeResult.enabled,
+          metadata
         };
       }
     }
@@ -436,7 +479,7 @@ function buildDefaultCallModel(deps: SimilarArtistsAiWorkflowDeps): (prompt: AiP
     }
 
     const client = deps.openaiClient ?? new OpenAI({ apiKey });
-    const model = deps.model ?? process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+    const model = deps.model ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL;
 
     const response = await client.chat.completions.create({
       model,

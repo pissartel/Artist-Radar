@@ -113,6 +113,15 @@ describe("runBookingAiWorkflow", () => {
     expect(opportunity.scoreExplanation).toContain("Deterministic relevance score");
     expect(opportunity.judgeVerdict).toBeNull();
     expect(result.aiJudgeEnabled).toBe(false);
+
+    expect(result.metadata).toMatchObject({
+      domain: "booking",
+      model: "gpt-4.1-mini",
+      promptVersion: "booking-rag-v1",
+      retrievedChunkCount: 1,
+      sourcesUsed: ["https://le-sonic.example.com/programming"]
+    });
+    expect(result.metadata.generatedAt).toBe(result.generatedAt);
   });
 
   it("attaches an AI judge verdict to the matching opportunity when the judge is enabled", async () => {

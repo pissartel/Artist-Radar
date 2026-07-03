@@ -4,11 +4,17 @@ import type { AiDomainPipelineConfig, AiPipelineInput, AiPromptPayload } from ".
 import { AiBookingOpportunitySchema, type AiBookingOpportunity } from "../ai/schemas/bookingOpportunity.schema.js";
 import type { AiEvidence } from "../ai/schemas/evidence.schema.js";
 import { validateAiOutputList, type AiValidationListResult } from "../ai/validation/validateAiOutput.js";
-import { buildBookingRagPrompt, type BookingRagContextDocument } from "../ai/prompts/booking-rag.prompt.js";
+import {
+  buildBookingRagPrompt,
+  BOOKING_RAG_PROMPT_VERSION,
+  type BookingRagContextDocument
+} from "../ai/prompts/booking-rag.prompt.js";
 import { normalizeComparableName, runAiJudge, type AiJudgeDeps, type AiJudgeVerdict } from "../ai/judge/aiJudge.js";
+import { createAiRunMetadata, AI_PIPELINE_VERSION, type AiRunMetadata } from "../ai/metadata/aiRunMetadata.js";
+import { writeAiDebugReport } from "../ai/debug/writeAiDebugReport.js";
 import type { ChunkStore } from "../knowledge/chunkStore.js";
 import type { EmbeddingProvider } from "../knowledge/embeddings.js";
-import { OpenAIEmbeddingProvider } from "../knowledge/embeddings.js";
+import { DEFAULT_EMBEDDING_MODEL, OpenAIEmbeddingProvider } from "../knowledge/embeddings.js";
 import { LocalChunkStore } from "../knowledge/localChunkStore.js";
 import {
   DEFAULT_RETRIEVAL_LIMIT,
@@ -18,6 +24,8 @@ import {
 import { scoreBookingRelevance, type BookingScoreComponents } from "../scoring/bookingScore.js";
 import { matchBookingGenres } from "./genreMatching.js";
 import type { BookingSearchInput } from "./types.js";
+
+const DEFAULT_MODEL = "gpt-4.1-mini";
 
 const MIN_STRONG_CONTEXT_DOCUMENTS = 3;
 
@@ -55,6 +63,7 @@ export interface BookingAiWorkflowResult {
   warnings: string[];
   generatedAt: string;
   aiJudgeEnabled: boolean;
+  metadata: AiRunMetadata;
 }
 
 export interface BookingAiWorkflowDeps {
@@ -113,14 +122,18 @@ export function createBookingAiWorkflowConfig(
   const retrieve = deps.retrieveRelevantContext ?? retrieveRelevantContext;
   const retrievalLimit = deps.retrievalLimit ?? DEFAULT_RETRIEVAL_LIMIT;
   const callModel = deps.callModel ?? buildDefaultCallModel(deps);
+  const model = deps.model ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL;
+  const embeddingModel = process.env.OPENAI_EMBEDDING_MODEL ?? DEFAULT_EMBEDDING_MODEL;
+  const retrievalQueries = buildBookingRetrievalQueries(bookingInput);
 
   const retrievedByChunkId = new Map<string, RetrievedContext>();
+  let lastPrompt: AiPromptPayload | undefined;
 
   return {
     domain: "booking",
     stages: {
       collectSources: async () => {
-        const queries = buildBookingRetrievalQueries(bookingInput);
+        const queries = retrievalQueries;
         const merged = new Map<string, RetrievedContext>();
 
         for (const query of queries) {
@@ -174,7 +187,9 @@ export function createBookingAiWorkflowConfig(
           };
         });
 
-        return buildBookingRagPrompt({ input: bookingInput, contextDocuments });
+        const prompt = buildBookingRagPrompt({ input: bookingInput, contextDocuments });
+        lastPrompt = prompt;
+        return prompt;
       },
 
       callModel: async (prompt) => {
@@ -332,14 +347,45 @@ export function createBookingAiWorkflowConfig(
           judgeVerdict: judgeResult.verdictsByItemName.get(normalizeComparableName(opportunity.name)) ?? null
         }));
 
+        const warnings = [...context.notes, ...scoredOutput.warnings, ...judgeResult.warnings];
+        const retrievedSources = [...retrievedByChunkId.values()].map((result) => ({
+          sourceName: result.sourceName,
+          sourceType: result.sourceType,
+          url: result.url
+        }));
+
+        const metadata = createAiRunMetadata({
+          domain: "booking",
+          model,
+          embeddingModel,
+          promptVersion: BOOKING_RAG_PROMPT_VERSION,
+          pipelineVersion: AI_PIPELINE_VERSION,
+          retrievalQuery: retrievalQueries.join(" | "),
+          retrievedChunkCount: retrievedByChunkId.size,
+          sourcesUsed: [...sourcesUsedByUrl.values()].map((source) => source.url),
+          warnings
+        });
+
+        await writeAiDebugReport(
+          {
+            metadata,
+            retrievedSources,
+            validationWarnings: warnings,
+            scoringSummary: { acceptedCount: opportunities.length, rejectedCount: scoredOutput.rejectedCount },
+            prompt: lastPrompt
+          },
+          { artistName: bookingInput.artist }
+        );
+
         return {
           input: bookingInput,
           opportunities,
           rejectedCount: scoredOutput.rejectedCount,
           sourcesUsed: [...sourcesUsedByUrl.values()],
-          warnings: [...context.notes, ...scoredOutput.warnings, ...judgeResult.warnings],
-          generatedAt: new Date().toISOString(),
-          aiJudgeEnabled: judgeResult.enabled
+          warnings,
+          generatedAt: metadata.generatedAt,
+          aiJudgeEnabled: judgeResult.enabled,
+          metadata
         };
       }
     }
@@ -368,7 +414,7 @@ function buildDefaultCallModel(deps: BookingAiWorkflowDeps): (prompt: AiPromptPa
     }
 
     const client = deps.openaiClient ?? new OpenAI({ apiKey });
-    const model = deps.model ?? process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+    const model = deps.model ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL;
 
     const response = await client.chat.completions.create({
       model,

@@ -1,0 +1,253 @@
+{
+  "input": {
+    "artist": "Tuesday Fall",
+    "genre": "pop punk",
+    "city": "Paris",
+    "target": "grandes villes françaises"
+  },
+  "expectedStrongGenreTerms": [
+    "pop punk",
+    "punk rock",
+    "emo pop",
+    "easycore",
+    "skate punk",
+    "melodic punk"
+  ],
+  "weakGenreTerms": [
+    "generic rock",
+    "generic pop",
+    "alternative rock alone"
+  ],
+  "mustHaveEvidence": true,
+  "mustHaveSourceUrl": true,
+  "manualEvaluationNotes": [
+    "Re-check the French pop punk / easycore venue list quarterly — the scene shifts fast (new venues open, old ones stop booking punk nights).",
+    "If deterministic scores drift after a prompt or RAG change, compare scoreBreakdown across the positive vs negative cases below before trusting the new prompt.",
+    "The negative cases are the actual regression guard: as long as chanson/generic-rock/ungrounded/invented-contact results keep getting rejected or cleaned, obvious quality regressions are caught even without perfect scoring."
+  ],
+  "similarArtists": {
+    "positive": [
+      {
+        "name": "Marseille Skate Punk Club",
+        "reason": "strong genre match with grounded evidence and a valid source URL — should be accepted with strong genre compatibility",
+        "candidate": {
+          "name": "Marseille Skate Punk Club",
+          "genres": ["skate punk", "pop punk"],
+          "city": "Marseille",
+          "country": "France",
+          "url": "https://marseille-skate-punk.example.com"
+        },
+        "context": {
+          "sourceName": "Marseille Skate Punk Club bio",
+          "sourceType": "artist",
+          "url": "https://marseille-skate-punk.example.com",
+          "text": "Marseille Skate Punk Club plays skate punk and pop punk shows across grandes villes françaises and has shared bills with Tuesday Fall."
+        },
+        "modelResponse": {
+          "name": "Marseille Skate Punk Club",
+          "genres": ["skate punk", "pop punk"],
+          "city": "Marseille",
+          "country": "France",
+          "similarityScore": 86,
+          "sizeTier": "small",
+          "genreCompatibility": "strong",
+          "geographicRelevance": "national",
+          "category": "musically_similar",
+          "reason": "Plays skate punk and pop punk shows across grandes villes françaises and has shared bills with Tuesday Fall.",
+          "evidence": [
+            {
+              "source": "Marseille Skate Punk Club bio",
+              "sourceUrl": "https://marseille-skate-punk.example.com",
+              "snippet": "Marseille Skate Punk Club plays skate punk and pop punk shows across grandes villes françaises."
+            }
+          ],
+          "rejectionReason": null
+        }
+      }
+    ],
+    "negative": [
+      {
+        "name": "Chanson Realiste Trio",
+        "reason": "chanson is an explicitly rejected genre for pop punk — must never surface in top results",
+        "candidate": {
+          "name": "Chanson Realiste Trio",
+          "genres": ["chanson"],
+          "city": "Lyon",
+          "country": "France",
+          "url": "https://chanson-realiste.example.com"
+        },
+        "context": {
+          "sourceName": "Chanson Realiste Trio bio",
+          "sourceType": "artist",
+          "url": "https://chanson-realiste.example.com",
+          "text": "Chanson Realiste Trio performs traditional French chanson in small cabarets."
+        },
+        "modelResponse": {
+          "name": "Chanson Realiste Trio",
+          "genres": ["chanson"],
+          "similarityScore": null,
+          "sizeTier": null,
+          "genreCompatibility": "reject",
+          "geographicRelevance": null,
+          "category": "rejected",
+          "reason": "Traditional chanson act with no pop punk, punk rock, emo, or easycore signal in bio or programming.",
+          "evidence": [],
+          "rejectionReason": "Chanson is an explicitly incompatible genre for pop punk."
+        }
+      },
+      {
+        "name": "Generic Rock Outfit",
+        "reason": "generic rock/pop evidence only, no pop punk signal — a strong model claim must be downgraded rather than trusted",
+        "candidate": {
+          "name": "Generic Rock Outfit",
+          "genres": ["rock", "pop"],
+          "city": "Paris",
+          "country": "France",
+          "url": "https://generic-rock-outfit.example.com"
+        },
+        "context": {
+          "sourceName": "Generic Rock Outfit bio",
+          "sourceType": "artist",
+          "url": "https://generic-rock-outfit.example.com",
+          "text": "Generic Rock Outfit mostly plays generic metal and pop covers around Paris bars."
+        },
+        "modelResponse": {
+          "name": "Generic Rock Outfit",
+          "genres": ["rock", "pop"],
+          "city": "Paris",
+          "country": "France",
+          "similarityScore": 88,
+          "sizeTier": "small",
+          "genreCompatibility": "strong",
+          "geographicRelevance": "local",
+          "category": "musically_similar",
+          "reason": "Generic rock and pop covers band based in Paris.",
+          "evidence": [
+            {
+              "source": "Generic Rock Outfit bio",
+              "sourceUrl": "https://generic-rock-outfit.example.com",
+              "snippet": "Generic Rock Outfit mostly plays generic metal and pop covers around Paris bars."
+            }
+          ],
+          "rejectionReason": null
+        }
+      }
+    ]
+  },
+  "booking": {
+    "positive": [
+      {
+        "name": "Le Klub Pop Punk Nights",
+        "reason": "strong genre match, grounded evidence, valid source URL — should be accepted",
+        "opportunity": {
+          "name": "Le Klub Pop Punk Nights",
+          "type": "venue",
+          "city": "Paris",
+          "relevanceScore": 85,
+          "genreCompatibility": 88,
+          "reason": "Books pop punk and easycore nights across grandes villes françaises.",
+          "evidence": [
+            {
+              "source": "Le Klub programming page",
+              "sourceUrl": "https://le-klub.example.com/programming",
+              "snippet": "Le Klub books pop punk and easycore nights across grandes villes françaises."
+            }
+          ],
+          "contact": null,
+          "risks": []
+        },
+        "context": {
+          "sourceName": "Le Klub programming page",
+          "sourceType": "venue",
+          "url": "https://le-klub.example.com/programming",
+          "text": "Le Klub books pop punk and easycore nights across grandes villes françaises."
+        }
+      }
+    ],
+    "negative": [
+      {
+        "name": "Ungrounded Venue",
+        "reason": "cited source is not present in the retrieved context — must be rejected as an unsupported opportunity",
+        "opportunity": {
+          "name": "Ungrounded Venue",
+          "type": "venue",
+          "city": "Paris",
+          "relevanceScore": 80,
+          "genreCompatibility": 80,
+          "reason": "Books pop punk shows every week, allegedly.",
+          "evidence": [
+            {
+              "source": "Ungrounded Venue site",
+              "sourceUrl": "https://ungrounded-venue.example.com",
+              "snippet": "Pop punk night every week."
+            }
+          ],
+          "contact": null,
+          "risks": []
+        },
+        "context": {
+          "sourceName": "Le Klub programming page",
+          "sourceType": "venue",
+          "url": "https://le-klub.example.com/programming",
+          "text": "Le Klub books pop punk and easycore nights across grandes villes françaises."
+        }
+      },
+      {
+        "name": "Generic Rock Bar",
+        "reason": "generic rock/pop evidence only, no pop punk signal — must be rejected as not genre-compatible",
+        "opportunity": {
+          "name": "Generic Rock Bar",
+          "type": "bar",
+          "city": "Paris",
+          "relevanceScore": 70,
+          "genreCompatibility": 60,
+          "reason": "This venue mostly books alternative rock and mainstream pop acts; no genre-specific evidence available.",
+          "evidence": [
+            {
+              "source": "Le Klub programming page",
+              "sourceUrl": "https://le-klub.example.com/programming",
+              "snippet": "General concert programming, mostly alternative rock and mainstream pop acts."
+            }
+          ],
+          "contact": null,
+          "risks": []
+        },
+        "context": {
+          "sourceName": "Le Klub programming page",
+          "sourceType": "venue",
+          "url": "https://le-klub.example.com/programming",
+          "text": "Le Klub books pop punk and easycore nights across grandes villes françaises."
+        }
+      }
+    ],
+    "contactSafety": [
+      {
+        "name": "Le Klub Pop Punk Nights",
+        "reason": "contact is not present anywhere in the retrieved context — must be cleared to null instead of trusting the model's invented contact",
+        "opportunity": {
+          "name": "Le Klub Pop Punk Nights",
+          "type": "venue",
+          "city": "Paris",
+          "relevanceScore": 85,
+          "genreCompatibility": 88,
+          "reason": "Books pop punk and easycore nights across grandes villes françaises.",
+          "evidence": [
+            {
+              "source": "Le Klub programming page",
+              "sourceUrl": "https://le-klub.example.com/programming",
+              "snippet": "Le Klub books pop punk and easycore nights across grandes villes françaises."
+            }
+          ],
+          "contact": "booking@invented-not-in-context.example.com",
+          "risks": []
+        },
+        "context": {
+          "sourceName": "Le Klub programming page",
+          "sourceType": "venue",
+          "url": "https://le-klub.example.com/programming",
+          "text": "Le Klub books pop punk and easycore nights across grandes villes françaises."
+        }
+      }
+    ]
+  }
+}

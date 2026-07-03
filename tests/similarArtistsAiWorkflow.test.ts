@@ -110,6 +110,80 @@ describe("runSimilarArtistsAiWorkflow", () => {
       { sourceName: "Le Sonic programming page", sourceType: "venue", url: "https://le-sonic.example.com/programming" }
     ]);
     expect(result.rejectedCount).toBe(0);
+
+    const [artist] = result.similarArtists;
+    expect(artist.deterministicScore).toBeGreaterThan(0);
+    expect(artist.deterministicScore).toBeLessThanOrEqual(100);
+    expect(Object.keys(artist.scoreBreakdown).sort()).toEqual(
+      [
+        "artistSizeFitScore",
+        "contactabilityScore",
+        "evidenceQualityScore",
+        "genreCompatibilityScore",
+        "geographicRelevanceScore",
+        "recencyScore",
+        "sourceConfidenceScore"
+      ].sort()
+    );
+    expect(artist.scoreExplanation).toContain("Deterministic relevance score");
+    expect(artist.judgeVerdict).toBeNull();
+    expect(result.aiJudgeEnabled).toBe(false);
+  });
+
+  it("attaches an AI judge verdict to the matching similar artist when the judge is enabled", async () => {
+    const chunkStore = new InMemoryChunkStore([makeChunk({})]);
+    const callModel = vi.fn(async () =>
+      JSON.stringify({
+        similarArtists: [
+          {
+            name: "Paris Pop Punk Collective",
+            genres: ["pop punk", "easycore"],
+            city: "Paris",
+            country: "France",
+            similarityScore: 88,
+            sizeTier: "small",
+            genreCompatibility: "strong",
+            geographicRelevance: "local",
+            category: "musically_similar",
+            reason: "Plays pop punk and easycore shows around Paris and has co-billed with Tuesday Fall.",
+            evidence: [
+              {
+                source: "Le Sonic programming page",
+                sourceUrl: "https://le-sonic.example.com/programming",
+                snippet: "Paris Pop Punk Collective plays pop punk and easycore shows around Paris."
+              }
+            ],
+            rejectionReason: null
+          }
+        ]
+      })
+    );
+    const judgeCallModel = vi.fn(async () =>
+      JSON.stringify({
+        verdicts: [
+          {
+            itemName: "Paris Pop Punk Collective",
+            relevance: "high",
+            realism: "realistic",
+            missingEvidence: [],
+            risks: [],
+            recommendedNextAction: "Reach out about a co-bill.",
+            explanation: "Consistent with the deterministic score."
+          }
+        ]
+      })
+    );
+
+    const result = await runSimilarArtistsAiWorkflow(searchInput, {
+      chunkStore,
+      embeddingProvider: stubEmbeddingProvider,
+      callModel,
+      aiJudge: { enabled: true, callModel: judgeCallModel }
+    });
+
+    expect(result.aiJudgeEnabled).toBe(true);
+    expect(judgeCallModel).toHaveBeenCalledTimes(1);
+    expect(result.similarArtists[0].judgeVerdict).toMatchObject({ relevance: "high", realism: "realistic" });
   });
 
   it("rejects a candidate the model classifies as genre-incompatible", async () => {

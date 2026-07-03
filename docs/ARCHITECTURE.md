@@ -253,6 +253,21 @@ A fresh pipeline config is built per call (not registered in the shared domain r
 
 Like the booking workflow, this is an additive capability: the existing rule-based `findSimilarArtists()` pipeline and the CLI are unchanged.
 
+### Deterministic scoring and AI judge pass
+
+`src/scoring/bookingScore.ts` (`scoreBookingRelevance`) and `src/scoring/similarArtistScore.ts` (`scoreSimilarArtistRelevance`) add a code-computed relevance score on top of the RAG workflows (issue #48), grounding "how relevant is this result" in the same way the RAG prompts ground "is this result real":
+
+- Both compute a 0-100 total from seven weighted components: genre compatibility (reusing `scoreGenreCompatibility` from issue #47), evidence quality, source recency, geographic/location relevance, artist size fit, contactability, and source confidence. `src/scoring/evidenceSignals.ts` implements the three components shared by both domains (evidence quality, recency, source confidence) so they aren't duplicated.
+- The score, its component breakdown, and a human-readable explanation are attached to every accepted opportunity/similar artist as `deterministicScore`, `scoreBreakdown`, and `scoreExplanation` — always visible on the result, alongside the existing AI-provided `relevanceScore`/`similarityScore`, which this does not replace.
+- `RetrievedContext` (in `retrieveRelevantContext.ts`) now also carries `createdAt` from the source knowledge chunk so `scoreRecency` has a signal to work with.
+
+`src/ai/judge/aiJudge.ts` (`runAiJudge`) adds an optional second-pass AI reviewer over the already deterministically-scored results:
+
+- Disabled by default; gated by `ENABLE_AI_JUDGE=true` to control API cost, and skipped entirely (no model call) when there are no items to judge.
+- Built from `src/ai/prompts/judge.prompt.ts` and validated against `src/ai/schemas/judge.schema.ts` with Zod. The judge never produces or overrides a score — it only returns `relevance`, `realism`, `missingEvidence`, `risks`, and a `recommendedNextAction` per item, explaining or flagging the deterministic score rather than replacing it.
+- The judge is instructed to use only the reason/evidence text it is given and not invent new sources, venues, artists, or contacts. Any verdict referencing an item name that wasn't part of the input is discarded with a warning (the same hallucination-guard pattern used elsewhere in the RAG workflows).
+- Both `runBookingAiWorkflow` and `runSimilarArtistsAiWorkflow` call it once per run (batching all items into a single prompt) from their `formatResult` stage, attach the matching verdict to each result as `judgeVerdict` (`null` when disabled or unmatched), and expose `aiJudgeEnabled` on the workflow result.
+
 ## Future SaaS reuse
 
 Later, an API route should call the same runOpportunitySearch() function.

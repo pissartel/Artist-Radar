@@ -1,3 +1,5 @@
+import { debugLog } from "../utils/logger.js";
+
 export type GenreCompatibilityLevel = "strong" | "medium" | "weak" | "reject";
 
 export const LEVEL_RANK: Record<GenreCompatibilityLevel, number> = {
@@ -32,6 +34,8 @@ export interface GenreRuleSet {
   weak: string[];
   reject: string[];
   conditional: ConditionalGenreRule[];
+  /** True when this rule set was created dynamically because no explicit rules exist for the genre. */
+  isGenericFallback?: boolean;
 }
 
 /**
@@ -73,14 +77,43 @@ export const GENRE_RULE_SETS: Record<string, GenreRuleSet> = {
   }
 };
 
-export function findGenreRuleSet(genre: string): GenreRuleSet | null {
+/**
+ * Looks up the explicit rule set for a genre, falling back to a generic rule set when
+ * none is configured yet. This keeps compatibility scoring safe for any user-entered
+ * genre instead of returning null. Adding a genre to GENRE_RULE_SETS always takes
+ * priority over the fallback.
+ */
+export function findGenreRuleSet(genre: string): GenreRuleSet {
   const normalized = normalizeGenreLabel(genre);
+
   for (const ruleSet of Object.values(GENRE_RULE_SETS)) {
     if (ruleSet.genre === normalized || ruleSet.aliases.includes(normalized)) {
       return ruleSet;
     }
   }
-  return null;
+
+  debugLog("genre", `No explicit genre rule set for "${normalized}"; using generic fallback.`, {
+    genre: normalized,
+    usedGenericFallback: true
+  });
+  return createGenericGenreRuleSet(normalized);
+}
+
+/**
+ * A safe default for genres without dedicated rules: only an exact match on the
+ * genre itself counts as strong, and no related/medium/weak genres are guessed.
+ */
+export function createGenericGenreRuleSet(genre: string): GenreRuleSet {
+  return {
+    genre,
+    aliases: [],
+    strong: [genre],
+    medium: [],
+    weak: [],
+    reject: [],
+    conditional: [],
+    isGenericFallback: true
+  };
 }
 
 export function normalizeGenreLabel(value: string): string {

@@ -5,6 +5,27 @@ export const AiArtistSizeTierSchema = z.enum(["small", "medium", "large", "unkno
 
 export type AiArtistSizeTier = z.infer<typeof AiArtistSizeTierSchema>;
 
+/** How closely a candidate's genre matches the searching artist's genre, per issue #46. */
+export const AiGenreCompatibilitySchema = z.enum(["strong", "medium", "weak", "reject"]);
+
+export type AiGenreCompatibility = z.infer<typeof AiGenreCompatibilitySchema>;
+
+/** How close a candidate's scene/market is to the searching artist's city/target. */
+export const AiGeographicRelevanceSchema = z.enum(["local", "regional", "national", "international", "unknown"]);
+
+export type AiGeographicRelevance = z.infer<typeof AiGeographicRelevanceSchema>;
+
+/** Booking/promo usefulness bucket a candidate falls into, per issue #46's prompt design. */
+export const AiSimilarArtistCategorySchema = z.enum([
+  "musically_similar",
+  "scene_adjacent",
+  "commercially_useful",
+  "large_reference",
+  "rejected"
+]);
+
+export type AiSimilarArtistCategory = z.infer<typeof AiSimilarArtistCategorySchema>;
+
 /**
  * Raw AI output schema for a single similar artist suggestion, before it is
  * mapped into the app's internal SimilarArtist model.
@@ -22,11 +43,25 @@ export const AiSimilarArtistSchema = z
     country: z.string().trim().min(1).nullable().optional(),
     similarityScore: z.number().min(0).max(100).nullable(),
     sizeTier: AiArtistSizeTierSchema.nullable(),
+    genreCompatibility: AiGenreCompatibilitySchema,
+    geographicRelevance: AiGeographicRelevanceSchema.nullable(),
+    category: AiSimilarArtistCategorySchema,
     reason: z.string().trim().min(1),
     evidence: z.array(AiEvidenceSchema).default([]),
     rejectionReason: z.string().trim().min(1).nullable().optional()
   })
   .superRefine((value, ctx) => {
+    if (value.genreCompatibility === "reject" || value.category === "rejected") {
+      if (!value.rejectionReason) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["rejectionReason"],
+          message: "rejectionReason is required when genreCompatibility is \"reject\" or category is \"rejected\""
+        });
+      }
+      return;
+    }
+
     if (value.rejectionReason) {
       return;
     }

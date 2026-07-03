@@ -95,6 +95,77 @@ describe("runBookingAiWorkflow", () => {
       { sourceName: "Le Sonic", sourceType: "venue", url: "https://le-sonic.example.com/programming" }
     ]);
     expect(result.rejectedCount).toBe(0);
+
+    const [opportunity] = result.opportunities;
+    expect(opportunity.deterministicScore).toBeGreaterThan(0);
+    expect(opportunity.deterministicScore).toBeLessThanOrEqual(100);
+    expect(Object.keys(opportunity.scoreBreakdown).sort()).toEqual(
+      [
+        "artistSizeFitScore",
+        "contactabilityScore",
+        "evidenceQualityScore",
+        "genreCompatibilityScore",
+        "locationScore",
+        "recencyScore",
+        "sourceConfidenceScore"
+      ].sort()
+    );
+    expect(opportunity.scoreExplanation).toContain("Deterministic relevance score");
+    expect(opportunity.judgeVerdict).toBeNull();
+    expect(result.aiJudgeEnabled).toBe(false);
+  });
+
+  it("attaches an AI judge verdict to the matching opportunity when the judge is enabled", async () => {
+    const chunkStore = new InMemoryChunkStore([makeChunk({})]);
+    const callModel = vi.fn(async () =>
+      JSON.stringify({
+        opportunities: [
+          {
+            name: "Le Sonic",
+            type: "venue",
+            city: "Lyon",
+            relevanceScore: 88,
+            genreCompatibility: 90,
+            reason: "Books pop punk and easycore nights year-round.",
+            evidence: [
+              {
+                source: "Le Sonic",
+                sourceUrl: "https://le-sonic.example.com/programming",
+                snippet: "Le Sonic books pop punk and easycore nights year-round in Lyon."
+              }
+            ],
+            contact: null,
+            risks: []
+          }
+        ]
+      })
+    );
+    const judgeCallModel = vi.fn(async () =>
+      JSON.stringify({
+        verdicts: [
+          {
+            itemName: "Le Sonic",
+            relevance: "high",
+            realism: "realistic",
+            missingEvidence: [],
+            risks: [],
+            recommendedNextAction: "Reach out with a press kit.",
+            explanation: "Consistent with the deterministic score."
+          }
+        ]
+      })
+    );
+
+    const result = await runBookingAiWorkflow(bookingInput, {
+      chunkStore,
+      embeddingProvider: stubEmbeddingProvider,
+      callModel,
+      aiJudge: { enabled: true, callModel: judgeCallModel }
+    });
+
+    expect(result.aiJudgeEnabled).toBe(true);
+    expect(judgeCallModel).toHaveBeenCalledTimes(1);
+    expect(result.opportunities[0].judgeVerdict).toMatchObject({ relevance: "high", realism: "realistic" });
   });
 
   it("rejects an opportunity whose cited source is not present in the retrieved context", async () => {

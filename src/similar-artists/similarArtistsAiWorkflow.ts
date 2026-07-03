@@ -15,6 +15,7 @@ import {
   buildSimilarArtistsRagPrompt,
   type SimilarArtistRagContextDocument
 } from "../ai/prompts/similar-artists-rag.prompt.js";
+import { normalizeComparableName as normalizeComparableJudgeName, runAiJudge, type AiJudgeDeps, type AiJudgeVerdict } from "../ai/judge/aiJudge.js";
 import type { ChunkStore } from "../knowledge/chunkStore.js";
 import type { EmbeddingProvider } from "../knowledge/embeddings.js";
 import { OpenAIEmbeddingProvider } from "../knowledge/embeddings.js";
@@ -24,6 +25,7 @@ import {
   retrieveRelevantContext,
   type RetrievedContext
 } from "../knowledge/retrieveRelevantContext.js";
+import { scoreSimilarArtistRelevance, type SimilarArtistScoreComponents } from "../scoring/similarArtistScore.js";
 import { matchBookingGenres, type BookingGenreMatchLevel } from "../booking/genreMatching.js";
 import { debugLog } from "../utils/logger.js";
 import type { SimilarArtistRagCandidate, SimilarArtistRagSearchInput } from "./types.js";
@@ -45,6 +47,13 @@ export interface SimilarArtistAiResult {
   category: AiSimilarArtistCategory;
   reason: string;
   evidence: AiEvidence[];
+  /** Deterministic score (0-100) computed in code, per issue #48 — independent of the AI-provided similarityScore above. */
+  deterministicScore: number;
+  /** The seven score components behind deterministicScore, visible for debugging. */
+  scoreBreakdown: SimilarArtistScoreComponents;
+  scoreExplanation: string;
+  /** Set only when ENABLE_AI_JUDGE=true and the judge returned a verdict for this candidate. */
+  judgeVerdict: AiJudgeVerdict | null;
 }
 
 export interface SimilarArtistAiSourceUsed {
@@ -66,6 +75,7 @@ export interface SimilarArtistAiWorkflowResult {
   sourcesUsed: SimilarArtistAiSourceUsed[];
   warnings: string[];
   generatedAt: string;
+  aiJudgeEnabled: boolean;
 }
 
 export interface SimilarArtistsAiWorkflowDeps {
@@ -76,6 +86,8 @@ export interface SimilarArtistsAiWorkflowDeps {
   retrievalLimit?: number;
   openaiClient?: OpenAI;
   model?: string;
+  /** Optional AI judge overrides; primarily for tests. Falls back to ENABLE_AI_JUDGE and the main model config. */
+  aiJudge?: AiJudgeDeps;
 }
 
 interface RawSimilarArtistModelOutput {
@@ -210,6 +222,7 @@ export function createSimilarArtistsAiWorkflowConfig(
 
       scoreResults: (validatedOutput) => {
         const retrievedUrls = new Set([...retrievedByChunkId.values()].map((result) => result.url));
+        const retrievedByUrl = new Map([...retrievedByChunkId.values()].map((result) => [result.url, result]));
         const similarArtists: SimilarArtistAiResult[] = [];
         const rejectedCandidates: RejectedSimilarArtistCandidate[] = [];
         const warnings = [...validatedOutput.warnings];
@@ -272,6 +285,28 @@ export function createSimilarArtistsAiWorkflowConfig(
             ? "scene_adjacent"
             : candidateResult.category;
 
+          const sizeTier = candidateResult.sizeTier ?? "unknown";
+          const deterministic = scoreSimilarArtistRelevance({
+            targetGenre: searchInput.genre,
+            artistCity: searchInput.city,
+            artistTarget: searchInput.target,
+            candidate: {
+              genres: knownCandidate.genres,
+              city: knownCandidate.city,
+              country: knownCandidate.country,
+              url: knownCandidate.url,
+              sizeTier,
+              reason: candidateResult.reason,
+              evidence: groundedEvidence.map((evidence) => ({
+                sourceUrl: evidence.sourceUrl,
+                snippet: evidence.snippet,
+                confidence: evidence.confidence,
+                createdAt: evidence.sourceUrl ? retrievedByUrl.get(evidence.sourceUrl)?.createdAt : undefined,
+                sourceType: evidence.sourceUrl ? retrievedByUrl.get(evidence.sourceUrl)?.sourceType : undefined
+              }))
+            }
+          });
+
           similarArtists.push({
             name: knownCandidate.name,
             genres: knownCandidate.genres,
@@ -279,12 +314,16 @@ export function createSimilarArtistsAiWorkflowConfig(
             country: knownCandidate.country,
             url: knownCandidate.url,
             similarityScore,
-            sizeTier: candidateResult.sizeTier ?? "unknown",
+            sizeTier,
             genreCompatibility: resolvedGenreCompatibility,
             geographicRelevance: candidateResult.geographicRelevance,
             category,
             reason: candidateResult.reason,
-            evidence: groundedEvidence
+            evidence: groundedEvidence,
+            deterministicScore: deterministic.score,
+            scoreBreakdown: deterministic.components,
+            scoreExplanation: deterministic.explanation,
+            judgeVerdict: null
           });
         }
 
@@ -299,7 +338,7 @@ export function createSimilarArtistsAiWorkflowConfig(
         };
       },
 
-      formatResult: (scoredOutput, context) => {
+      formatResult: async (scoredOutput, context) => {
         const sourcesUsedByUrl = new Map<string, SimilarArtistAiSourceUsed>();
         for (const artist of scoredOutput.similarArtists) {
           for (const evidence of artist.evidence) {
@@ -317,14 +356,43 @@ export function createSimilarArtistsAiWorkflowConfig(
           }
         }
 
+        const judgeResult = await runAiJudge(
+          {
+            domain: "similar-artists",
+            artistName: searchInput.artist,
+            genre: searchInput.genre,
+            items: scoredOutput.similarArtists.map((artist) => ({
+              name: artist.name,
+              deterministicScore: artist.deterministicScore,
+              reason: artist.reason,
+              evidence: artist.evidence.map((evidence) => ({
+                source: evidence.source,
+                sourceUrl: evidence.sourceUrl,
+                snippet: evidence.snippet ?? null
+              }))
+            }))
+          },
+          {
+            openaiClient: deps.openaiClient,
+            model: deps.model,
+            ...deps.aiJudge
+          }
+        );
+
+        const similarArtists = scoredOutput.similarArtists.map((artist) => ({
+          ...artist,
+          judgeVerdict: judgeResult.verdictsByItemName.get(normalizeComparableJudgeName(artist.name)) ?? null
+        }));
+
         return {
           input: searchInput,
-          similarArtists: scoredOutput.similarArtists,
+          similarArtists,
           rejectedCount: scoredOutput.rejectedCount,
           rejectedCandidates: scoredOutput.rejectedCandidates,
           sourcesUsed: [...sourcesUsedByUrl.values()],
-          warnings: [...context.notes, ...scoredOutput.warnings],
-          generatedAt: new Date().toISOString()
+          warnings: [...context.notes, ...scoredOutput.warnings, ...judgeResult.warnings],
+          generatedAt: new Date().toISOString(),
+          aiJudgeEnabled: judgeResult.enabled
         };
       }
     }

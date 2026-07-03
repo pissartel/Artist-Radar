@@ -224,7 +224,7 @@ The orchestrator returns a domain-agnostic `AiPipelineResult<T>` with `result`, 
 
 `domainConfig.ts` provides a small in-memory registry (`registerAiDomainPipeline`, `getAiDomainPipeline`, `hasAiDomainPipeline`) so a domain's pipeline config can be registered once and looked up by CLI commands without importing every domain implementation module directly.
 
-No LangChain or vector database is introduced. Similar artists will plug into this architecture in a follow-up ticket.
+No LangChain or vector database is introduced.
 
 ### Booking RAG workflow
 
@@ -238,6 +238,20 @@ No LangChain or vector database is introduced. Similar artists will plug into th
 - `formatResult` returns the accepted opportunities, a rejected count, the deduplicated sources actually cited, and all warnings collected along the way.
 
 A fresh pipeline config is built per call (not registered in the shared domain registry) because retrieval results for a run are held in a closure-scoped map; sharing one config across concurrent searches would leak context between them. The existing rule-based `searchBookingOpportunities()` pipeline and the booking CLI are unchanged; this RAG-grounded workflow is an additive capability for a later CLI/API wiring ticket.
+
+### Similar artists RAG workflow
+
+`src/similar-artists/similarArtistsAiWorkflow.ts` (`runSimilarArtistsAiWorkflow`) plugs the similar-artists domain into the same shared pipeline, mirroring the booking RAG workflow:
+
+- The workflow takes a fixed list of already-discovered candidate artists (`SimilarArtistRagSearchInput.candidates`, e.g. from seeds, Last.fm or Spotify discovery) — the model classifies these candidates, it never invents new artist names.
+- `collectSources` retrieves knowledge-base chunks (`retrieveRelevantContext`) for artist/genre/scene queries and per-candidate bio/genre/playlist/lineup/venue/co-bill queries, merges and ranks them by similarity.
+- `buildPrompt` uses `src/ai/prompts/similar-artists-rag.prompt.ts`, which instructs the model to classify every given candidate — never adding or dropping any — with `genreCompatibility` (`strong`/`medium`/`weak`/`reject`), `sizeTier`, `geographicRelevance`, and a `category` (`musically_similar`, `scene_adjacent`, `commercially_useful`, `large_reference`, `rejected`).
+- `validateOutput` reuses the extended `AiSimilarArtistSchema` (issue #46 added `genreCompatibility`, `geographicRelevance` and `category` to the schema originally added in issue #44), which requires a `rejectionReason` whenever `genreCompatibility` is `reject` or `category` is `rejected`, and requires evidence otherwise.
+- `scoreResults` rejects any model result whose name is not in the given candidate list (a hallucination guard), drops evidence whose URL is not among the retrieved sources, re-derives the candidate's real genres/city/country/url from the original candidate metadata rather than trusting the model's restated fields, and re-grounds the model's `genreCompatibility` claim against the cited evidence text using the shared `matchBookingGenres()` helper — downgrading (never upgrading) the model's claim when the evidence doesn't support it.
+- Rejected candidates (hallucinated, ungrounded, or genre-incompatible) are counted, explained in `warnings`, returned in `rejectedCandidates`, and logged via `debugLog("similar-artists", ...)`, which only prints when `DEBUG_SIMILAR_ARTISTS=true`.
+- `formatResult` returns the accepted, RAG-grounded similar artists, a rejected count/list, the deduplicated sources actually cited, and all warnings collected along the way.
+
+Like the booking workflow, this is an additive capability: the existing rule-based `findSimilarArtists()` pipeline and the CLI are unchanged.
 
 ## Future SaaS reuse
 

@@ -27,12 +27,22 @@ export interface KpiMetric {
   unit?: string;
 }
 
+export type ArtistTier = "emerging" | "rising" | "established" | "headliner";
+
 export interface SimilarArtist {
   id: string;
   name: string;
   genres: string[];
   location: string;
   matchScore: number;
+  reason?: string;
+  artistTier?: ArtistTier;
+  platforms?: Platform[];
+  // Future fields expected from the similar-artist pipeline (not yet populated in V1):
+  matchReasons?: string[];
+  sharedGenres?: string[];
+  sourceUrls?: string[];
+  relatedVenues?: string[];
 }
 
 // V1 scope: booking opportunities only.

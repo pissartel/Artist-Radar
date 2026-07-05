@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Opportunity } from "@/types";
 import MatchReasonsList from "./MatchReasonsList";
 import { formatOpportunityDate, getOpportunitySource } from "@/lib/opportunity";
@@ -115,12 +116,12 @@ export default function BookingOpportunityCard({
         )}
 
         <div className="mt-3">
-          <button
-            type="button"
+          <Link
+            href={`/opportunities/${opportunity.id}`}
             className="text-xs text-accent-light hover:text-white border border-accent/30 hover:border-accent-light hover:bg-accent/10 px-3 py-1.5 rounded-lg transition-all duration-150"
           >
             View details
-          </button>
+          </Link>
         </div>
       </div>
     </div>

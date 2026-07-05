@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Opportunity, BookingSource, CityOpportunityStat } from "@/types";
 import BookingTabs from "./BookingTabs";
 import BookingInsightsPanel from "./BookingInsightsPanel";
@@ -27,6 +28,12 @@ export default function BookingSection({
             {opportunities.length}
           </span>
         </div>
+        <Link
+          href="/booking"
+          className="text-xs text-accent-light hover:text-white transition-colors"
+        >
+          View all
+        </Link>
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_272px] gap-5">
         <BookingTabs opportunities={opportunities} />

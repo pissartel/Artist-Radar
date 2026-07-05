@@ -1,7 +1,8 @@
 import type { Opportunity } from "@/types";
 import MatchReasonsList from "./MatchReasonsList";
+import { formatOpportunityDate, getOpportunitySource } from "@/lib/opportunity";
 
-const TYPE_LABELS: Record<string, string> = {
+export const TYPE_LABELS: Record<string, string> = {
   venue: "Venue",
   festival: "Festival",
   concert: "Concert",
@@ -39,6 +40,8 @@ export default function BookingOpportunityCard({
 }: BookingOpportunityCardProps) {
   const typeBadgeClass =
     TYPE_COLORS[opportunity.type] ?? "text-gray-400 bg-gray-400/10 border-gray-400/20";
+  const formattedDate = formatOpportunityDate(opportunity.date);
+  const source = getOpportunitySource(opportunity);
 
   return (
     <div className="bg-card rounded-xl p-4 border border-slate-400/10 shadow-card hover:bg-card-hover hover:border-accent/30 hover:shadow-card-hover transition-all duration-200 flex gap-4">
@@ -83,7 +86,10 @@ export default function BookingOpportunityCard({
           </div>
         </div>
 
-        <p className="text-xs text-gray-500 mb-1.5">{opportunity.location}</p>
+        <p className="text-xs text-gray-500 mb-1.5">
+          {opportunity.location}
+          {formattedDate && <span> · {formattedDate}</span>}
+        </p>
 
         <p className="text-xs text-gray-400 leading-relaxed mb-2">
           {opportunity.description}
@@ -103,6 +109,10 @@ export default function BookingOpportunityCard({
         )}
 
         <MatchReasonsList reasons={opportunity.matchReasons} />
+
+        {source && (
+          <p className="text-[10px] text-gray-600 mt-2">Source: {source}</p>
+        )}
 
         <div className="mt-3">
           <button

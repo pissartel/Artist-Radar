@@ -45,6 +45,7 @@ const similarArtists: SimilarArtist[] = [
     reason: "Shares your pop punk sound and touring circuit in the UK/EU scene",
     artistTier: "established",
     platforms: [{ type: "spotify" }, { type: "instagram" }],
+    monthlyListeners: 890000,
   },
   {
     id: "wstr",
@@ -55,6 +56,7 @@ const similarArtists: SimilarArtist[] = [
     reason: "Similar energy and audience size on the European pop punk circuit",
     artistTier: "rising",
     platforms: [{ type: "spotify" }, { type: "youtube" }],
+    monthlyListeners: 145000,
   },
   {
     id: "belmont",
@@ -65,6 +67,7 @@ const similarArtists: SimilarArtist[] = [
     reason: "Closely matches your emo pop influences and vocal style",
     artistTier: "rising",
     platforms: [{ type: "spotify" }, { type: "instagram" }],
+    monthlyListeners: 98000,
   },
   {
     id: "hot-mulligan",
@@ -75,6 +78,7 @@ const similarArtists: SimilarArtist[] = [
     reason: "Overlapping emo/pop punk genre blend and comparable listener base",
     artistTier: "established",
     platforms: [{ type: "spotify" }, { type: "website" }],
+    monthlyListeners: 410000,
   },
   {
     id: "daisy-grenade",
@@ -85,6 +89,7 @@ const similarArtists: SimilarArtist[] = [
     reason: "Similar pop punk style with an emerging fanbase in North America",
     artistTier: "emerging",
     platforms: [{ type: "instagram" }],
+    monthlyListeners: 21000,
   },
   {
     id: "grayscale",
@@ -95,6 +100,7 @@ const similarArtists: SimilarArtist[] = [
     reason: "Blends pop punk with alternative rock, close to your sound evolution",
     artistTier: "established",
     platforms: [{ type: "spotify" }, { type: "youtube" }, { type: "instagram" }],
+    monthlyListeners: 265000,
   },
   {
     id: "with-confidence",
@@ -105,6 +111,7 @@ const similarArtists: SimilarArtist[] = [
     reason: "Matches your genre blend and plays similar-sized venues",
     artistTier: "rising",
     platforms: [{ type: "spotify" }],
+    monthlyListeners: 112000,
   },
   {
     id: "stand-atlantic",
@@ -115,6 +122,7 @@ const similarArtists: SimilarArtist[] = [
     reason: "Shares touring markets and a comparable growth trajectory",
     artistTier: "rising",
     platforms: [{ type: "spotify" }, { type: "instagram" }],
+    monthlyListeners: 156000,
   },
   {
     id: "trash-boat",
@@ -125,6 +133,7 @@ const similarArtists: SimilarArtist[] = [
     reason: "Frequent co-bills with artists in your genre and region",
     artistTier: "established",
     platforms: [{ type: "spotify" }, { type: "website" }],
+    monthlyListeners: 198000,
   },
   {
     id: "koyo",
@@ -135,6 +144,7 @@ const similarArtists: SimilarArtist[] = [
     reason: "Emerging act with a fast-growing audience in your genre space",
     artistTier: "emerging",
     platforms: [{ type: "instagram" }],
+    monthlyListeners: 34000,
   },
 ];
 

@@ -1,14 +1,14 @@
 import Link from "next/link";
 import type { SimilarArtist } from "@/types";
 
-const TIER_LABELS: Record<string, string> = {
+export const TIER_LABELS: Record<string, string> = {
   emerging: "Emerging",
   rising: "Rising",
   established: "Established",
   headliner: "Headliner",
 };
 
-const PLATFORM_LABELS: Record<string, string> = {
+export const PLATFORM_LABELS: Record<string, string> = {
   spotify: "Spotify",
   instagram: "Instagram",
   youtube: "YouTube",
@@ -26,7 +26,10 @@ export default function SimilarArtistCard({
 }: SimilarArtistCardProps) {
   if (variant === "compact") {
     return (
-      <div className="bg-card-alt rounded-xl p-4 border border-slate-400/10 shadow-card flex flex-col gap-3 min-w-[176px] flex-shrink-0 hover:bg-card-hover hover:border-accent/35 hover:shadow-card-hover transition-all duration-200 cursor-default">
+      <Link
+        href={`/similar-artists/${artist.id}`}
+        className="bg-card-alt rounded-xl p-4 border border-slate-400/10 shadow-card flex flex-col gap-3 min-w-[176px] flex-shrink-0 hover:bg-card-hover hover:border-accent/35 hover:shadow-card-hover transition-all duration-200"
+      >
         <div className="flex items-start justify-between gap-2">
           <div className="w-10 h-10 rounded-full bg-accent/15 border border-accent/25 flex items-center justify-center flex-shrink-0">
             <span className="text-accent-light text-base font-semibold">
@@ -42,7 +45,7 @@ export default function SimilarArtistCard({
           <p className="text-xs text-gray-400 mt-0.5 truncate">{artist.genres.join(", ")}</p>
           <p className="text-xs text-gray-600 mt-0.5">{artist.location}</p>
         </div>
-      </div>
+      </Link>
     );
   }
 

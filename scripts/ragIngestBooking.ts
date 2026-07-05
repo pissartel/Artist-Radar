@@ -2,6 +2,7 @@ import "dotenv/config";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { runBookingRagIngestion } from "../src/ai/ingestion/bookingIngestionService.js";
+import { createHeadlessPageFetcherIfAvailable } from "../src/ai/ingestion/headlessPageFetcher.js";
 import { OpenAIEmbeddingProvider } from "../src/knowledge/embeddings.js";
 import { LocalChunkStore } from "../src/knowledge/localChunkStore.js";
 import { LocalDocumentStore } from "../src/knowledge/localDocumentStore.js";
@@ -20,16 +21,23 @@ async function main(): Promise<void> {
     return;
   }
 
+  const headlessFetcher =
+    process.env.ENABLE_HEADLESS_FALLBACK === "true" ? await createHeadlessPageFetcherIfAvailable() : undefined;
+
   const summary = await runBookingRagIngestion({
     documentStore: new LocalDocumentStore(),
     chunkStore: new LocalChunkStore(),
-    embeddingProvider: new OpenAIEmbeddingProvider()
+    embeddingProvider: new OpenAIEmbeddingProvider(),
+    headlessFetcher: headlessFetcher ?? undefined
   });
 
   await mkdir(path.dirname(DEBUG_REPORT_PATH), { recursive: true });
   await writeFile(DEBUG_REPORT_PATH, JSON.stringify(summary, null, 2), "utf8");
 
-  console.log(`Booking RAG ingestion complete: ${summary.documentsCreated} document(s), ${summary.chunksCreated} chunk(s).`);
+  console.log(
+    `Booking RAG ingestion complete: ${summary.documentsCreated} document(s), ${summary.chunksCreated} chunk(s) ` +
+      `(${summary.sourcesIngestedViaHeadless} via headless fallback).`
+  );
   if (summary.warnings.length > 0) {
     console.warn(`Warnings (${summary.warnings.length}):`);
     for (const warning of summary.warnings) {

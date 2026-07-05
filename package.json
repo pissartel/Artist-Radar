@@ -32,9 +32,9 @@
   },
   "devDependencies": {
     "@types/json2csv": "^5.0.7",
-    "@types/node": "^24.10.1",
+    "@types/node": "^24.13.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.14"
+    "vitest": "^4.1.9"
   }
 }

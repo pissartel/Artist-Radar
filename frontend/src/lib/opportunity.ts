@@ -17,14 +17,25 @@ export function formatOpportunityDate(date?: string): string | null {
   });
 }
 
-export function getOpportunitySource(opportunity: Opportunity): string | null {
-  const url = opportunity.sourceUrls?.[0];
-  if (!url) return null;
+export function getUrlHostname(url: string): string | null {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
   } catch {
     return null;
   }
+}
+
+export function getOpportunitySource(opportunity: Opportunity): string | null {
+  const url = opportunity.sourceUrls?.[0];
+  if (!url) return null;
+  return getUrlHostname(url);
+}
+
+export function getOpportunityById(
+  opportunities: Opportunity[],
+  id: string,
+): Opportunity | undefined {
+  return opportunities.find((opportunity) => opportunity.id === id);
 }
 
 function locationRank(opportunity: Opportunity, artistCity?: string, artistCountry?: string): number {

@@ -25,6 +25,7 @@
     "dotenv": "^17.4.2",
     "json2csv": "^6.0.0-alpha.2",
     "openai": "^6.42.0",
+    "playwright": "^1.61.1",
     "slugify": "^1.6.9",
     "zod": "^4.4.3"
   },

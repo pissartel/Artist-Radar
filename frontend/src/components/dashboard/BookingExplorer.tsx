@@ -1,0 +1,208 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import type { Opportunity, OpportunityType } from "@/types";
+import {
+  getOpportunitySource,
+  sortOpportunities,
+  type OpportunitySortOption,
+} from "@/lib/opportunity";
+import BookingOpportunityCard, { TYPE_LABELS } from "./BookingOpportunityCard";
+
+interface BookingExplorerProps {
+  opportunities: Opportunity[];
+  artistCity?: string;
+  artistCountry?: string;
+}
+
+type PresenceFilter = "all" | "has" | "missing";
+
+const MATCH_SCORE_OPTIONS = [
+  { label: "Any match score", value: 0 },
+  { label: "90%+", value: 90 },
+  { label: "80%+", value: 80 },
+  { label: "70%+", value: 70 },
+  { label: "60%+", value: 60 },
+];
+
+const SORT_OPTIONS: { label: string; value: OpportunitySortOption }[] = [
+  { label: "Best match", value: "best_match" },
+  { label: "Newest", value: "newest" },
+  { label: "Closest location", value: "closest_location" },
+  { label: "Most actionable", value: "most_actionable" },
+];
+
+const selectClassName =
+  "text-xs text-gray-300 bg-card border border-slate-400/15 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-accent/50 hover:border-accent/35 transition-colors";
+
+export default function BookingExplorer({
+  opportunities,
+  artistCity,
+  artistCountry,
+}: BookingExplorerProps) {
+  const [type, setType] = useState<"all" | OpportunityType>("all");
+  const [city, setCity] = useState("all");
+  const [minScore, setMinScore] = useState(0);
+  const [dateFilter, setDateFilter] = useState<PresenceFilter>("all");
+  const [contactFilter, setContactFilter] = useState<PresenceFilter>("all");
+  const [source, setSource] = useState("all");
+  const [sortBy, setSortBy] = useState<OpportunitySortOption>("best_match");
+
+  const types = useMemo(
+    () => Array.from(new Set(opportunities.map((opportunity) => opportunity.type))).sort(),
+    [opportunities],
+  );
+
+  const cities = useMemo(
+    () =>
+      Array.from(
+        new Set(opportunities.map((opportunity) => opportunity.city ?? opportunity.location)),
+      ).sort(),
+    [opportunities],
+  );
+
+  const sources = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          opportunities
+            .map((opportunity) => getOpportunitySource(opportunity))
+            .filter((value): value is string => Boolean(value)),
+        ),
+      ).sort(),
+    [opportunities],
+  );
+
+  const hasDateData = useMemo(() => opportunities.some((o) => o.date), [opportunities]);
+  const hasContactData = useMemo(() => opportunities.some((o) => o.contact), [opportunities]);
+
+  const filteredOpportunities = useMemo(() => {
+    const filtered = opportunities.filter((opportunity) => {
+      const matchesType = type === "all" || opportunity.type === type;
+      const matchesCity =
+        city === "all" || (opportunity.city ?? opportunity.location) === city;
+      const matchesScore = opportunity.matchScore >= minScore;
+      const matchesDate =
+        dateFilter === "all" ||
+        (dateFilter === "has" ? Boolean(opportunity.date) : !opportunity.date);
+      const matchesContact =
+        contactFilter === "all" ||
+        (contactFilter === "has" ? Boolean(opportunity.contact) : !opportunity.contact);
+      const matchesSource = source === "all" || getOpportunitySource(opportunity) === source;
+
+      return (
+        matchesType && matchesCity && matchesScore && matchesDate && matchesContact && matchesSource
+      );
+    });
+
+    return sortOpportunities(filtered, sortBy, artistCity, artistCountry);
+  }, [
+    opportunities,
+    type,
+    city,
+    minScore,
+    dateFilter,
+    contactFilter,
+    source,
+    sortBy,
+    artistCity,
+    artistCountry,
+  ]);
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2 mb-5">
+        <select
+          value={type}
+          onChange={(event) => setType(event.target.value as "all" | OpportunityType)}
+          className={selectClassName}
+        >
+          <option value="all">All types</option>
+          {types.map((t) => (
+            <option key={t} value={t}>
+              {TYPE_LABELS[t] ?? t}
+            </option>
+          ))}
+        </select>
+        <select value={city} onChange={(event) => setCity(event.target.value)} className={selectClassName}>
+          <option value="all">All cities</option>
+          {cities.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <select
+          value={minScore}
+          onChange={(event) => setMinScore(Number(event.target.value))}
+          className={selectClassName}
+        >
+          {MATCH_SCORE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        {hasDateData && (
+          <select
+            value={dateFilter}
+            onChange={(event) => setDateFilter(event.target.value as PresenceFilter)}
+            className={selectClassName}
+          >
+            <option value="all">Any date</option>
+            <option value="has">Has a date</option>
+            <option value="missing">No date yet</option>
+          </select>
+        )}
+        {hasContactData && (
+          <select
+            value={contactFilter}
+            onChange={(event) => setContactFilter(event.target.value as PresenceFilter)}
+            className={selectClassName}
+          >
+            <option value="all">Any contact</option>
+            <option value="has">Has contact</option>
+            <option value="missing">No contact yet</option>
+          </select>
+        )}
+        {sources.length > 0 && (
+          <select value={source} onChange={(event) => setSource(event.target.value)} className={selectClassName}>
+            <option value="all">All sources</option>
+            {sources.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        )}
+        <select
+          value={sortBy}
+          onChange={(event) => setSortBy(event.target.value as OpportunitySortOption)}
+          className={selectClassName}
+        >
+          {SORT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <p className="text-xs text-gray-600 mb-3">
+        {filteredOpportunities.length} of {opportunities.length} booking opportunities
+      </p>
+
+      {filteredOpportunities.length > 0 ? (
+        <div className="flex flex-col gap-3">
+          {filteredOpportunities.map((opportunity) => (
+            <BookingOpportunityCard key={opportunity.id} opportunity={opportunity} />
+          ))}
+        </div>
+      ) : (
+        <div className="bg-card rounded-xl border border-slate-400/10 shadow-card-glow p-6 text-sm text-gray-500">
+          No booking opportunities match your filters.
+        </div>
+      )}
+    </div>
+  );
+}

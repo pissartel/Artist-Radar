@@ -31,3 +31,4 @@ export type { EmbeddingProvider } from "./embeddings.js";
 export { cosineSimilarity } from "./cosineSimilarity.js";
 export { DEFAULT_RETRIEVAL_LIMIT, retrieveRelevantContext } from "./retrieveRelevantContext.js";
 export type { RetrievedContext, RetrieveRelevantContextOptions } from "./retrieveRelevantContext.js";
+export { cleanHtmlToText, extractHtmlTitle, isEmptyOrBoilerplateText } from "./htmlText.js";

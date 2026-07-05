@@ -38,6 +38,8 @@ export interface SimilarArtist {
   reason?: string;
   artistTier?: ArtistTier;
   platforms?: Platform[];
+  imageUrl?: string;
+  monthlyListeners?: number;
   // Future fields expected from the similar-artist pipeline (not yet populated in V1):
   matchReasons?: string[];
   sharedGenres?: string[];

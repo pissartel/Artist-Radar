@@ -1,4 +1,5 @@
 import { warnLog } from "../../utils/logger.js";
+import { extractEventDate } from "../dateParsing.js";
 import { normalizeSceneAgendaEvent, type RawSceneAgendaEvent } from "../normalization/normalizeSceneAgendaEvent.js";
 import { filterBookingTargetsForRelevance } from "../relevance.js";
 import type { BookingSearchInput } from "../types.js";
@@ -285,7 +286,7 @@ function buildSceneEvent(
     city: input.city || null,
     country: input.artistProfile?.country ?? "France",
     description: entry.description,
-    eventDate: parseEntryDate(entry.pubDate),
+    eventDate: parseEntryDate(entry.pubDate) ?? extractEventDate(text),
     lineupArtists: [],
     venueName: null,
     genresDetected: detectGenresFromText(text),
@@ -295,15 +296,11 @@ function buildSceneEvent(
 
 function parseEntryDate(pubDate: string | null): string | null {
   if (!pubDate) return null;
-  try {
-    const date = new Date(pubDate);
-    if (!isNaN(date.getTime())) {
-      return date.toISOString().split("T")[0];
-    }
-  } catch {}
-  const iso = pubDate.match(/\b(20\d{2})[-/](0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01])\b/);
-  if (iso) return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
-  return null;
+  const date = new Date(pubDate);
+  if (!isNaN(date.getTime())) {
+    return date.toISOString().split("T")[0];
+  }
+  return extractEventDate(pubDate);
 }
 
 function detectGenresFromText(text: string): string[] {

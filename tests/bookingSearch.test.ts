@@ -203,6 +203,62 @@ describe("Booking Search core", () => {
     });
   });
 
+  it("returns empty opportunities gracefully with warnings when no provider finds targets", async () => {
+    const emptyProvider: BookingSourceProvider = {
+      providerName: "empty_provider",
+      async search() {
+        return {
+          sourceProvider: "empty_provider",
+          searchedQueries: ["qa"],
+          warnings: ["empty_provider found nothing for this query."],
+          metadata: {},
+          targets: []
+        };
+      }
+    };
+
+    const result = await searchBookingOpportunities(input, { providers: [emptyProvider] });
+
+    expect(result.opportunities).toEqual([]);
+    expect(result.warnings).toEqual(expect.arrayContaining(["empty_provider found nothing for this query."]));
+  });
+
+  it("keeps other providers' results when one provider throws", async () => {
+    const brokenProvider: BookingSourceProvider = {
+      providerName: "broken_provider",
+      async search() {
+        throw new Error("HTTP 403");
+      }
+    };
+    const workingProvider: BookingSourceProvider = {
+      providerName: "working_provider",
+      async search() {
+        return {
+          sourceProvider: "working_provider",
+          searchedQueries: ["qa"],
+          warnings: [],
+          metadata: {},
+          targets: [
+            baseTarget({
+              name: "Working Punk Room",
+              genres: ["pop punk"],
+              confidence: 0.9,
+              contacts: [],
+              sourceUrl: "https://example.test/working-punk-room"
+            })
+          ]
+        };
+      }
+    };
+
+    const result = await searchBookingOpportunities(input, {
+      providers: [brokenProvider, workingProvider]
+    });
+
+    expect(result.opportunities.map((opportunity) => opportunity.name)).toEqual(["Working Punk Room"]);
+    expect(result.warnings.some((warning) => warning.includes("broken_provider failed and was skipped"))).toBe(true);
+  });
+
   it("normalizes raw booking source data while preserving source and contact URLs", () => {
     const target = normalizeBookingSource({
       name: "Official Venue",

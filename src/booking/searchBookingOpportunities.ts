@@ -4,7 +4,8 @@ import { recommendBookingAction, scoreBookingCompatibility } from "./scoring.js"
 import type { BookingOpportunity, BookingSearchInput, BookingSearchResult, BookingSourceMetadata, BookingSourceType, BookingTarget } from "./types.js";
 import {
   buildDefaultBookingSourceProviders,
-  type BookingSourceProvider
+  type BookingSourceProvider,
+  type BookingSourceProviderResult
 } from "./providers/BookingSourceProvider.js";
 import { warnLog } from "../utils/logger.js";
 
@@ -23,7 +24,7 @@ export async function searchBookingOpportunities(
     : buildDefaultBookingSourceProviders();
 
   const providerResults = await Promise.all(
-    providers.map((provider) => provider.search({ input, maxResults: input.limit }))
+    providers.map((provider) => runProviderSafely(provider, input))
   );
   const rawTargets = dedupeTargets(providerResults.flatMap((result) => result.targets.map((target) => ({
     ...target,
@@ -55,6 +56,25 @@ export async function searchBookingOpportunities(
       metadata: result.metadata
     }))
   };
+}
+
+async function runProviderSafely(
+  provider: BookingSourceProvider,
+  input: BookingSearchInput
+): Promise<BookingSourceProviderResult> {
+  try {
+    return await provider.search({ input, maxResults: input.limit });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warnLog("booking", `Provider ${provider.providerName} failed and was skipped: ${message}`);
+    return {
+      targets: [],
+      sourceProvider: provider.providerName,
+      searchedQueries: [],
+      warnings: [`${provider.providerName} failed and was skipped: ${message}.`],
+      metadata: { failed: true }
+    };
+  }
 }
 
 function buildOpportunity(input: BookingSearchInput, target: BookingTarget): BookingOpportunity {

@@ -7,4 +7,5 @@ out/
 
 # misc
 *.local
+*.tsbuildinfo
 .DS_Store

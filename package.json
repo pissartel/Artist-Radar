@@ -15,7 +15,8 @@
     "test:firecrawl": "tsx scripts/testFirecrawl.ts",
     "test:artist": "tsx scripts/runArtistTest.ts",
     "test:compare-limits": "tsx scripts/compareConsolidateLimits.ts",
-    "rag:ingest:booking": "tsx scripts/ragIngestBooking.ts"
+    "rag:ingest:booking": "tsx scripts/ragIngestBooking.ts",
+    "eval:rag:booking": "tsx scripts/ragBookingSmokeTest.ts"
   },
   "keywords": [],
   "author": "",

@@ -8,10 +8,11 @@
     "artist-radar": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
     "build:frontend": "npm run build && cd frontend && npm run build",
-    "dev": "tsx src/cli.ts",
-    "start": "node dist/cli.js",
+    "prebuild": "cd .. && npm install && npm run build",
+    "build": "next build",
+    "dev": "next dev",
+    "start": "next start",
     "test": "vitest run",
     "test:firecrawl": "tsx scripts/testFirecrawl.ts",
     "test:artist": "tsx scripts/runArtistTest.ts",

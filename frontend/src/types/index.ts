@@ -81,6 +81,26 @@ export interface CityOpportunityStat {
   percentage?: number;
 }
 
+export type MainGoal =
+  | "booking_opportunities"
+  | "similar_artists"
+  | "opening_slots"
+  | "small_tour";
+
+export interface OnboardingFormData {
+  artistName: string;
+  spotifyUrl: string;
+  youtubeUrl: string;
+  instagramUrl: string;
+  websiteUrl: string;
+  countryOfOrigin: string;
+  city: string;
+  mainGenre: string;
+  secondaryGenres: string;
+  targetLocation: string;
+  mainGoal: MainGoal;
+}
+
 export interface DashboardData {
   artist: ArtistProfile;
   kpis: KpiMetric[];

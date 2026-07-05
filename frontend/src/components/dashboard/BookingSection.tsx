@@ -1,9 +1,9 @@
-import type { BookingOpportunity, BookingSource, CityOpportunityStat } from "@/types";
+import type { Opportunity, BookingSource, CityOpportunityStat } from "@/types";
 import BookingTabs from "./BookingTabs";
 import BookingInsightsPanel from "./BookingInsightsPanel";
 
 interface BookingSectionProps {
-  opportunities: BookingOpportunity[];
+  opportunities: Opportunity[];
   topCities: CityOpportunityStat[];
   matchExplanations: string[];
   sources: BookingSource[];

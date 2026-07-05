@@ -1,4 +1,4 @@
-import type { BookingOpportunity } from "@/types";
+import type { Opportunity } from "@/types";
 import MatchReasonsList from "./MatchReasonsList";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -16,7 +16,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 interface BookingOpportunityCardProps {
-  opportunity: BookingOpportunity;
+  opportunity: Opportunity;
 }
 
 function ScoreBadge({ score }: { score: number }) {

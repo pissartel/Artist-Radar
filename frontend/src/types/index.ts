@@ -1,16 +1,3 @@
-// Legacy component types — kept for existing components
-export interface Artist {
-  name: string;
-  genre: string;
-  city: string;
-  score?: number;
-}
-
-export interface KPICard {
-  label: string;
-  value: string | number;
-}
-
 // Dashboard API-aligned types
 export type PlatformType = "spotify" | "instagram" | "youtube" | "website";
 
@@ -48,29 +35,33 @@ export interface SimilarArtist {
   matchScore: number;
 }
 
-export type BookingOpportunityType =
-  | "venue"
-  | "festival"
-  | "concert"
-  | "opening_slot";
+// V1 scope: booking opportunities only.
+// Future opportunity categories (not yet exposed in the UI):
+// | "playlist"
+// | "label"
+// | "blog"
+// | "creative_provider"
+// | "mixing_engineer"
+// | "video_director"
+export type OpportunityType = "venue" | "concert" | "opening_slot" | "festival";
 
-export interface MatchReason {
-  label: string;
-  detail?: string;
-}
-
-export interface BookingOpportunity {
+// Generic entity covering booking opportunities today and future artist
+// growth opportunities (labels, playlists, creative providers, ...).
+export interface Opportunity {
   id: string;
+  type: OpportunityType;
   title: string;
-  type: BookingOpportunityType;
   location: string;
   city?: string;
   country?: string;
+  date?: string;
   description: string;
   tags: string[];
   matchScore: number;
   matchReasons: string[];
-  source?: string;
+  sourceUrls?: string[];
+  contact?: string | null;
+  relatedSimilarArtistIds?: string[];
   imageUrl?: string;
 }
 
@@ -94,7 +85,7 @@ export interface DashboardData {
   artist: ArtistProfile;
   kpis: KpiMetric[];
   similarArtists: SimilarArtist[];
-  bookingOpportunities: BookingOpportunity[];
+  bookingOpportunities: Opportunity[];
   topCities: CityOpportunityStat[];
   sources: BookingSource[];
   matchExplanations: string[];

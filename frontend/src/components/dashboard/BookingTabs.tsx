@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { BookingOpportunity } from "@/types";
+import type { Opportunity } from "@/types";
 import BookingOpportunityCard from "./BookingOpportunityCard";
 
 const TABS = [
@@ -17,7 +17,7 @@ const TABS = [
 type TabName = (typeof TABS)[number];
 
 interface BookingTabsProps {
-  opportunities: BookingOpportunity[];
+  opportunities: Opportunity[];
 }
 
 function EmptyTabState({ tab }: { tab: string }) {
@@ -34,7 +34,7 @@ function EmptyTabState({ tab }: { tab: string }) {
   );
 }
 
-function RawJsonTab({ opportunities }: { opportunities: BookingOpportunity[] }) {
+function RawJsonTab({ opportunities }: { opportunities: Opportunity[] }) {
   return (
     <pre className="bg-[#0d1117] rounded-xl p-4 border border-slate-400/10 text-xs text-emerald-400 overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed font-mono shadow-card">
       {JSON.stringify(opportunities, null, 2)}

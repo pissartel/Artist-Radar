@@ -1,10 +1,10 @@
 import type {
   ArtistProfile,
-  BookingOpportunity,
   BookingSource,
   CityOpportunityStat,
   DashboardData,
   KpiMetric,
+  Opportunity,
   SimilarArtist,
 } from "@/types";
 
@@ -73,23 +73,27 @@ const similarArtists: SimilarArtist[] = [
   },
 ];
 
-const bookingOpportunities: BookingOpportunity[] = [
+const bookingOpportunities: Opportunity[] = [
   {
     id: "neck-deep-guests",
-    title: "Neck Deep + Guests",
     type: "opening_slot",
+    title: "Neck Deep + Guests",
     location: "Bordeaux, France",
     city: "Bordeaux",
     country: "France",
+    date: "2026-03-14",
     description: "Possible opening slot on European tour",
     tags: ["Pop Punk", "Emo Pop", "UK"],
     matchScore: 92,
     matchReasons: ["Similar music style", "Similar audience", "Same region"],
+    sourceUrls: ["https://www.bandsintown.com"],
+    contact: null,
+    relatedSimilarArtistIds: ["neck-deep"],
   },
   {
     id: "le-rocher-de-palmer",
-    title: "Le Rocher de Palmer",
     type: "venue",
+    title: "Le Rocher de Palmer",
     location: "Cenon, France",
     city: "Cenon",
     country: "France",
@@ -97,23 +101,29 @@ const bookingOpportunities: BookingOpportunity[] = [
     tags: ["Pop Punk", "Indie Rock", "Alternative"],
     matchScore: 91,
     matchReasons: ["Similar venues history", "Capacity match", "Same city/region"],
+    sourceUrls: ["https://www.lerocherdepalmer.fr"],
+    contact: "booking@lerocherdepalmer.fr",
   },
   {
     id: "xtreme-fest-2025",
-    title: "Xtreme Fest 2025",
     type: "festival",
+    title: "Xtreme Fest 2025",
     location: "Cap Découverte, France",
     city: "Cap Découverte",
     country: "France",
+    date: "2026-07-18",
     description: "Festival with similar artists in the lineup",
     tags: ["Pop Punk", "Metalcore", "Punk Rock"],
     matchScore: 89,
     matchReasons: ["Similar artists played", "Good style fit", "Call for applications open"],
+    sourceUrls: ["https://www.songkick.com"],
+    contact: null,
+    relatedSimilarArtistIds: ["hot-mulligan", "daisy-grenade"],
   },
   {
     id: "darkest-hour-guests",
-    title: "Darkest Hour + Guests",
     type: "opening_slot",
+    title: "Darkest Hour + Guests",
     location: "Lyon, France",
     city: "Lyon",
     country: "France",
@@ -121,6 +131,7 @@ const bookingOpportunities: BookingOpportunity[] = [
     tags: ["Metalcore", "Hardcore"],
     matchScore: 87,
     matchReasons: ["Looking for opener", "Style compatible", "Geographic relevance"],
+    contact: null,
   },
 ];
 

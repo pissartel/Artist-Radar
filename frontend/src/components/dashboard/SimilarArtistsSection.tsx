@@ -22,11 +22,20 @@ export default function SimilarArtistsSection({
           View all
         </Link>
       </div>
-      <div className="flex flex-row gap-3 overflow-x-auto pb-2 scrollbar-thin">
-        {artists.map((artist) => (
-          <SimilarArtistCard key={artist.id} artist={artist} variant="compact" />
-        ))}
-      </div>
+      {artists.length > 0 ? (
+        <div className="flex flex-row gap-3 overflow-x-auto pb-2 scrollbar-thin">
+          {artists.map((artist) => (
+            <SimilarArtistCard key={artist.id} artist={artist} variant="compact" />
+          ))}
+        </div>
+      ) : (
+        <div className="bg-card rounded-xl border border-slate-400/10 shadow-card p-6 text-center">
+          <p className="text-sm text-gray-500">No similar artists found yet.</p>
+          <p className="text-xs text-gray-600 mt-1">
+            Try a broader genre or location to widen the search.
+          </p>
+        </div>
+      )}
     </section>
   );
 }

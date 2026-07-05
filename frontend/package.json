@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "npm run build --prefix ..",
+    "prebuild": "npm run build --prefix ..",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

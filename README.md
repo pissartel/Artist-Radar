@@ -128,7 +128,11 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) — it redirects automatically to `/dashboard`.
 
-The frontend is fully static and does not require a backend or any API keys.
+The Overview page (`/overview`) calls `POST /api/artist-radar`, which runs the real
+`runOpportunitySearch()` backend pipeline. `npm run dev`/`npm run build` in `frontend/`
+first rebuild the root project (`predev`/`prebuild` hooks) so the compiled pipeline in
+`../dist` is current, and the API route loads API keys from the repo root `.env`. Other
+pages (`/similar-artists`, `/booking`, ...) still use static mock data.
 
 ## Notes
 

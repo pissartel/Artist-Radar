@@ -8,17 +8,15 @@
     "artist-radar": "dist/cli.js"
   },
   "scripts": {
-    "build:frontend": "npm run build && cd frontend && npm run build",
-    "prebuild": "cd .. && npm install && npm run build",
-    "build": "next build",
-    "dev": "next dev",
-    "start": "next start",
-    "test": "vitest run",
-    "test:firecrawl": "tsx scripts/testFirecrawl.ts",
-    "test:artist": "tsx scripts/runArtistTest.ts",
-    "test:compare-limits": "tsx scripts/compareConsolidateLimits.ts",
-    "rag:ingest:booking": "tsx scripts/ragIngestBooking.ts",
-    "eval:rag:booking": "tsx scripts/ragBookingSmokeTest.ts"
+  "build": "tsc",
+  "dev": "tsx src/cli.ts",
+  "start": "node dist/cli.js",
+  "test": "vitest run",
+  "test:firecrawl": "tsx scripts/testFirecrawl.ts",
+  "test:artist": "tsx scripts/runArtistTest.ts",
+  "test:compare-limits": "tsx scripts/compareConsolidateLimits.ts",
+  "rag:ingest:booking": "tsx scripts/ragIngestBooking.ts",
+  "eval:rag:booking": "tsx scripts/ragBookingSmokeTest.ts"
   },
   "keywords": [],
   "author": "",

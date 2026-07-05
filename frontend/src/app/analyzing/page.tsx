@@ -28,7 +28,7 @@ export default function AnalyzingPage() {
     }, STEP_INTERVAL_MS);
 
     const redirectTimer = setTimeout(() => {
-      router.push("/dashboard");
+      router.push("/overview");
     }, REDIRECT_DELAY_MS);
 
     return () => {

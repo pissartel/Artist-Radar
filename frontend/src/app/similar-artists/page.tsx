@@ -1,13 +1,20 @@
 import MainLayout from "@/components/layout/MainLayout";
-import PlaceholderPage from "@/components/layout/PlaceholderPage";
+import SimilarArtistsExplorer from "@/components/dashboard/SimilarArtistsExplorer";
+import { getDashboardData } from "@/lib/getDashboardData";
 
-export default function SimilarArtistsPage() {
+export default async function SimilarArtistsPage() {
+  const { similarArtists } = await getDashboardData();
+
   return (
     <MainLayout>
-      <PlaceholderPage
-        title="Similar Artists"
-        description="A dedicated view of similar-artist matches is coming soon."
-      />
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-white">Similar Artists</h1>
+        <p className="text-sm text-gray-400 mt-1.5">
+          Explore every similar artist found for your profile to understand your scene
+          and find useful references for booking research.
+        </p>
+      </div>
+      <SimilarArtistsExplorer artists={similarArtists} />
     </MainLayout>
   );
 }

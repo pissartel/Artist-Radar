@@ -1,18 +1,50 @@
+"use client";
+
 import Link from "next/link";
+import { use } from "react";
 import MainLayout from "@/components/layout/MainLayout";
 import OpportunityDetail from "@/components/dashboard/OpportunityDetail";
-import { getDashboardData } from "@/lib/getDashboardData";
+import {
+  ArtistRadarEmptyOnboardingState,
+  ArtistRadarErrorState,
+  ArtistRadarLoadingState,
+} from "@/components/dashboard/ArtistRadarStates";
+import { useArtistRadarData } from "@/lib/useArtistRadarData";
 import { getOpportunityById } from "@/lib/opportunity";
 
 interface OpportunityDetailPageProps {
   params: Promise<{ id: string }>;
 }
 
-export default async function OpportunityDetailPage({
-  params,
-}: OpportunityDetailPageProps) {
-  const { id } = await params;
-  const { bookingOpportunities, similarArtists } = await getDashboardData();
+export default function OpportunityDetailPage({ params }: OpportunityDetailPageProps) {
+  const { id } = use(params);
+  const { state, refetch } = useArtistRadarData();
+
+  if (state.status === "checking-onboarding" || state.status === "loading") {
+    return (
+      <MainLayout>
+        <ArtistRadarLoadingState />
+      </MainLayout>
+    );
+  }
+
+  if (state.status === "empty") {
+    return (
+      <MainLayout>
+        <ArtistRadarEmptyOnboardingState />
+      </MainLayout>
+    );
+  }
+
+  if (state.status === "error") {
+    return (
+      <MainLayout>
+        <ArtistRadarErrorState message={state.message} onRetry={refetch} />
+      </MainLayout>
+    );
+  }
+
+  const { bookingOpportunities, similarArtists } = state.data;
   const opportunity = getOpportunityById(bookingOpportunities, id);
 
   if (!opportunity) {

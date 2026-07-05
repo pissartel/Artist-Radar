@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "build:frontend": "npm run build && cd frontend && npm run build",
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js",
     "test": "vitest run",

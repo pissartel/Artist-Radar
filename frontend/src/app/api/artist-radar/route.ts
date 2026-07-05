@@ -32,6 +32,15 @@ function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | nul
   };
 }
 
+function logBookingProviderDiagnostics(): void {
+  warnLog("artist-radar-api", "Booking provider diagnostics", {
+    enableOpenAgenda: process.env.ENABLE_OPENAGENDA === "true",
+    openAgendaApiKeyPresent: Boolean(process.env.OPENAGENDA_API_KEY),
+    enableFirecrawlBooking: process.env.ENABLE_FIRECRAWL_BOOKING === "true",
+    firecrawlApiKeyPresent: Boolean(process.env.FIRECRAWL_API_KEY),
+  });
+}
+
 export async function POST(request: Request): Promise<Response> {
   let body: RawRequestBody;
   try {
@@ -47,6 +56,8 @@ export async function POST(request: Request): Promise<Response> {
       { status: 400 }
     );
   }
+
+  logBookingProviderDiagnostics();
 
   try {
     const input = ArtistInputSchema.parse({

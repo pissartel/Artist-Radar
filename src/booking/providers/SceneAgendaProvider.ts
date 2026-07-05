@@ -1,5 +1,6 @@
 import type { WebSearchProvider, WebSearchResult } from "../../providers/web/WebSearchProvider.js";
 import { warnLog } from "../../utils/logger.js";
+import { extractEventDate } from "../dateParsing.js";
 import { matchBookingGenres } from "../genreMatching.js";
 import { normalizeSceneAgendaEvent, type RawSceneAgendaEvent } from "../normalization/normalizeSceneAgendaEvent.js";
 import {
@@ -316,18 +317,6 @@ function buildDetectedGenres(text: string): string[] {
   ];
   const normalized = text.toLowerCase();
   return known.filter((genre) => new RegExp(`\\b${escapeRegExp(genre)}\\b`).test(normalized));
-}
-
-function extractEventDate(text: string): string | null {
-  const iso = text.match(/\b(20\d{2})[-/](0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01])\b/);
-  if (iso) {
-    return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
-  }
-  const european = text.match(/\b(0?[1-9]|[12]\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.](20\d{2})\b/);
-  if (european) {
-    return `${european[3]}-${european[2].padStart(2, "0")}-${european[1].padStart(2, "0")}`;
-  }
-  return null;
 }
 
 function logSceneAgendaSummary(summary: {

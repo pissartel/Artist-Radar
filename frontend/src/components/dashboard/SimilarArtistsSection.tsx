@@ -6,9 +6,12 @@ interface SimilarArtistsSectionProps {
   artists: SimilarArtist[];
 }
 
+const MAX_CAROUSEL_ARTISTS = 20;
+
 export default function SimilarArtistsSection({
   artists,
 }: SimilarArtistsSectionProps) {
+  const carouselArtists = artists.slice(0, MAX_CAROUSEL_ARTISTS);
   return (
     <section className="mb-6">
       <div className="flex items-center justify-between mb-3">
@@ -22,9 +25,9 @@ export default function SimilarArtistsSection({
           View all
         </Link>
       </div>
-      {artists.length > 0 ? (
+      {carouselArtists.length > 0 ? (
         <div className="flex flex-row gap-3 overflow-x-auto pb-2 scrollbar-thin">
-          {artists.map((artist) => (
+          {carouselArtists.map((artist) => (
             <SimilarArtistCard key={artist.id} artist={artist} variant="compact" />
           ))}
         </div>

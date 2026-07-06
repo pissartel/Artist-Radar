@@ -28,3 +28,9 @@ export function getSharedGenres(
   if (artist.sharedGenres) return artist.sharedGenres;
   return artist.genres.filter((genre) => referenceGenres.includes(genre));
 }
+
+export function formatGenrePreview(genres: string[], maxVisible = 3): string {
+  if (genres.length <= maxVisible) return genres.join(", ");
+  const remaining = genres.length - maxVisible;
+  return `${genres.slice(0, maxVisible).join(", ")} +${remaining}`;
+}

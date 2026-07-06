@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { SimilarArtist } from "@/types";
+import { formatGenrePreview } from "@/lib/similarArtist";
 
 export const TIER_LABELS: Record<string, string> = {
   emerging: "Emerging",
@@ -28,7 +29,7 @@ export default function SimilarArtistCard({
     return (
       <Link
         href={`/similar-artists/${artist.id}`}
-        className="bg-card-alt rounded-xl p-4 border border-slate-400/10 shadow-card flex flex-col gap-3 min-w-[176px] flex-shrink-0 hover:bg-card-hover hover:border-accent/35 hover:shadow-card-hover transition-all duration-200"
+        className="bg-card-alt rounded-xl p-4 border border-slate-400/10 shadow-card flex flex-col gap-3 w-44 flex-shrink-0 hover:bg-card-hover hover:border-accent/35 hover:shadow-card-hover transition-all duration-200"
       >
         <div className="flex items-start justify-between gap-2">
           <div className="w-10 h-10 rounded-full bg-accent/15 border border-accent/25 flex items-center justify-center flex-shrink-0">
@@ -40,10 +41,15 @@ export default function SimilarArtistCard({
             {artist.matchScore}%
           </span>
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-semibold text-white truncate">{artist.name}</p>
-          <p className="text-xs text-gray-400 mt-0.5 truncate">{artist.genres.join(", ")}</p>
-          <p className="text-xs text-gray-600 mt-0.5">{artist.location}</p>
+          <p
+            className="text-xs text-gray-400 mt-0.5 truncate"
+            title={artist.genres.join(", ")}
+          >
+            {formatGenrePreview(artist.genres)}
+          </p>
+          <p className="text-xs text-gray-600 mt-0.5 truncate">{artist.location}</p>
         </div>
       </Link>
     );

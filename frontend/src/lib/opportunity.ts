@@ -1,10 +1,79 @@
-import type { Opportunity } from "@/types";
+import type { Opportunity, OpportunityType } from "@/types";
 
 export type OpportunitySortOption =
   | "best_match"
   | "newest"
   | "closest_location"
   | "most_actionable";
+
+export type OpportunityCategory =
+  | "concert"
+  | "venue"
+  | "festival"
+  | "opening_slot"
+  | "contact"
+  | "unknown";
+
+export type BookingTabName =
+  | "All"
+  | "Concerts"
+  | "Venues"
+  | "Festivals"
+  | "Opening Slots"
+  | "Contacts"
+  | "Raw JSON";
+
+const CATEGORY_BY_TYPE: Record<OpportunityType, OpportunityCategory> = {
+  concert: "concert",
+  venue: "venue",
+  festival: "festival",
+  opening_slot: "opening_slot",
+};
+
+const SUPPORT_SLOT_SIGNALS = ["support slot", "support-slot", "opening act", "first part"];
+
+function hasSupportSlotSignal(opportunity: Opportunity): boolean {
+  return opportunity.tags.some((tag) =>
+    SUPPORT_SLOT_SIGNALS.some((signal) => tag.toLowerCase().includes(signal)),
+  );
+}
+
+export function hasBookingContact(opportunity: Opportunity): boolean {
+  return Boolean(opportunity.contact);
+}
+
+export function getOpportunityCategory(opportunity: Opportunity): OpportunityCategory {
+  if (CATEGORY_BY_TYPE[opportunity.type]) {
+    return CATEGORY_BY_TYPE[opportunity.type];
+  }
+  if (hasSupportSlotSignal(opportunity)) return "opening_slot";
+  if (hasBookingContact(opportunity)) return "contact";
+  return "unknown";
+}
+
+export function filterBookingOpportunities(
+  opportunities: Opportunity[],
+  activeTab: BookingTabName,
+): Opportunity[] {
+  switch (activeTab) {
+    case "Concerts":
+      return opportunities.filter((o) => getOpportunityCategory(o) === "concert");
+    case "Venues":
+      return opportunities.filter((o) => getOpportunityCategory(o) === "venue");
+    case "Festivals":
+      return opportunities.filter((o) => getOpportunityCategory(o) === "festival");
+    case "Opening Slots":
+      return opportunities.filter(
+        (o) => getOpportunityCategory(o) === "opening_slot" || hasSupportSlotSignal(o),
+      );
+    case "Contacts":
+      return opportunities.filter(hasBookingContact);
+    case "All":
+    case "Raw JSON":
+    default:
+      return opportunities;
+  }
+}
 
 export function formatOpportunityDate(date?: string): string | null {
   if (!date) return null;

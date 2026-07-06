@@ -1,39 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Opportunity } from "@/types";
+import { filterBookingOpportunities, type BookingTabName } from "@/lib/opportunity";
 import BookingOpportunityCard from "./BookingOpportunityCard";
 
-const TABS = [
-  "Opportunities",
+const TABS: BookingTabName[] = [
+  "All",
   "Venues",
   "Concerts",
   "Festivals",
   "Opening Slots",
   "Contacts",
   "Raw JSON",
-] as const;
+];
 
-type TabName = (typeof TABS)[number];
+const EMPTY_STATE_MESSAGE: Record<BookingTabName, string> = {
+  All: "No booking opportunities found in this analysis",
+  Concerts: "No concert opportunities found in this analysis",
+  Venues: "No venue opportunities found in this analysis",
+  Festivals: "No festival opportunities found in this analysis",
+  "Opening Slots": "No opening slot opportunities found in this analysis",
+  Contacts: "No booking contacts found in this analysis",
+  "Raw JSON": "No booking opportunities found in this analysis",
+};
 
 interface BookingTabsProps {
   opportunities: Opportunity[];
 }
 
-function EmptyTabState({
-  tab,
-  hint = "This section will be available soon.",
-}: {
-  tab: string;
-  hint?: string;
-}) {
+function EmptyTabState({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="w-10 h-10 rounded-full bg-white/5 border border-slate-400/10 flex items-center justify-center mb-3">
         <span className="text-gray-600 text-lg">—</span>
       </div>
-      <p className="text-sm text-gray-500">No {tab.toLowerCase()} yet.</p>
-      <p className="text-xs text-gray-600 mt-1">{hint}</p>
+      <p className="text-sm text-gray-500">{message}</p>
     </div>
   );
 }
@@ -47,7 +49,20 @@ function RawJsonTab({ opportunities }: { opportunities: Opportunity[] }) {
 }
 
 export default function BookingTabs({ opportunities }: BookingTabsProps) {
-  const [activeTab, setActiveTab] = useState<TabName>("Opportunities");
+  const [activeTab, setActiveTab] = useState<BookingTabName>("All");
+
+  const tabCounts = useMemo(() => {
+    const counts = {} as Record<BookingTabName, number>;
+    for (const tab of TABS) {
+      counts[tab] = filterBookingOpportunities(opportunities, tab).length;
+    }
+    return counts;
+  }, [opportunities]);
+
+  const activeOpportunities = useMemo(
+    () => filterBookingOpportunities(opportunities, activeTab),
+    [opportunities, activeTab],
+  );
 
   return (
     <div>
@@ -64,26 +79,23 @@ export default function BookingTabs({ opportunities }: BookingTabsProps) {
             }`}
           >
             {tab}
+            {tab !== "Raw JSON" && (
+              <span className="ml-1.5 tabular-nums opacity-70">{tabCounts[tab]}</span>
+            )}
           </button>
         ))}
       </div>
 
-      {activeTab === "Opportunities" && (
-        opportunities.length > 0 ? (
-          <div className="flex flex-col gap-3">
-            {opportunities.map((opportunity) => (
-              <BookingOpportunityCard key={opportunity.id} opportunity={opportunity} />
-            ))}
-          </div>
-        ) : (
-          <EmptyTabState tab="booking opportunities" hint="Try a broader genre or location to widen the search." />
-        )
-      )}
-      {activeTab === "Raw JSON" && (
+      {activeTab === "Raw JSON" ? (
         <RawJsonTab opportunities={opportunities} />
-      )}
-      {activeTab !== "Opportunities" && activeTab !== "Raw JSON" && (
-        <EmptyTabState tab={activeTab} />
+      ) : activeOpportunities.length > 0 ? (
+        <div className="flex flex-col gap-3">
+          {activeOpportunities.map((opportunity) => (
+            <BookingOpportunityCard key={opportunity.id} opportunity={opportunity} />
+          ))}
+        </div>
+      ) : (
+        <EmptyTabState message={EMPTY_STATE_MESSAGE[activeTab]} />
       )}
     </div>
   );

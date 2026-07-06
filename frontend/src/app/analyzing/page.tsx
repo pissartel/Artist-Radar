@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { ArtistRadarErrorState } from "@/components/dashboard/ArtistRadarStates";
 import { useArtistRadarData } from "@/lib/useArtistRadarData";
 
-const STEP_INTERVAL_MS = 700;
+const STEP_INTERVAL_MS = 3000;
+const COMPLETION_HOLD_MS = 500;
 
 const ANALYSIS_STEPS = [
   "Analyzing artist profile",
@@ -28,7 +29,10 @@ export default function AnalyzingPage() {
       return;
     }
     const stepTimer = setInterval(() => {
-      setActiveStep((step) => (step < ANALYSIS_STEPS.length - 1 ? step + 1 : step));
+      // Stop one step short of the end while still running so the checklist
+      // never sits fully "active" on the last item before the analysis is
+      // actually done; the success handler below fills in the final step.
+      setActiveStep((step) => (step < ANALYSIS_STEPS.length - 2 ? step + 1 : step));
     }, STEP_INTERVAL_MS);
     return () => clearInterval(stepTimer);
   }, [isRunning]);
@@ -40,9 +44,17 @@ export default function AnalyzingPage() {
   }, [state.status, router]);
 
   useEffect(() => {
-    if (state.status === "success") {
-      router.replace("/overview");
+    if (state.status !== "success") {
+      return;
     }
+    // If the API resolves before the checklist animation catches up, mark
+    // every step as completed and hold briefly before navigating away so the
+    // loading state never jumps straight to the dashboard mid-checklist.
+    setActiveStep(ANALYSIS_STEPS.length);
+    const navigateTimer = setTimeout(() => {
+      router.replace("/overview");
+    }, COMPLETION_HOLD_MS);
+    return () => clearTimeout(navigateTimer);
   }, [state.status, router]);
 
   if (state.status === "error") {

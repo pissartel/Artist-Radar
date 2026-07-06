@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ArtistRadarErrorState } from "@/components/dashboard/ArtistRadarStates";
+import { useArtistRadarData } from "@/lib/useArtistRadarData";
 
-const REDIRECT_DELAY_MS = 4200;
+const STEP_INTERVAL_MS = 700;
 
 const ANALYSIS_STEPS = [
   "Analyzing artist profile",
@@ -14,28 +16,44 @@ const ANALYSIS_STEPS = [
   "Building dashboard",
 ];
 
-const STEP_INTERVAL_MS = REDIRECT_DELAY_MS / ANALYSIS_STEPS.length;
-
 export default function AnalyzingPage() {
   const router = useRouter();
+  const { state, refetch } = useArtistRadarData();
   const [activeStep, setActiveStep] = useState(0);
 
+  const isRunning = state.status === "checking-onboarding" || state.status === "loading";
+
   useEffect(() => {
+    if (!isRunning) {
+      return;
+    }
     const stepTimer = setInterval(() => {
-      setActiveStep((step) =>
-        step < ANALYSIS_STEPS.length - 1 ? step + 1 : step
-      );
+      setActiveStep((step) => (step < ANALYSIS_STEPS.length - 1 ? step + 1 : step));
     }, STEP_INTERVAL_MS);
+    return () => clearInterval(stepTimer);
+  }, [isRunning]);
 
-    const redirectTimer = setTimeout(() => {
-      router.push("/overview");
-    }, REDIRECT_DELAY_MS);
+  useEffect(() => {
+    if (state.status === "empty") {
+      router.replace("/onboarding");
+    }
+  }, [state.status, router]);
 
-    return () => {
-      clearInterval(stepTimer);
-      clearTimeout(redirectTimer);
-    };
-  }, [router]);
+  useEffect(() => {
+    if (state.status === "success") {
+      router.replace("/overview");
+    }
+  }, [state.status, router]);
+
+  if (state.status === "error") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          <ArtistRadarErrorState message={state.message} onRetry={refetch} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -53,7 +71,7 @@ export default function AnalyzingPage() {
           Analyzing your artist profile...
         </h1>
         <p className="text-sm text-gray-400 mt-1.5">
-          This usually takes a few seconds for the first scan.
+          We&apos;re running the real analysis now. This can take a few seconds.
         </p>
 
         <ul className="mt-6 flex flex-col gap-2.5 text-left bg-card rounded-xl border border-slate-400/10 shadow-card-glow p-4">

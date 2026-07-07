@@ -6,7 +6,7 @@ interface SimilarArtistsSectionProps {
   artists: SimilarArtist[];
 }
 
-const MAX_CAROUSEL_ARTISTS = 20;
+const MAX_CAROUSEL_ARTISTS = 15;
 
 export default function SimilarArtistsSection({
   artists,

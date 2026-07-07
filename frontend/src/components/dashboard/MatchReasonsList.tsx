@@ -7,9 +7,9 @@ export default function MatchReasonsList({ reasons }: MatchReasonsListProps) {
   return (
     <ul className="flex flex-col gap-1 mt-2">
       {reasons.map((reason) => (
-        <li key={reason} className="flex items-start gap-1.5 text-xs text-gray-400">
+        <li key={reason} className="flex items-start gap-1.5 text-xs text-gray-400 min-w-0">
           <span className="w-1 h-1 rounded-full bg-accent-light/60 flex-shrink-0 mt-1.5" />
-          {reason}
+          <span className="line-clamp-2">{reason}</span>
         </li>
       ))}
     </ul>

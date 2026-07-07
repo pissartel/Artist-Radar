@@ -35,13 +35,17 @@ export default function BookingSection({
           View all
         </Link>
       </div>
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_272px] gap-5">
-        <BookingTabs opportunities={opportunities} />
-        <BookingInsightsPanel
-          topCities={topCities}
-          matchExplanations={matchExplanations}
-          sources={sources}
-        />
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] gap-5">
+        <div className="min-w-0">
+          <BookingTabs opportunities={opportunities} />
+        </div>
+        <div className="min-w-0">
+          <BookingInsightsPanel
+            topCities={topCities}
+            matchExplanations={matchExplanations}
+            sources={sources}
+          />
+        </div>
       </div>
     </section>
   );

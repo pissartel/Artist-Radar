@@ -92,7 +92,7 @@ export default function BookingOpportunityCard({
           {formattedDate && <span> · {formattedDate}</span>}
         </p>
 
-        <p className="text-xs text-gray-400 leading-relaxed mb-2">
+        <p className="text-xs text-gray-400 leading-relaxed mb-2 line-clamp-2">
           {opportunity.description}
         </p>
 

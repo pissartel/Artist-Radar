@@ -74,7 +74,9 @@ function mapArtistProfile(profile: BackendArtistProfile, request: ArtistRadarReq
     country,
     monthlyListeners: profile.spotify?.followers ?? profile.platformStats.spotifyFollowers ?? 0,
     growthPercent: 0,
-    imageUrl: profile.spotify?.imageUrl ?? undefined,
+    imageUrl: profile.imageUrl ?? undefined,
+    imageSource: profile.imageSource ?? null,
+    imageConfidence: profile.imageConfidence ?? null,
     platforms,
     spotify: profile.spotify ?? undefined,
   };
@@ -93,7 +95,9 @@ function mapSimilarArtist(artist: BackendSimilarArtist): SimilarArtist {
     reason: artist.reason,
     artistTier: ARTIST_TIER_MAP[artist.artistTier],
     platforms,
-    imageUrl: artist.spotify?.imageUrl ?? undefined,
+    imageUrl: artist.imageUrl ?? undefined,
+    imageSource: artist.imageSource ?? null,
+    imageConfidence: artist.imageConfidence ?? null,
     monthlyListeners: artist.spotify?.followers ?? artist.estimatedFollowers ?? undefined,
     spotify: artist.spotify ?? undefined,
   };

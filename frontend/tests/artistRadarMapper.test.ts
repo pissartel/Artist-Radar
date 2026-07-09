@@ -215,6 +215,103 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     expect(response.bookingOpportunities.every((opportunity) => Boolean(opportunity.category))).toBe(true);
   });
 
+  it("passes the generic imageUrl through for the main artist and similar artists, not spotify.imageUrl", () => {
+    const result = buildResult({
+      artistProfile: {
+        artistName: "Tuesday Fall",
+        city: "Paris",
+        country: "France",
+        genres: ["pop punk"],
+        socialLinks: {},
+        platformStats: {},
+        spotify: {
+          id: "abc123",
+          url: "https://open.spotify.com/artist/abc123",
+          imageUrl: "https://images.example.test/spotify-raw.jpg",
+          followers: 1000,
+          popularity: 20,
+          genres: ["pop punk"],
+        },
+        imageUrl: "https://images.example.test/resolved.jpg",
+        imageSource: "spotify",
+        imageConfidence: 0.9,
+      },
+      similarArtists: {
+        local_peer: [
+          {
+            name: "Neon Riot",
+            genres: ["pop punk"],
+            city: "Lyon",
+            country: "France",
+            reason: "Similar genre and audience size.",
+            artistTier: "small",
+            totalRelevance: 78,
+            estimatedFollowers: 4200,
+            spotify: {
+              id: "def456",
+              url: "https://open.spotify.com/artist/def456",
+              imageUrl: "https://images.example.test/spotify-raw-similar.jpg",
+              followers: 4200,
+              popularity: 15,
+              genres: ["pop punk"],
+            },
+            imageUrl: "https://images.example.test/resolved-similar.jpg",
+            imageSource: "spotify",
+            imageConfidence: 0.9,
+          },
+        ],
+      },
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+
+    expect(response.artist.imageUrl).toBe("https://images.example.test/resolved.jpg");
+    expect(response.artist.imageSource).toBe("spotify");
+    expect(response.artist.imageConfidence).toBe(0.9);
+    expect(response.similarArtists[0]?.imageUrl).toBe("https://images.example.test/resolved-similar.jpg");
+    expect(response.similarArtists[0]?.imageSource).toBe("spotify");
+  });
+
+  it("keeps imageUrl null when no trusted image source exists", () => {
+    const result = buildResult({
+      artistProfile: {
+        artistName: "Tuesday Fall",
+        city: "Paris",
+        country: "France",
+        genres: ["pop punk"],
+        socialLinks: {},
+        platformStats: {},
+        spotify: null,
+        imageUrl: null,
+        imageSource: null,
+        imageConfidence: null,
+      },
+      similarArtists: {
+        local_peer: [
+          {
+            name: "Neon Riot",
+            genres: ["pop punk"],
+            city: "Lyon",
+            country: "France",
+            reason: "Similar genre and audience size.",
+            artistTier: "small",
+            totalRelevance: 78,
+            estimatedFollowers: 4200,
+            spotify: null,
+            imageUrl: null,
+            imageSource: null,
+            imageConfidence: null,
+          },
+        ],
+      },
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+
+    expect(response.artist.imageUrl).toBeUndefined();
+    expect(response.similarArtists[0]?.imageUrl).toBeUndefined();
+  });
+
   it("falls back to request artist name and genre when the backend profile is missing them", () => {
     const result = buildResult({
       artistProfile: {

@@ -23,6 +23,7 @@ import {
   enrichArtistWithMusicBrainz,
   type MusicBrainzArtistMetadata
 } from "../services/musicBrainzService.js";
+import { resolveArtistImage } from "../services/artistImageResolver.js";
 import {
   verifyAndEnrichArtistCandidate,
   type ArtistVerificationResult,
@@ -381,7 +382,15 @@ async function enrichSimilarArtistsWithSpotify(
       }
     }
 
-    enriched.push({ ...artist, spotify: profile ? toSpotifyMetadata(profile) : null });
+    const spotifyMetadata = profile ? toSpotifyMetadata(profile) : null;
+    const resolvedImage = resolveArtistImage({ spotify: spotifyMetadata });
+    enriched.push({
+      ...artist,
+      spotify: spotifyMetadata,
+      imageUrl: resolvedImage.imageUrl,
+      imageSource: resolvedImage.imageSource,
+      imageConfidence: resolvedImage.imageConfidence
+    });
   }
 
   return enriched;
@@ -2169,6 +2178,15 @@ export function mapSpotifyArtistToSimilarArtist(
     sharedGenres.length > 0
       ? `Shared or adjacent genres: ${sharedGenres.join(", ")}.`
       : "Genre overlap is limited; retained only if overall similarity is still useful.";
+  const spotifyMetadata = {
+    id: artist.id,
+    url: artist.spotifyUrl,
+    imageUrl: artist.images[0] ?? null,
+    followers: artist.followers,
+    popularity: artist.popularity,
+    genres: artist.genres
+  };
+  const resolvedImage = resolveArtistImage({ spotify: spotifyMetadata });
 
   return {
     name: artist.name,
@@ -2225,14 +2243,10 @@ export function mapSpotifyArtistToSimilarArtist(
     discardedTags: cleanedGenreResult.discardedTags,
     matchedQuery: null,
     searchRelevanceBoost: 0,
-    spotify: {
-      id: artist.id,
-      url: artist.spotifyUrl,
-      imageUrl: artist.images[0] ?? null,
-      followers: artist.followers,
-      popularity: artist.popularity,
-      genres: artist.genres
-    }
+    spotify: spotifyMetadata,
+    imageUrl: resolvedImage.imageUrl,
+    imageSource: resolvedImage.imageSource,
+    imageConfidence: resolvedImage.imageConfidence
   };
 }
 
@@ -2525,7 +2539,10 @@ function buildMockSimilarArtist(artist: SimilarArtistSeed, input: SimilarArtists
       platforms: {}
     },
     discardedTags: [],
-    spotify: null
+    spotify: null,
+    imageUrl: null,
+    imageSource: null,
+    imageConfidence: null
   };
 }
 
@@ -2594,7 +2611,10 @@ function normalizeUserProvidedArtists(input: SimilarArtistsFinderInput): Similar
           platforms: {}
         },
         discardedTags: [],
-        spotify: null
+        spotify: null,
+        imageUrl: null,
+        imageSource: null,
+        imageConfidence: null
       };
     });
 }

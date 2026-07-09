@@ -9,6 +9,7 @@ import {
 } from "../schemas.js";
 import { getSpotifyArtistProfile, type SpotifyArtistProfile } from "../services/spotifyService.js";
 import { getYouTubeChannelStats, type YouTubeChannelStats } from "../services/youtubeService.js";
+import { resolveArtistImage } from "../services/artistImageResolver.js";
 import { debugLog } from "../utils/logger.js";
 import { estimateArtistSize } from "./sizeEstimator.js";
 
@@ -61,6 +62,8 @@ export async function collectArtistProfile(rawInput: ArtistInput): Promise<Artis
   const estimatedLevel = sizeEstimate.estimatedLevel;
   const confidence = calculateConfidence(socialLinks, platformStats, estimatedLevel);
   const notes = buildNotes(socialLinks, platformStats, estimatedLevel, spotifyProfile, sizeEstimate);
+  const spotifyMetadata = toSpotifyMetadata(spotifyProfile);
+  const resolvedImage = resolveArtistImage({ spotify: spotifyMetadata });
   debugLog("profile", "artist enrichment results", {
     spotifyEnrichmentSucceeded: Boolean(spotifyProfile),
     youtubeEnrichmentSucceeded: Boolean(youtubeStats),
@@ -86,7 +89,10 @@ export async function collectArtistProfile(rawInput: ArtistInput): Promise<Artis
     estimatedLevel,
     confidence,
     notes,
-    spotify: toSpotifyMetadata(spotifyProfile)
+    spotify: spotifyMetadata,
+    imageUrl: resolvedImage.imageUrl,
+    imageSource: resolvedImage.imageSource,
+    imageConfidence: resolvedImage.imageConfidence
   });
 }
 

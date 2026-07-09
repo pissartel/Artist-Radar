@@ -17,6 +17,18 @@ export interface SpotifyMetadata {
   genres: string[];
 }
 
+// Where the generic artist image came from. Spotify is the preferred source
+// today, but the UI should not assume it: other trusted providers can be
+// added on the backend without any frontend change.
+export type ImageSource =
+  | "spotify"
+  | "lastfm"
+  | "musicbrainz"
+  | "website"
+  | "manual"
+  | "fallback"
+  | null;
+
 export interface ArtistProfile {
   id: string;
   name: string;
@@ -27,6 +39,8 @@ export interface ArtistProfile {
   monthlyListeners: number;
   growthPercent: number;
   imageUrl?: string;
+  imageSource?: ImageSource;
+  imageConfidence?: number | null;
   verified?: boolean;
   platforms?: Platform[];
   spotify?: SpotifyMetadata;
@@ -51,6 +65,8 @@ export interface SimilarArtist {
   artistTier?: ArtistTier;
   platforms?: Platform[];
   imageUrl?: string;
+  imageSource?: ImageSource;
+  imageConfidence?: number | null;
   monthlyListeners?: number;
   spotify?: SpotifyMetadata;
   // Future fields expected from the similar-artist pipeline (not yet populated in V1):

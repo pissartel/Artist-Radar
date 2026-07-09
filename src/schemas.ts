@@ -232,8 +232,25 @@ export const SimilarArtistSchema = z.object({
   searchRelevanceBoost: z.number().int().min(0).max(100).optional()
 });
 
+export const OpportunityInternalReviewSchema = z.object({
+  needsReview: z.boolean(),
+  missingFields: z.array(z.string().trim().min(1)),
+  confidence: ConfidenceScoreSchema
+});
+
+export const OpportunityDateRangeSchema = z.object({
+  start: z.string().trim().min(1),
+  end: z.string().trim().min(1)
+});
+
 export const OpportunitySchema = z.object({
   name: z.string().trim().min(1),
+  // Raw scraped title, kept for traceability. Falls back to `name` for
+  // opportunities produced outside the booking pipeline (e.g. promo mode).
+  rawTitle: z.string().trim().min(1).optional(),
+  // Clean, user-facing title. Frontend cards should render this instead of `name`.
+  displayTitle: z.string().trim().min(1).optional(),
+  summary: z.string().trim().min(1).optional(),
   type: z.string().trim().min(1),
   city: z.string().trim().min(1).nullable(),
   country: z.string().trim().min(1).nullable(),
@@ -241,7 +258,11 @@ export const OpportunitySchema = z.object({
   contact: z.string().trim().min(1).nullable(),
   reason: z.string().trim().min(1),
   score: z.number().int().min(0).max(100),
-  suggested_message: z.string().trim().min(1)
+  suggested_message: z.string().trim().min(1),
+  date: z.string().trim().min(1).nullable().optional(),
+  dateRange: OpportunityDateRangeSchema.nullable().optional(),
+  // Internal-only metadata; must not be surfaced directly on frontend cards.
+  internalReview: OpportunityInternalReviewSchema.optional()
 });
 
 export const OpportunitySearchResultSchema = z.object({
@@ -269,4 +290,6 @@ export type EventCandidate = z.infer<typeof EventCandidateSchema>;
 export type VenueCandidate = z.infer<typeof VenueCandidateSchema>;
 export type SimilarArtist = z.infer<typeof SimilarArtistSchema>;
 export type Opportunity = z.infer<typeof OpportunitySchema>;
+export type OpportunityInternalReview = z.infer<typeof OpportunityInternalReviewSchema>;
+export type OpportunityDateRange = z.infer<typeof OpportunityDateRangeSchema>;
 export type OpportunitySearchResult = z.infer<typeof OpportunitySearchResultSchema>;

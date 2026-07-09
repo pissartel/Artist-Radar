@@ -32,6 +32,8 @@ const ISO_DATE_PATTERN = /\b(20\d{2})[-/](0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[0
 const EUROPEAN_DATE_PATTERN = /\b(0?[1-9]|[12]\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.](20\d{2})\b/;
 const FRENCH_WRITTEN_DATE_PATTERN = /\b(\d{1,2})(?:er)?\s+([a-z]+)\.?(?:\s+(\d{4}))?\b/g;
 const SHORT_EUROPEAN_DATE_PATTERN = /\b(0?[1-9]|[12]\d|3[01])[/.](0?[1-9]|1[0-2])\b(?!\d)/;
+const FRENCH_WRITTEN_DATE_RANGE_PATTERN =
+  /\b(\d{1,2})(?:er)?\s*(?:au|-|–|to)\s*(\d{1,2})(?:er)?\s+([a-z]+)\.?(?:\s+(\d{4}))?\b/;
 
 function stripAccents(value: string): string {
   return value.normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -101,4 +103,32 @@ export function extractEventDate(text: string, referenceDate: Date = new Date())
   }
 
   return null;
+}
+
+/**
+ * Extracts a multi-day event date range (festivals, weekend bills) from
+ * free-form text, e.g. "12 au 14 juin 2026" or "du 12-14 juin". Returns null
+ * when no range pattern with two valid day numbers sharing one month is found.
+ */
+export function extractEventDateRange(
+  text: string,
+  referenceDate: Date = new Date()
+): { start: string; end: string } | null {
+  const normalized = stripAccents(text).toLowerCase();
+  const match = normalized.match(FRENCH_WRITTEN_DATE_RANGE_PATTERN);
+  if (!match) return null;
+
+  const month = FRENCH_MONTHS[match[3]];
+  if (!month) return null;
+
+  const startDay = Number(match[1]);
+  const endDay = Number(match[2]);
+  if (endDay <= startDay) return null;
+
+  const year = match[4] ? Number(match[4]) : null;
+  const start = year ? toIsoDate(year, month, startDay) : resolveYearlessDate(month, startDay, referenceDate);
+  const end = year ? toIsoDate(year, month, endDay) : resolveYearlessDate(month, endDay, referenceDate);
+  if (!start || !end) return null;
+
+  return { start, end };
 }

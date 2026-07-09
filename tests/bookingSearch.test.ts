@@ -152,6 +152,40 @@ describe("Booking Search core", () => {
     expect(Array.isArray(result.opportunities[0]?.warnings)).toBe(true);
   });
 
+  it("builds a display title, summary and internal review alongside the raw title", async () => {
+    const provider: BookingSourceProvider = {
+      providerName: "qa_title_provider",
+      async search() {
+        return {
+          sourceProvider: "qa_title_provider",
+          searchedQueries: ["qa"],
+          warnings: [],
+          metadata: {},
+          targets: [
+            baseTarget({
+              name: "music.box PACA - Mina Warren en replay - France TV",
+              genres: ["pop punk"],
+              description: "Programmation pop punk.",
+              contacts: [],
+              confidence: 0.9
+            })
+          ]
+        };
+      }
+    };
+
+    const result = await searchBookingOpportunities(input, { providers: [provider] });
+    const opportunity = result.opportunities[0];
+
+    expect(opportunity?.rawTitle).toBe("music.box PACA - Mina Warren en replay - France TV");
+    expect(opportunity?.displayTitle).toBe("music.box PACA - Mina Warren");
+    expect(opportunity?.summary).toContain("music.box PACA - Mina Warren");
+    expect(opportunity?.internalReview.needsReview).toBe(true);
+    expect(opportunity?.internalReview.missingFields).toEqual(expect.arrayContaining(["date", "contact"]));
+    expect(opportunity?.internalReview.confidence).toBeGreaterThanOrEqual(0);
+    expect(opportunity?.internalReview.confidence).toBeLessThanOrEqual(1);
+  });
+
   it("searchBookingOpportunities returns sorted opportunities with reasons and contacts when available", async () => {
     const provider: BookingSourceProvider = {
       providerName: "qa_booking_provider",

@@ -1,11 +1,8 @@
 import Link from "next/link";
 import type { Opportunity } from "@/types";
 import {
-  getMissingFields,
-  getOpportunitySource,
-  getOpportunityStatus,
+  getDisplayTitle,
   getOpportunitySubtitle,
-  getOpportunityTitle,
   getShortRelevanceReason,
 } from "@/lib/opportunity";
 
@@ -42,32 +39,14 @@ function ScoreBadge({ score }: { score: number }) {
   );
 }
 
-function StatusBadge({ status }: { status: "verified" | "needs_review" }) {
-  if (status === "verified") {
-    return (
-      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md border text-emerald-400 bg-emerald-400/10 border-emerald-400/20 whitespace-nowrap">
-        Verified
-      </span>
-    );
-  }
-  return (
-    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md border text-amber-400 bg-amber-400/10 border-amber-400/20 whitespace-nowrap">
-      Needs review
-    </span>
-  );
-}
-
 export default function BookingOpportunityCard({
   opportunity,
 }: BookingOpportunityCardProps) {
   const typeBadgeClass =
     TYPE_COLORS[opportunity.type] ?? "text-gray-400 bg-gray-400/10 border-gray-400/20";
-  const title = getOpportunityTitle(opportunity);
+  const title = getDisplayTitle(opportunity);
   const subtitle = getOpportunitySubtitle(opportunity);
   const relevanceReason = getShortRelevanceReason(opportunity);
-  const missingFields = getMissingFields(opportunity);
-  const status = getOpportunityStatus(opportunity);
-  const source = getOpportunitySource(opportunity);
 
   return (
     <div className="bg-card rounded-xl p-4 border border-slate-400/10 shadow-card hover:bg-card-hover hover:border-accent/30 hover:shadow-card-hover transition-all duration-200 flex gap-4">
@@ -81,7 +60,6 @@ export default function BookingOpportunityCard({
         <div className="flex items-start justify-between gap-2 mb-1">
           <p className="text-sm font-semibold text-white truncate min-w-0">{title}</p>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <StatusBadge status={status} />
             <button
               type="button"
               aria-label="Bookmark"
@@ -119,17 +97,6 @@ export default function BookingOpportunityCard({
             <span className="text-gray-500">Why relevant: </span>
             {relevanceReason}
           </p>
-        )}
-
-        {missingFields.length > 0 && (
-          <p className="text-xs text-amber-400/80 leading-relaxed mb-2">
-            <span className="text-amber-400/60">Missing: </span>
-            {missingFields.join(" · ")}
-          </p>
-        )}
-
-        {source && (
-          <p className="text-[10px] text-gray-600 mt-1">Source: {source}</p>
         )}
 
         <div className="mt-3">

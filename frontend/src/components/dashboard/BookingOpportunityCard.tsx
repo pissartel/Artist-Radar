@@ -1,7 +1,13 @@
 import Link from "next/link";
 import type { Opportunity } from "@/types";
-import MatchReasonsList from "./MatchReasonsList";
-import { formatOpportunityDate, getOpportunitySource } from "@/lib/opportunity";
+import {
+  getMissingFields,
+  getOpportunitySource,
+  getOpportunityStatus,
+  getOpportunitySubtitle,
+  getOpportunityTitle,
+  getShortRelevanceReason,
+} from "@/lib/opportunity";
 
 export const TYPE_LABELS: Record<string, string> = {
   venue: "Venue",
@@ -36,36 +42,46 @@ function ScoreBadge({ score }: { score: number }) {
   );
 }
 
+function StatusBadge({ status }: { status: "verified" | "needs_review" }) {
+  if (status === "verified") {
+    return (
+      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md border text-emerald-400 bg-emerald-400/10 border-emerald-400/20 whitespace-nowrap">
+        Verified
+      </span>
+    );
+  }
+  return (
+    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md border text-amber-400 bg-amber-400/10 border-amber-400/20 whitespace-nowrap">
+      Needs review
+    </span>
+  );
+}
+
 export default function BookingOpportunityCard({
   opportunity,
 }: BookingOpportunityCardProps) {
   const typeBadgeClass =
     TYPE_COLORS[opportunity.type] ?? "text-gray-400 bg-gray-400/10 border-gray-400/20";
-  const formattedDate = formatOpportunityDate(opportunity.date);
+  const title = getOpportunityTitle(opportunity);
+  const subtitle = getOpportunitySubtitle(opportunity);
+  const relevanceReason = getShortRelevanceReason(opportunity);
+  const missingFields = getMissingFields(opportunity);
+  const status = getOpportunityStatus(opportunity);
   const source = getOpportunitySource(opportunity);
 
   return (
     <div className="bg-card rounded-xl p-4 border border-slate-400/10 shadow-card hover:bg-card-hover hover:border-accent/30 hover:shadow-card-hover transition-all duration-200 flex gap-4">
       <div className="w-11 h-11 rounded-xl bg-accent/15 border border-accent/25 flex items-center justify-center flex-shrink-0">
         <span className="text-accent-light text-base font-semibold">
-          {opportunity.title.charAt(0)}
+          {title.charAt(0)}
         </span>
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2 mb-1">
-          <div className="flex items-center gap-2 min-w-0 flex-wrap">
-            <p className="text-sm font-semibold text-white truncate">
-              {opportunity.title}
-            </p>
-            <span
-              className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md border whitespace-nowrap flex-shrink-0 ${typeBadgeClass}`}
-            >
-              {TYPE_LABELS[opportunity.type] ?? opportunity.type}
-            </span>
-          </div>
+          <p className="text-sm font-semibold text-white truncate min-w-0">{title}</p>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <ScoreBadge score={opportunity.matchScore} />
+            <StatusBadge status={status} />
             <button
               type="button"
               aria-label="Bookmark"
@@ -87,32 +103,33 @@ export default function BookingOpportunityCard({
           </div>
         </div>
 
-        <p className="text-xs text-gray-500 mb-1.5">
-          {opportunity.location}
-          {formattedDate && <span> · {formattedDate}</span>}
-        </p>
+        <p className="text-xs text-gray-500 mb-1.5">{subtitle}</p>
 
-        <p className="text-xs text-gray-400 leading-relaxed mb-2 line-clamp-2">
-          {opportunity.description}
-        </p>
+        <div className="flex items-center gap-2 mb-2">
+          <span
+            className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md border whitespace-nowrap ${typeBadgeClass}`}
+          >
+            {TYPE_LABELS[opportunity.type] ?? opportunity.type}
+          </span>
+          <ScoreBadge score={opportunity.matchScore} />
+        </div>
 
-        {opportunity.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-1.5">
-            {opportunity.tags.map((tag) => (
-              <span
-                key={tag}
-                className="text-[10px] text-gray-500 bg-white/5 border border-slate-400/10 px-1.5 py-0.5 rounded-md"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
+        {relevanceReason && (
+          <p className="text-xs text-gray-400 leading-relaxed mb-2 line-clamp-2">
+            <span className="text-gray-500">Why relevant: </span>
+            {relevanceReason}
+          </p>
         )}
 
-        <MatchReasonsList reasons={opportunity.matchReasons} />
+        {missingFields.length > 0 && (
+          <p className="text-xs text-amber-400/80 leading-relaxed mb-2">
+            <span className="text-amber-400/60">Missing: </span>
+            {missingFields.join(" · ")}
+          </p>
+        )}
 
         {source && (
-          <p className="text-[10px] text-gray-600 mt-2">Source: {source}</p>
+          <p className="text-[10px] text-gray-600 mt-1">Source: {source}</p>
         )}
 
         <div className="mt-3">

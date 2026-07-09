@@ -11,6 +11,15 @@
 
 export type BackendMode = "booking" | "promo";
 
+export interface BackendSpotifyMetadata {
+  id: string;
+  url: string | null;
+  imageUrl: string | null;
+  followers: number | null;
+  popularity: number | null;
+  genres: string[];
+}
+
 export interface BackendArtistInput {
   mode: BackendMode;
   artist: string;
@@ -31,6 +40,7 @@ export interface BackendArtistProfile {
   platformStats: {
     spotifyFollowers?: number | null;
   };
+  spotify?: BackendSpotifyMetadata | null;
 }
 
 export type BackendArtistTier = "small" | "medium" | "large" | "unknown";
@@ -44,6 +54,7 @@ export interface BackendSimilarArtist {
   artistTier: BackendArtistTier;
   totalRelevance: number;
   estimatedFollowers: number | null;
+  spotify?: BackendSpotifyMetadata | null;
 }
 
 export interface BackendOpportunity {

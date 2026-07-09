@@ -6,6 +6,17 @@ export interface Platform {
   url?: string;
 }
 
+// Raw Spotify metadata for an artist, as fetched by the backend enrichment
+// step. Populated only when a confident Spotify match was found.
+export interface SpotifyMetadata {
+  id: string;
+  url: string | null;
+  imageUrl: string | null;
+  followers: number | null;
+  popularity: number | null;
+  genres: string[];
+}
+
 export interface ArtistProfile {
   id: string;
   name: string;
@@ -18,6 +29,7 @@ export interface ArtistProfile {
   imageUrl?: string;
   verified?: boolean;
   platforms?: Platform[];
+  spotify?: SpotifyMetadata;
 }
 
 export interface KpiMetric {
@@ -40,6 +52,7 @@ export interface SimilarArtist {
   platforms?: Platform[];
   imageUrl?: string;
   monthlyListeners?: number;
+  spotify?: SpotifyMetadata;
   // Future fields expected from the similar-artist pipeline (not yet populated in V1):
   matchReasons?: string[];
   sharedGenres?: string[];

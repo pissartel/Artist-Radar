@@ -61,6 +61,10 @@ interface SpotifyRelatedArtistsResponse {
   artists?: SpotifyArtistApiResponse[];
 }
 
+interface SpotifySeveralArtistsResponse {
+  artists?: Array<SpotifyArtistApiResponse | null>;
+}
+
 interface SpotifyEnv {
   MOCK_AI?: string;
   SPOTIFY_CLIENT_ID?: string;
@@ -166,7 +170,7 @@ export async function searchSpotifyArtists(
 
   try {
     debugLog("spotify", "Spotify artist search query", { query: trimmedQuery, limit });
-    const token = await fetchSpotifyAccessToken(env.SPOTIFY_CLIENT_ID, env.SPOTIFY_CLIENT_SECRET, fetchImpl);
+    const token = await getSpotifyAccessToken(env.SPOTIFY_CLIENT_ID, env.SPOTIFY_CLIENT_SECRET, fetchImpl);
     if (!token) {
       warnLog("spotify", "Spotify artist search skipped: could not obtain an access token.", {
         spotifyClientIdPresent: true,
@@ -209,6 +213,105 @@ export async function searchSpotifyArtists(
   }
 }
 
+// Confidence-checked lookup for enrichment (main artist / similar artists),
+// as opposed to searchSpotifyArtists which returns raw candidates for
+// similar-artist discovery. Only returns a match when the normalized name is
+// an exact match, to avoid attaching the wrong Spotify profile to a small
+// artist that shares a name with a bigger act.
+export async function searchSpotifyArtistByName(
+  name: string,
+  env: SpotifyEnv = process.env,
+  fetchImpl: FetchLike = fetch,
+  capabilities: SpotifyCapabilities = createSpotifyCapabilities(env)
+): Promise<SpotifyArtistProfile | null> {
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    return null;
+  }
+
+  const candidates = await searchSpotifyArtists(trimmedName, 5, env, fetchImpl, capabilities);
+  const normalizedTarget = normalizeArtistNameForMatching(trimmedName);
+  const confidentMatch = candidates.find((candidate) => normalizeArtistNameForMatching(candidate.name) === normalizedTarget);
+
+  debugLog("spotify", "Spotify search-by-name confidence check", {
+    name: trimmedName,
+    candidateCount: candidates.length,
+    confidentMatchFound: Boolean(confidentMatch)
+  });
+
+  return confidentMatch ?? null;
+}
+
+function normalizeArtistNameForMatching(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+// Batches lookups via Spotify's multi-artist endpoint (max 50 ids per call)
+// so enrichment can resolve many similar artists without one request each.
+export async function getSeveralSpotifyArtistsByIds(
+  artistIds: string[],
+  env: SpotifyEnv = process.env,
+  fetchImpl: FetchLike = fetch,
+  capabilities: SpotifyCapabilities = createSpotifyCapabilities(env)
+): Promise<SpotifyArtistProfile[]> {
+  const ids = Array.from(new Set(artistIds.map((id) => id.trim()).filter(Boolean)));
+  if (ids.length === 0) {
+    return [];
+  }
+
+  if (!env.SPOTIFY_CLIENT_ID || !env.SPOTIFY_CLIENT_SECRET) {
+    return [];
+  }
+
+  const token = await getSpotifyAccessToken(env.SPOTIFY_CLIENT_ID, env.SPOTIFY_CLIENT_SECRET, fetchImpl);
+  if (!token) {
+    warnLog("spotify", "Several Spotify artists lookup skipped: could not obtain an access token.", {
+      spotifyClientIdPresent: true,
+      spotifyClientSecretPresent: true
+    });
+    return [];
+  }
+
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += 50) {
+    batches.push(ids.slice(i, i + 50));
+  }
+
+  const results: SpotifyArtistProfile[] = [];
+  for (const batch of batches) {
+    const response = await fetchImpl(`https://api.spotify.com/v1/artists?ids=${batch.map(encodeURIComponent).join(",")}`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    debugLog("spotify", "several artists request status", { status: response.status, batchSize: batch.length });
+
+    if (!response.ok) {
+      warnLog("spotify", "Several Spotify artists lookup failed.", {
+        status: response.status,
+        batchSize: batch.length
+      });
+      continue;
+    }
+
+    const data = (await response.json()) as SpotifySeveralArtistsResponse;
+    const artists = (data.artists ?? [])
+      .filter((artist): artist is SpotifyArtistApiResponse => Boolean(artist))
+      .map((artist) => mapSpotifyArtistApiResponse(artist, capabilities))
+      .filter((artist): artist is SpotifyArtistProfile => artist !== null);
+    results.push(...artists);
+  }
+
+  debugLog("spotify", "several artists result count", { requested: ids.length, resolved: results.length });
+  return results;
+}
+
 export async function getSpotifyRelatedArtists(
   spotifyArtistId: string,
   env: SpotifyEnv = process.env,
@@ -234,7 +337,7 @@ export async function getSpotifyRelatedArtists(
 
   try {
     debugLog("spotify", "Spotify related artists request", { artistId });
-    const token = await fetchSpotifyAccessToken(env.SPOTIFY_CLIENT_ID, env.SPOTIFY_CLIENT_SECRET, fetchImpl);
+    const token = await getSpotifyAccessToken(env.SPOTIFY_CLIENT_ID, env.SPOTIFY_CLIENT_SECRET, fetchImpl);
     if (!token) {
       warnLog("spotify", "Spotify related artists skipped: could not obtain an access token.", {
         spotifyClientIdPresent: true,
@@ -333,7 +436,7 @@ export async function getSpotifyArtistById(
     return null;
   }
 
-  const token = await fetchSpotifyAccessToken(env.SPOTIFY_CLIENT_ID, env.SPOTIFY_CLIENT_SECRET, fetchImpl);
+  const token = await getSpotifyAccessToken(env.SPOTIFY_CLIENT_ID, env.SPOTIFY_CLIENT_SECRET, fetchImpl);
   if (!token) {
     warnLog("spotify", "Spotify artist profile skipped: could not obtain an access token.", {
       spotifyClientIdPresent: true,
@@ -484,7 +587,7 @@ async function fetchSpotifyArtistTopTrackStats(
   };
 }
 
-async function fetchSpotifyAccessToken(
+export async function getSpotifyAccessToken(
   clientId: string,
   clientSecret: string,
   fetchImpl: FetchLike

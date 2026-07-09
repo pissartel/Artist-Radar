@@ -8,6 +8,8 @@ export interface ArtistRadarRequest {
   // Defaults to true: booking is the current product focus.
   // When false, booking-related fields in the response are left empty.
   enableBooking?: boolean;
+  // Optional Spotify artist URL used to enrich the main artist with Spotify metadata.
+  spotifyUrl?: string;
 }
 
 // Normalized response returned by POST /api/artist-radar.

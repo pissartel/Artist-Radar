@@ -7,10 +7,11 @@ interface RawRequestBody {
   genre?: unknown;
   location?: unknown;
   enableBooking?: unknown;
+  spotifyUrl?: unknown;
 }
 
 function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | null {
-  const { artistName, genre, location, enableBooking } = body;
+  const { artistName, genre, location, enableBooking, spotifyUrl } = body;
 
   if (
     typeof artistName !== "string" || !artistName.trim() ||
@@ -24,12 +25,29 @@ function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | nul
     return null;
   }
 
+  if (spotifyUrl !== undefined && typeof spotifyUrl !== "string") {
+    return null;
+  }
+
   return {
     artistName: artistName.trim(),
     genre: genre.trim(),
     location: location.trim(),
     enableBooking,
+    ...(spotifyUrl?.trim() ? { spotifyUrl: spotifyUrl.trim() } : {}),
   };
+}
+
+function isValidHttpUrl(value: string | undefined): value is string {
+  if (!value) {
+    return false;
+  }
+
+  try {
+    return ["http:", "https:"].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
 }
 
 function logBookingProviderDiagnostics(): void {
@@ -65,6 +83,7 @@ export async function POST(request: Request): Promise<Response> {
       artist: artistRadarRequest.artistName,
       city: artistRadarRequest.location,
       genre: artistRadarRequest.genre,
+      spotifyUrl: isValidHttpUrl(artistRadarRequest.spotifyUrl) ? artistRadarRequest.spotifyUrl : undefined,
     });
 
     const result = await runOpportunitySearch(input);

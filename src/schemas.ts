@@ -99,6 +99,15 @@ export const PopularitySchema = z.object({
 
 const OptionalUrlSchema = z.string().trim().url().nullable().optional();
 
+export const SpotifyMetadataSchema = z.object({
+  id: z.string().trim().min(1),
+  url: z.string().trim().url().nullable(),
+  imageUrl: z.string().trim().url().nullable(),
+  followers: z.number().int().nonnegative().nullable(),
+  popularity: z.number().int().min(0).max(100).nullable(),
+  genres: z.array(z.string().trim().min(1)).default([])
+});
+
 export const SocialLinksSchema = z.object({
   spotifyUrl: OptionalUrlSchema,
   youtubeUrl: OptionalUrlSchema,
@@ -142,7 +151,8 @@ export const ArtistProfileSchema = z.object({
   platformStats: PlatformStatsSchema.default({}),
   estimatedLevel: EstimatedArtistLevelSchema.default("unknown"),
   confidence: ConfidenceScoreSchema,
-  notes: z.array(z.string().trim().min(1)).default([])
+  notes: z.array(z.string().trim().min(1)).default([]),
+  spotify: SpotifyMetadataSchema.nullable().default(null)
 });
 
 export const LineupStatusSchema = z.enum([
@@ -229,7 +239,8 @@ export const SimilarArtistSchema = z.object({
   }),
   discardedTags: z.array(z.string().trim().min(1)).default([]),
   matchedQuery: z.string().trim().min(1).nullable().optional(),
-  searchRelevanceBoost: z.number().int().min(0).max(100).optional()
+  searchRelevanceBoost: z.number().int().min(0).max(100).optional(),
+  spotify: SpotifyMetadataSchema.nullable().default(null)
 });
 
 export const OpportunitySchema = z.object({
@@ -261,6 +272,7 @@ export type GenreEvidence = z.infer<typeof GenreEvidenceSchema>;
 export type LocationEvidence = z.infer<typeof LocationEvidenceSchema>;
 export type SizeEvidence = z.infer<typeof SizeEvidenceSchema>;
 export type Popularity = z.infer<typeof PopularitySchema>;
+export type SpotifyMetadata = z.infer<typeof SpotifyMetadataSchema>;
 export type SocialLinks = z.infer<typeof SocialLinksSchema>;
 export type PlatformStats = z.infer<typeof PlatformStatsSchema>;
 export type ArtistProfile = z.infer<typeof ArtistProfileSchema>;

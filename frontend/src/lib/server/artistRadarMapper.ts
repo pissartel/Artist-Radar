@@ -52,10 +52,11 @@ function mapArtistProfile(profile: BackendArtistProfile, request: ArtistRadarReq
   const city = profile.city ?? request.location;
   const country = profile.country ?? "";
   const genres = profile.genres.length > 0 ? profile.genres : [request.genre];
+  const spotifyUrl = profile.spotify?.url ?? profile.socialLinks.spotifyUrl;
 
   const platforms: ArtistProfile["platforms"] = [];
-  if (profile.socialLinks.spotifyUrl) {
-    platforms.push({ type: "spotify", url: profile.socialLinks.spotifyUrl });
+  if (spotifyUrl) {
+    platforms.push({ type: "spotify", url: spotifyUrl });
   }
   if (profile.socialLinks.instagramUrl) {
     platforms.push({ type: "instagram", url: profile.socialLinks.instagramUrl });
@@ -71,13 +72,18 @@ function mapArtistProfile(profile: BackendArtistProfile, request: ArtistRadarReq
     location: joinLocation(city, country) || city,
     city,
     country,
-    monthlyListeners: profile.platformStats.spotifyFollowers ?? 0,
+    monthlyListeners: profile.spotify?.followers ?? profile.platformStats.spotifyFollowers ?? 0,
     growthPercent: 0,
+    imageUrl: profile.spotify?.imageUrl ?? undefined,
     platforms,
+    spotify: profile.spotify ?? undefined,
   };
 }
 
 function mapSimilarArtist(artist: BackendSimilarArtist): SimilarArtist {
+  const spotifyUrl = artist.spotify?.url ?? undefined;
+  const platforms: SimilarArtist["platforms"] = spotifyUrl ? [{ type: "spotify", url: spotifyUrl }] : [];
+
   return {
     id: slugify(artist.name),
     name: artist.name,
@@ -86,7 +92,10 @@ function mapSimilarArtist(artist: BackendSimilarArtist): SimilarArtist {
     matchScore: artist.totalRelevance,
     reason: artist.reason,
     artistTier: ARTIST_TIER_MAP[artist.artistTier],
-    monthlyListeners: artist.estimatedFollowers ?? undefined,
+    platforms,
+    imageUrl: artist.spotify?.imageUrl ?? undefined,
+    monthlyListeners: artist.spotify?.followers ?? artist.estimatedFollowers ?? undefined,
+    spotify: artist.spotify ?? undefined,
   };
 }
 

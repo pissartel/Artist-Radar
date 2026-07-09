@@ -30,10 +30,13 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
     return null;
   }
 
+  const spotifyUrl = onboarding.spotifyUrl?.trim();
+
   return {
     artistName,
     genre,
     location,
     enableBooking: onboarding.mainGoal !== "similar_artists",
+    ...(spotifyUrl ? { spotifyUrl } : {}),
   };
 }

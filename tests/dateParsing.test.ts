@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractEventDate } from "../src/booking/dateParsing.js";
+import { extractEventDate, extractEventDateRange } from "../src/booking/dateParsing.js";
 
 const REFERENCE_DATE = new Date("2026-07-05T00:00:00Z");
 
@@ -50,5 +50,29 @@ describe("extractEventDate", () => {
 
   it("prefers the ISO/European numeric match over an unrelated number+word pair", () => {
     expect(extractEventDate("12/06/2026, salle 3 ouverture", REFERENCE_DATE)).toBe("2026-06-12");
+  });
+});
+
+describe("extractEventDateRange", () => {
+  it("parses a 'du X au Y month year' French festival range", () => {
+    expect(extractEventDateRange("Festival du 12 au 14 juin 2026", REFERENCE_DATE)).toEqual({
+      start: "2026-06-12",
+      end: "2026-06-14"
+    });
+  });
+
+  it("parses a hyphenated day range without an explicit year, rolling forward when past", () => {
+    expect(extractEventDateRange("Festival 12-14 juin", REFERENCE_DATE)).toEqual({
+      start: "2027-06-12",
+      end: "2027-06-14"
+    });
+  });
+
+  it("returns null when there is no range pattern", () => {
+    expect(extractEventDateRange("Concert le 12 juin 2026", REFERENCE_DATE)).toBeNull();
+  });
+
+  it("returns null when the second day is not after the first", () => {
+    expect(extractEventDateRange("Festival du 14 au 12 juin 2026", REFERENCE_DATE)).toBeNull();
   });
 });

@@ -138,6 +138,9 @@ export async function runOpportunitySearch(
 function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpportunity): Opportunity {
   return {
     name: opportunity.name,
+    rawTitle: opportunity.rawTitle,
+    displayTitle: opportunity.displayTitle,
+    summary: opportunity.summary,
     type: opportunity.type,
     city: opportunity.city,
     country: opportunity.country,
@@ -145,7 +148,10 @@ function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpportunit
     contact: opportunity.contact,
     reason: opportunity.reason,
     score: opportunity.score,
-    suggested_message: opportunity.fitSummary
+    suggested_message: opportunity.fitSummary,
+    date: opportunity.eventDate,
+    dateRange: opportunity.dateRange,
+    internalReview: opportunity.internalReview
   };
 }
 

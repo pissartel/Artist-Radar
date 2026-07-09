@@ -1,4 +1,5 @@
 import { classifyBookingTarget } from "./classifyTarget.js";
+import { extractEventDateRange } from "./dateParsing.js";
 import type { BookingTarget, RawBookingSource } from "./types.js";
 
 export function normalizeBookingSource(rawSource: RawBookingSource): BookingTarget | null {
@@ -15,6 +16,7 @@ export function normalizeBookingSource(rawSource: RawBookingSource): BookingTarg
   return {
     ...target,
     sourceUrl,
+    eventDateRange: rawSource.text ? extractEventDateRange(rawSource.text) : null,
     contacts: target.contacts.map((contact) => ({
       ...contact,
       sourceUrl: contact.sourceUrl ?? sourceUrl

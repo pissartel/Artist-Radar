@@ -65,6 +65,7 @@ export interface BookingTarget {
   estimatedArtistTier?: ArtistTier | null;
   pastProgramming?: string[];
   eventDate?: string | null;
+  eventDateRange?: { start: string; end: string } | null;
   isFutureEvent?: boolean | null;
   ageMonths?: number | null;
   deadline?: string | null;
@@ -129,8 +130,17 @@ export interface BookingScore {
   warnings: string[];
 }
 
+export interface OpportunityInternalReview {
+  needsReview: boolean;
+  missingFields: string[];
+  confidence: number;
+}
+
 export interface BookingOpportunity {
   name: string;
+  rawTitle: string;
+  displayTitle: string;
+  summary: string;
   type: string;
   category: BookingTargetCategory;
   city: string | null;
@@ -148,11 +158,13 @@ export interface BookingOpportunity {
   evidence: string[];
   suggestedAction: string;
   eventDate: string | null;
+  dateRange: { start: string; end: string } | null;
   isFutureEvent: boolean | null;
   ageMonths: number | null;
   derivedFromSimilarArtist?: DerivedFromSimilarArtist | null;
   target: BookingTarget;
   bookingScore: BookingScore;
+  internalReview: OpportunityInternalReview;
 }
 
 export interface BookingSearchResult {

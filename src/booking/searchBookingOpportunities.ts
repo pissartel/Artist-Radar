@@ -1,7 +1,17 @@
 import { pickBestContact } from "./contactExtraction.js";
 import { filterBookingTargetsForRelevance, sourcePriorityBonus, type BookingRelevanceEnv } from "./relevance.js";
 import { recommendBookingAction, scoreBookingCompatibility } from "./scoring.js";
-import type { BookingOpportunity, BookingSearchInput, BookingSearchResult, BookingSourceMetadata, BookingSourceType, BookingTarget } from "./types.js";
+import { normalizeOpportunityTitle } from "./titleNormalization.js";
+import type {
+  BookingOpportunity,
+  BookingSearchInput,
+  BookingSearchResult,
+  BookingSourceMetadata,
+  BookingSourceType,
+  BookingTarget,
+  ContactCandidate,
+  OpportunityInternalReview
+} from "./types.js";
 import {
   buildDefaultBookingSourceProviders,
   type BookingSourceProvider,
@@ -84,9 +94,19 @@ function buildOpportunity(input: BookingSearchInput, target: BookingTarget): Boo
   const priorityBonus = sourcePriorityBonus(target);
   const score = clampScore(bookingScore.total + priorityBonus);
   const reason = buildOpportunityReason(target, bookingScore.reason, priorityBonus);
+  const titleResult = normalizeOpportunityTitle({
+    rawTitle: target.name,
+    category: target.category,
+    city: target.city,
+    eventDate: target.eventDate ?? null,
+    derivedFromSimilarArtist: target.derivedFromSimilarArtist ?? null
+  });
 
   return {
     name: target.name,
+    rawTitle: target.name,
+    displayTitle: titleResult.displayTitle,
+    summary: titleResult.summary,
     type: target.category,
     category: target.category,
     city: target.city,
@@ -104,6 +124,7 @@ function buildOpportunity(input: BookingSearchInput, target: BookingTarget): Boo
     evidence: target.evidence,
     suggestedAction,
     eventDate: target.eventDate ?? null,
+    dateRange: target.eventDateRange ?? null,
     isFutureEvent: target.isFutureEvent ?? null,
     ageMonths: target.ageMonths ?? null,
     derivedFromSimilarArtist: target.derivedFromSimilarArtist ?? null,
@@ -111,8 +132,31 @@ function buildOpportunity(input: BookingSearchInput, target: BookingTarget): Boo
       ...target,
       recommendedAction: suggestedAction
     },
-    bookingScore
+    bookingScore,
+    internalReview: buildInternalReview(target, bestContact, titleResult.wasRewritten)
   };
+}
+
+function buildInternalReview(
+  target: BookingTarget,
+  contact: ContactCandidate | null,
+  titleWasRewritten: boolean
+): OpportunityInternalReview {
+  const missingFields: string[] = [];
+  if (!target.eventDate) missingFields.push("date");
+  if (!contact) missingFields.push("contact");
+  if (!target.city) missingFields.push("city");
+
+  const confidence = clampConfidence(
+    (target.confidence ?? 0.5) - missingFields.length * 0.05 - (titleWasRewritten ? 0.1 : 0)
+  );
+  const needsReview = missingFields.length > 0 || titleWasRewritten || (target.confidence ?? 0.5) < 0.6;
+
+  return { needsReview, missingFields, confidence };
+}
+
+function clampConfidence(value: number): number {
+  return Math.max(0, Math.min(value, 1));
 }
 
 function buildOpportunityReason(target: BookingTarget, baseReason: string, priorityBonus: number): string {

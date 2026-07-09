@@ -41,6 +41,7 @@ export interface BackendArtistProfile {
   };
   platformStats: {
     spotifyFollowers?: number | null;
+    spotifyPopularity?: number | null;
   };
   spotify?: BackendSpotifyMetadata | null;
   imageUrl?: string | null;

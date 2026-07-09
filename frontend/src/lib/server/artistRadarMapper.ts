@@ -1,4 +1,5 @@
 import type {
+  ArtistMetrics,
   ArtistProfile,
   BookingSource,
   CityOpportunityStat,
@@ -79,6 +80,19 @@ function mapArtistProfile(profile: BackendArtistProfile, request: ArtistRadarReq
     imageConfidence: profile.imageConfidence ?? null,
     platforms,
     spotify: profile.spotify ?? undefined,
+    metrics: mapArtistMetrics(profile, genres),
+  };
+}
+
+// Spotify's public API does not expose monthly listener counts, so that
+// field stays null rather than being inferred from followers.
+function mapArtistMetrics(profile: BackendArtistProfile, genres: string[]): ArtistMetrics {
+  return {
+    monthlyListeners: null,
+    followers: profile.platformStats.spotifyFollowers ?? null,
+    popularityScore: profile.platformStats.spotifyPopularity ?? null,
+    mainGenre: genres[0] ?? null,
+    spotifyUrl: profile.socialLinks.spotifyUrl ?? null,
   };
 }
 
@@ -230,11 +244,6 @@ function buildSources(result: BackendPipelineResult): BookingSource[] {
   }));
 }
 
-function buildMatchExplanations(opportunities: Opportunity[]): string[] {
-  const reasons = opportunities.flatMap((opportunity) => opportunity.matchReasons);
-  return Array.from(new Set(reasons)).slice(0, 6);
-}
-
 export function mapPipelineResultToArtistRadarResponse(
   result: BackendPipelineResult,
   request: ArtistRadarRequest
@@ -251,7 +260,6 @@ export function mapPipelineResultToArtistRadarResponse(
     bookingOpportunities,
     topCities: includeBooking ? buildTopCities(bookingOpportunities) : [],
     sources: includeBooking ? buildSources(result) : [],
-    matchExplanations: includeBooking ? buildMatchExplanations(bookingOpportunities) : [],
     warnings,
   };
 }

@@ -78,6 +78,41 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     ]);
   });
 
+  it("maps artist metrics only from fields the backend actually provides", () => {
+    const result = buildResult({
+      artistProfile: {
+        artistName: "Tuesday Fall",
+        city: "Paris",
+        country: "France",
+        genres: ["pop punk", "punk rock"],
+        socialLinks: { spotifyUrl: "https://open.spotify.com/artist/abc123" },
+        platformStats: { spotifyFollowers: 5400, spotifyPopularity: 32 },
+      },
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+
+    expect(response.artist.metrics).toEqual({
+      monthlyListeners: null,
+      followers: 5400,
+      popularityScore: 32,
+      mainGenre: "pop punk",
+      spotifyUrl: "https://open.spotify.com/artist/abc123",
+    });
+  });
+
+  it("marks Spotify-derived metrics as unavailable rather than inventing them", () => {
+    const response = mapPipelineResultToArtistRadarResponse(buildResult(), request);
+
+    expect(response.artist.metrics).toEqual({
+      monthlyListeners: null,
+      followers: null,
+      popularityScore: null,
+      mainGenre: "pop punk",
+      spotifyUrl: null,
+    });
+  });
+
   it("returns a graceful empty booking state with warnings when no provider finds targets", () => {
     const result = buildResult({
       bookingSearch: {
@@ -91,7 +126,6 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
 
     expect(response.bookingOpportunities).toEqual([]);
     expect(response.topCities).toEqual([]);
-    expect(response.matchExplanations).toEqual([]);
     expect(response.warnings).toEqual([
       "OpenAgenda booking provider is disabled.",
       "Firecrawl booking provider is disabled.",
@@ -125,7 +159,6 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
 
     expect(response.bookingOpportunities).toEqual([]);
     expect(response.sources).toEqual([]);
-    expect(response.matchExplanations).toEqual([]);
     expect(response.warnings).toEqual([]);
   });
 

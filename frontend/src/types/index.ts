@@ -29,6 +29,17 @@ export type ImageSource =
   | "fallback"
   | null;
 
+// Compact artist/audience metrics for the Insights panel. Fields are null
+// when the underlying data isn't available (e.g. no Spotify data collected) —
+// never fabricated.
+export interface ArtistMetrics {
+  monthlyListeners: number | null;
+  followers: number | null;
+  popularityScore: number | null;
+  mainGenre: string | null;
+  spotifyUrl: string | null;
+}
+
 export interface ArtistProfile {
   id: string;
   name: string;
@@ -44,6 +55,7 @@ export interface ArtistProfile {
   verified?: boolean;
   platforms?: Platform[];
   spotify?: SpotifyMetadata;
+  metrics?: ArtistMetrics;
 }
 
 export interface KpiMetric {
@@ -162,5 +174,4 @@ export interface DashboardData {
   bookingOpportunities: Opportunity[];
   topCities: CityOpportunityStat[];
   sources: BookingSource[];
-  matchExplanations: string[];
 }

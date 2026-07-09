@@ -1,19 +1,21 @@
 import Link from "next/link";
-import type { Opportunity, BookingSource, CityOpportunityStat } from "@/types";
+import type { ArtistMetrics, Opportunity, BookingSource, CityOpportunityStat } from "@/types";
 import BookingTabs from "./BookingTabs";
 import BookingInsightsPanel from "./BookingInsightsPanel";
 
 interface BookingSectionProps {
   opportunities: Opportunity[];
   topCities: CityOpportunityStat[];
-  matchExplanations: string[];
+  metrics?: ArtistMetrics;
+  similarArtistCount: number;
   sources: BookingSource[];
 }
 
 export default function BookingSection({
   opportunities,
   topCities,
-  matchExplanations,
+  metrics,
+  similarArtistCount,
   sources,
 }: BookingSectionProps) {
   return (
@@ -41,8 +43,10 @@ export default function BookingSection({
         </div>
         <div className="min-w-0">
           <BookingInsightsPanel
+            metrics={metrics}
             topCities={topCities}
-            matchExplanations={matchExplanations}
+            similarArtistCount={similarArtistCount}
+            opportunityCount={opportunities.length}
             sources={sources}
           />
         </div>

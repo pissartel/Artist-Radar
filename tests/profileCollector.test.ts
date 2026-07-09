@@ -15,6 +15,7 @@ const baseInput: ArtistInput = {
 describe("profileCollector", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 
   it("extracts social URLs from generic links", () => {
@@ -63,6 +64,46 @@ describe("profileCollector", () => {
     expect(profile.estimatedLevel).toBe("unknown");
     expect(profile.confidence).toBeGreaterThan(0);
     expect(profile.notes.join(" ")).toContain("without Spotify metadata");
+    expect(profile.imageUrl).toBeNull();
+    expect(profile.imageSource).toBeNull();
+    expect(profile.imageConfidence).toBeNull();
+  });
+
+  it("resolves a generic imageUrl from Spotify metadata when a confident match exists", async () => {
+    vi.stubEnv("MOCK_AI", "false");
+    vi.stubEnv("SPOTIFY_CLIENT_ID", "id");
+    vi.stubEnv("SPOTIFY_CLIENT_SECRET", "secret");
+
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "token" }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "2RO6dHJK11CKcEg1G7XYps",
+            name: "Fake Band",
+            followers: { total: 4321 },
+            popularity: 27,
+            genres: ["metalcore"],
+            external_urls: { spotify: "https://open.spotify.com/artist/2RO6dHJK11CKcEg1G7XYps" },
+            images: [{ url: "https://image.example/fake-band.jpg" }]
+          }),
+          { status: 200 }
+        )
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const profile = await collectArtistProfile({
+      ...baseInput,
+      links: ["https://open.spotify.com/artist/2RO6dHJK11CKcEg1G7XYps"]
+    });
+
+    expect(profile.spotify?.imageUrl).toBe("https://image.example/fake-band.jpg");
+    expect(profile.imageUrl).toBe("https://image.example/fake-band.jpg");
+    expect(profile.imageSource).toBe("spotify");
+    expect(profile.imageConfidence).toBeGreaterThan(0);
   });
 
   it("enriches the artist profile with deterministic Spotify data in mock mode", async () => {

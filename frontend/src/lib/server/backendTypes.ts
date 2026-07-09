@@ -11,6 +11,8 @@
 
 export type BackendMode = "booking" | "promo";
 
+export type BackendImageSource = "spotify" | "lastfm" | "musicbrainz" | "website" | "manual" | "fallback" | null;
+
 export interface BackendSpotifyMetadata {
   id: string;
   url: string | null;
@@ -41,6 +43,9 @@ export interface BackendArtistProfile {
     spotifyFollowers?: number | null;
   };
   spotify?: BackendSpotifyMetadata | null;
+  imageUrl?: string | null;
+  imageSource?: BackendImageSource;
+  imageConfidence?: number | null;
 }
 
 export type BackendArtistTier = "small" | "medium" | "large" | "unknown";
@@ -55,6 +60,9 @@ export interface BackendSimilarArtist {
   totalRelevance: number;
   estimatedFollowers: number | null;
   spotify?: BackendSpotifyMetadata | null;
+  imageUrl?: string | null;
+  imageSource?: BackendImageSource;
+  imageConfidence?: number | null;
 }
 
 export interface BackendOpportunity {

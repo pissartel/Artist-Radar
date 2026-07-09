@@ -40,6 +40,14 @@ export const SimilarArtistPossibleUseSchema = z.enum([
   "unknown"
 ]);
 export const ConfidenceScoreSchema = z.number().min(0).max(1);
+export const ImageSourceSchema = z.enum([
+  "spotify",
+  "lastfm",
+  "musicbrainz",
+  "website",
+  "manual",
+  "fallback"
+]).nullable();
 
 export const GenreEvidenceSchema = z.object({
   source: z.string().trim().min(1),
@@ -152,7 +160,10 @@ export const ArtistProfileSchema = z.object({
   estimatedLevel: EstimatedArtistLevelSchema.default("unknown"),
   confidence: ConfidenceScoreSchema,
   notes: z.array(z.string().trim().min(1)).default([]),
-  spotify: SpotifyMetadataSchema.nullable().default(null)
+  spotify: SpotifyMetadataSchema.nullable().default(null),
+  imageUrl: z.string().trim().url().nullable().default(null),
+  imageSource: ImageSourceSchema.default(null),
+  imageConfidence: ConfidenceScoreSchema.nullable().default(null)
 });
 
 export const LineupStatusSchema = z.enum([
@@ -240,7 +251,10 @@ export const SimilarArtistSchema = z.object({
   discardedTags: z.array(z.string().trim().min(1)).default([]),
   matchedQuery: z.string().trim().min(1).nullable().optional(),
   searchRelevanceBoost: z.number().int().min(0).max(100).optional(),
-  spotify: SpotifyMetadataSchema.nullable().default(null)
+  spotify: SpotifyMetadataSchema.nullable().default(null),
+  imageUrl: z.string().trim().url().nullable().default(null),
+  imageSource: ImageSourceSchema.default(null),
+  imageConfidence: ConfidenceScoreSchema.nullable().default(null)
 });
 
 export const OpportunitySchema = z.object({
@@ -265,6 +279,7 @@ export type LineupStatus = z.infer<typeof LineupStatusSchema>;
 export type ArtistTier = z.infer<typeof ArtistTierSchema>;
 export type BookingCategory = z.infer<typeof BookingCategorySchema>;
 export type VerificationStatus = z.infer<typeof VerificationStatusSchema>;
+export type ImageSource = z.infer<typeof ImageSourceSchema>;
 export type SizeSignalSource = z.infer<typeof SizeSignalSourceSchema>;
 export type SimilarArtistSource = z.infer<typeof SimilarArtistSourceSchema>;
 export type SimilarArtistPossibleUse = z.infer<typeof SimilarArtistPossibleUseSchema>;

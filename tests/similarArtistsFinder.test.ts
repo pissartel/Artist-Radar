@@ -129,6 +129,80 @@ describe("findSimilarArtists", () => {
     expect(artists.map((artist) => artist.source)).toEqual(["spotify_search", "spotify_search"]);
   });
 
+  it("attaches a generic resolved image sourced from Spotify to similar artists", async () => {
+    const artists = await findSimilarArtists({
+      profile,
+      target: "France",
+      genre: "pop punk",
+      city: "Paris",
+      seedCandidates: [],
+      env: {
+        MOCK_AI: "false",
+        SPOTIFY_CLIENT_ID: "test-client-id",
+        SPOTIFY_CLIENT_SECRET: "test-client-secret"
+      },
+      spotifyRelatedArtists: async () => [],
+      spotifySearch: async () => [
+        spotifyArtist("image-artist", "Image Artist", 5000, 20, ["pop punk"])
+      ],
+      spotifySeveralArtistsByIds: async (ids) => {
+        expect(ids).toContain("image-artist");
+        return [
+          {
+            id: "image-artist",
+            name: "Image Artist",
+            followers: 5000,
+            popularity: 20,
+            genres: ["pop punk"],
+            spotifyUrl: "https://open.spotify.com/artist/image-artist",
+            images: ["https://image.example/image-artist.jpg"]
+          }
+        ];
+      }
+    });
+
+    expect(artists).toHaveLength(1);
+    expect(artists[0]?.spotify?.imageUrl).toBe("https://image.example/image-artist.jpg");
+    expect(artists[0]?.imageUrl).toBe("https://image.example/image-artist.jpg");
+    expect(artists[0]?.imageSource).toBe("spotify");
+    expect(artists[0]?.imageConfidence).toBeGreaterThan(0);
+  });
+
+  it("keeps imageUrl null for similar artists when Spotify has no image", async () => {
+    const artists = await findSimilarArtists({
+      profile,
+      target: "France",
+      genre: "pop punk",
+      city: "Paris",
+      seedCandidates: [],
+      env: {
+        MOCK_AI: "false",
+        SPOTIFY_CLIENT_ID: "test-client-id",
+        SPOTIFY_CLIENT_SECRET: "test-client-secret"
+      },
+      spotifyRelatedArtists: async () => [],
+      spotifySearch: async () => [
+        spotifyArtist("no-image-artist", "No Image Artist", 5000, 20, ["pop punk"])
+      ],
+      spotifySeveralArtistsByIds: async () => [
+        {
+          id: "no-image-artist",
+          name: "No Image Artist",
+          followers: 5000,
+          popularity: 20,
+          genres: ["pop punk"],
+          spotifyUrl: "https://open.spotify.com/artist/no-image-artist",
+          images: []
+        }
+      ]
+    });
+
+    expect(artists).toHaveLength(1);
+    expect(artists[0]?.imageUrl).toBeNull();
+    expect(artists[0]?.imageSource).toBeNull();
+    expect(artists[0]?.imageConfidence).toBeNull();
+  });
+
   it("enriches Spotify search candidates by id before tiering", async () => {
     const artists = await findSimilarArtists({
       profile,

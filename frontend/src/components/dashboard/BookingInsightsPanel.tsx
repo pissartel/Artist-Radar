@@ -1,18 +1,22 @@
-import type { BookingSource, CityOpportunityStat } from "@/types";
+import type { ArtistMetrics, BookingSource, CityOpportunityStat } from "@/types";
 import TopCitiesPanel from "./TopCitiesPanel";
-import MatchExplanationPanel from "./MatchExplanationPanel";
+import ArtistMetricsPanel from "./ArtistMetricsPanel";
 import SourcesPanel from "./SourcesPanel";
 import FilterButton from "./FilterButton";
 
 interface BookingInsightsPanelProps {
+  metrics?: ArtistMetrics;
   topCities: CityOpportunityStat[];
-  matchExplanations: string[];
+  similarArtistCount: number;
+  opportunityCount: number;
   sources: BookingSource[];
 }
 
 export default function BookingInsightsPanel({
+  metrics,
   topCities,
-  matchExplanations,
+  similarArtistCount,
+  opportunityCount,
   sources,
 }: BookingInsightsPanelProps) {
   return (
@@ -23,8 +27,13 @@ export default function BookingInsightsPanel({
         </h3>
         <FilterButton />
       </div>
+      <ArtistMetricsPanel
+        metrics={metrics}
+        topCities={topCities}
+        similarArtistCount={similarArtistCount}
+        opportunityCount={opportunityCount}
+      />
       <TopCitiesPanel cities={topCities} />
-      <MatchExplanationPanel explanations={matchExplanations} />
       <SourcesPanel sources={sources} />
     </aside>
   );

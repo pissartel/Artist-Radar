@@ -40,8 +40,7 @@ export default function OverviewPage() {
     );
   }
 
-  const { artist, kpis, similarArtists, bookingOpportunities, topCities, matchExplanations, sources, warnings } =
-    state.data;
+  const { artist, kpis, similarArtists, bookingOpportunities, topCities, sources, warnings } = state.data;
 
   return (
     <MainLayout>
@@ -53,7 +52,8 @@ export default function OverviewPage() {
       <BookingSection
         opportunities={bookingOpportunities}
         topCities={topCities}
-        matchExplanations={matchExplanations}
+        metrics={artist.metrics}
+        similarArtistCount={similarArtists.length}
         sources={sources}
       />
     </MainLayout>

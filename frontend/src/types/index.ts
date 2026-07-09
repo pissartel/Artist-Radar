@@ -66,6 +66,7 @@ export interface Opportunity {
   location: string;
   city?: string;
   country?: string;
+  venue?: string;
   date?: string;
   description: string;
   tags: string[];

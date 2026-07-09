@@ -100,6 +100,37 @@ export function getOpportunitySource(opportunity: Opportunity): string | null {
   return getUrlHostname(url);
 }
 
+export type OpportunityStatus = "verified" | "needs_review";
+
+export function getOpportunityTitle(opportunity: Opportunity): string {
+  return opportunity.title || "Untitled opportunity";
+}
+
+export function getOpportunitySubtitle(opportunity: Opportunity): string {
+  const parts = [
+    opportunity.city ?? opportunity.location,
+    opportunity.venue,
+    formatOpportunityDate(opportunity.date),
+  ].filter((part): part is string => Boolean(part));
+  return parts.join(" · ");
+}
+
+export function getShortRelevanceReason(opportunity: Opportunity): string | null {
+  const [reason] = opportunity.matchReasons;
+  return reason || null;
+}
+
+export function getMissingFields(opportunity: Opportunity): string[] {
+  const missing: string[] = [];
+  if (!hasBookingContact(opportunity)) missing.push("No contact found");
+  if (!opportunity.date) missing.push("Date unclear");
+  return missing;
+}
+
+export function getOpportunityStatus(opportunity: Opportunity): OpportunityStatus {
+  return getMissingFields(opportunity).length > 0 ? "needs_review" : "verified";
+}
+
 export function getOpportunityById(
   opportunities: Opportunity[],
   id: string,

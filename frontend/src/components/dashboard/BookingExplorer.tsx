@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Opportunity, OpportunityType } from "@/types";
+import type { Opportunity, OpportunityCategory } from "@/types";
 import {
+  CATEGORY_LABELS,
   getOpportunitySource,
   sortOpportunities,
   type OpportunitySortOption,
 } from "@/lib/opportunity";
-import BookingOpportunityCard, { TYPE_LABELS } from "./BookingOpportunityCard";
+import BookingOpportunityCard from "./BookingOpportunityCard";
 
 interface BookingExplorerProps {
   opportunities: Opportunity[];
@@ -40,7 +41,7 @@ export default function BookingExplorer({
   artistCity,
   artistCountry,
 }: BookingExplorerProps) {
-  const [type, setType] = useState<"all" | OpportunityType>("all");
+  const [category, setCategory] = useState<"all" | OpportunityCategory>("all");
   const [city, setCity] = useState("all");
   const [minScore, setMinScore] = useState(0);
   const [dateFilter, setDateFilter] = useState<PresenceFilter>("all");
@@ -48,8 +49,8 @@ export default function BookingExplorer({
   const [source, setSource] = useState("all");
   const [sortBy, setSortBy] = useState<OpportunitySortOption>("best_match");
 
-  const types = useMemo(
-    () => Array.from(new Set(opportunities.map((opportunity) => opportunity.type))).sort(),
+  const categories = useMemo(
+    () => Array.from(new Set(opportunities.map((opportunity) => opportunity.category))).sort(),
     [opportunities],
   );
 
@@ -78,7 +79,7 @@ export default function BookingExplorer({
 
   const filteredOpportunities = useMemo(() => {
     const filtered = opportunities.filter((opportunity) => {
-      const matchesType = type === "all" || opportunity.type === type;
+      const matchesCategory = category === "all" || opportunity.category === category;
       const matchesCity =
         city === "all" || (opportunity.city ?? opportunity.location) === city;
       const matchesScore = opportunity.matchScore >= minScore;
@@ -91,14 +92,14 @@ export default function BookingExplorer({
       const matchesSource = source === "all" || getOpportunitySource(opportunity) === source;
 
       return (
-        matchesType && matchesCity && matchesScore && matchesDate && matchesContact && matchesSource
+        matchesCategory && matchesCity && matchesScore && matchesDate && matchesContact && matchesSource
       );
     });
 
     return sortOpportunities(filtered, sortBy, artistCity, artistCountry);
   }, [
     opportunities,
-    type,
+    category,
     city,
     minScore,
     dateFilter,
@@ -113,14 +114,14 @@ export default function BookingExplorer({
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-5">
         <select
-          value={type}
-          onChange={(event) => setType(event.target.value as "all" | OpportunityType)}
+          value={category}
+          onChange={(event) => setCategory(event.target.value as "all" | OpportunityCategory)}
           className={selectClassName}
         >
-          <option value="all">All types</option>
-          {types.map((t) => (
-            <option key={t} value={t}>
-              {TYPE_LABELS[t] ?? t}
+          <option value="all">All categories</option>
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {CATEGORY_LABELS[c] ?? c}
             </option>
           ))}
         </select>

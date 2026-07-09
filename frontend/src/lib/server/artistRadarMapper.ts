@@ -4,6 +4,7 @@ import type {
   CityOpportunityStat,
   KpiMetric,
   Opportunity,
+  OpportunityCategory,
   OpportunityType,
   ArtistTier,
   SimilarArtist,
@@ -93,10 +94,52 @@ function mapOpportunityType(type: string): OpportunityType {
   return OPPORTUNITY_TYPE_MAP[type] ?? "opening_slot";
 }
 
+// Direct hits from the backend's free-text `type` field. Kept separate from
+// OPPORTUNITY_TYPE_MAP since it also recognizes support-slot type values.
+const OPPORTUNITY_TYPE_CATEGORY_MAP: Record<string, OpportunityCategory> = {
+  festival: "festival",
+  venue: "venue",
+  bar: "venue",
+  club: "venue",
+  event: "concert",
+  concert: "concert",
+  gig: "concert",
+  show: "concert",
+  opening_slot: "opening_slot",
+  support_slot: "opening_slot",
+};
+
+const FESTIVAL_TEXT_SIGNAL = "festival";
+
+const OPENING_SLOT_TEXT_SIGNALS = [
+  "support slot",
+  "support-slot",
+  "opening act",
+  "opening slot",
+  "first part",
+];
+
+function mapOpportunityCategory(opportunity: BackendOpportunity): OpportunityCategory {
+  const type = opportunity.type.trim().toLowerCase();
+  const directMatch = OPPORTUNITY_TYPE_CATEGORY_MAP[type];
+  if (directMatch) return directMatch;
+
+  const text = [opportunity.name, opportunity.reason, opportunity.suggested_message]
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
+    .toLowerCase();
+
+  if (text.includes(FESTIVAL_TEXT_SIGNAL)) return "festival";
+  if (OPENING_SLOT_TEXT_SIGNALS.some((signal) => text.includes(signal))) return "opening_slot";
+  if (opportunity.contact) return "contact";
+  return "unknown";
+}
+
 function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
   return {
     id: slugify(`${opportunity.name}-${opportunity.city ?? "unknown"}`),
     type: mapOpportunityType(opportunity.type),
+    category: mapOpportunityCategory(opportunity),
     title: opportunity.name,
     location: joinLocation(opportunity.city, opportunity.country) || "Location unknown",
     city: opportunity.city ?? undefined,

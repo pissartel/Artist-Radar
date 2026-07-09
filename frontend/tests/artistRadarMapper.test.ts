@@ -129,6 +129,92 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     expect(response.warnings).toEqual([]);
   });
 
+  it("infers a reliable category for each mapped booking opportunity", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Le Petit Club",
+          type: "event",
+          city: "Paris",
+          country: "France",
+          source_url: null,
+          contact: null,
+          reason: "Strong genre match.",
+          score: 80,
+          suggested_message: "Reach out.",
+        },
+        {
+          name: "Salle Pleyel",
+          type: "venue",
+          city: "Paris",
+          country: "France",
+          source_url: null,
+          contact: null,
+          reason: "Strong genre match.",
+          score: 80,
+          suggested_message: "Reach out.",
+        },
+        {
+          name: "Paris Pop Punk Festival",
+          type: "unknown_source",
+          city: "Paris",
+          country: "France",
+          source_url: null,
+          contact: null,
+          reason: "Strong genre match.",
+          score: 80,
+          suggested_message: "Reach out.",
+        },
+        {
+          name: "Underground Bill",
+          type: "unknown_source",
+          city: "Paris",
+          country: "France",
+          source_url: null,
+          contact: null,
+          reason: "Best pitched as a support-slot opportunity.",
+          score: 70,
+          suggested_message: "Offer to play a support slot.",
+        },
+        {
+          name: "Local Booker",
+          type: "unknown_source",
+          city: "Paris",
+          country: "France",
+          source_url: null,
+          contact: "booker@example.test",
+          reason: "Books shows in the area.",
+          score: 60,
+          suggested_message: "Reach out directly.",
+        },
+        {
+          name: "Mystery Lead",
+          type: "unknown_source",
+          city: "Paris",
+          country: "France",
+          source_url: null,
+          contact: null,
+          reason: "Not much signal here.",
+          score: 40,
+          suggested_message: "Investigate further.",
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const categoryByTitle = Object.fromEntries(
+      response.bookingOpportunities.map((opportunity) => [opportunity.title, opportunity.category]),
+    );
+
+    expect(categoryByTitle["Le Petit Club"]).toBe("concert");
+    expect(categoryByTitle["Salle Pleyel"]).toBe("venue");
+    expect(categoryByTitle["Paris Pop Punk Festival"]).toBe("festival");
+    expect(categoryByTitle["Underground Bill"]).toBe("opening_slot");
+    expect(categoryByTitle["Local Booker"]).toBe("contact");
+    expect(categoryByTitle["Mystery Lead"]).toBe("unknown");
+    expect(response.bookingOpportunities.every((opportunity) => Boolean(opportunity.category))).toBe(true);
+  });
+
   it("falls back to request artist name and genre when the backend profile is missing them", () => {
     const result = buildResult({
       artistProfile: {

@@ -85,8 +85,24 @@ export async function collectArtistProfile(rawInput: ArtistInput): Promise<Artis
     platformStats,
     estimatedLevel,
     confidence,
-    notes
+    notes,
+    spotify: toSpotifyMetadata(spotifyProfile)
   });
+}
+
+function toSpotifyMetadata(spotifyProfile: SpotifyArtistProfile | null): ArtistProfile["spotify"] {
+  if (!spotifyProfile) {
+    return null;
+  }
+
+  return {
+    id: spotifyProfile.id,
+    url: spotifyProfile.spotifyUrl,
+    imageUrl: spotifyProfile.images[0] ?? null,
+    followers: spotifyProfile.followers,
+    popularity: spotifyProfile.popularity,
+    genres: spotifyProfile.genres
+  };
 }
 
 export function extractSocialLinks(input: Pick<ArtistInput, "links" | "spotifyUrl" | "youtubeUrl" | "instagramUrl">): SocialLinks {

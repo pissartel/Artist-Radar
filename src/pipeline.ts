@@ -25,6 +25,8 @@ export interface RunOpportunitySearchOptions {
   spotifyRelatedArtists?: (spotifyArtistId: string) => Promise<SpotifyArtistProfile[]>;
   spotifySearch?: (query: string, limit: number) => Promise<SpotifyArtistProfile[]>;
   spotifyArtistById?: (spotifyArtistId: string) => Promise<SpotifyArtistProfile | null>;
+  spotifySearchByName?: (name: string) => Promise<SpotifyArtistProfile | null>;
+  spotifySeveralArtistsByIds?: (spotifyArtistIds: string[]) => Promise<SpotifyArtistProfile[]>;
   lastfmSimilarArtists?: (artistName: string, limit: number) => Promise<LastFmSimilarArtist[]>;
   musicBrainzSearch?: (artistName: string) => Promise<MusicBrainzArtistMetadata | null>;
   seedCandidates?: SimilarArtistSeedRecord[];
@@ -60,6 +62,8 @@ export async function runOpportunitySearch(
     spotifyRelatedArtists: options.spotifyRelatedArtists,
     spotifySearch: options.spotifySearch,
     spotifyArtistById: options.spotifyArtistById,
+    spotifySearchByName: options.spotifySearchByName,
+    spotifySeveralArtistsByIds: options.spotifySeveralArtistsByIds,
     lastfmSimilarArtists: options.lastfmSimilarArtists,
     musicBrainzSearch: options.musicBrainzSearch,
     seedCandidates: options.seedCandidates

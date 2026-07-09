@@ -14,6 +14,8 @@ import {
   getSpotifyRelatedArtists,
   createSpotifyCapabilities,
   searchSpotifyArtists,
+  searchSpotifyArtistByName,
+  getSeveralSpotifyArtistsByIds,
   type SpotifyCapabilities,
   type SpotifyArtistProfile
 } from "../services/spotifyService.js";
@@ -42,7 +44,7 @@ import {
   collectGenreGateGenres,
   normalizeGenre
 } from "./genreCleaner.js";
-import { debugLog } from "../utils/logger.js";
+import { debugLog, warnLog } from "../utils/logger.js";
 import {
   findSeedCandidatesByGenreAndTarget,
   type SeedMatchCandidate,
@@ -62,6 +64,8 @@ export interface SimilarArtistsFinderInput {
   spotifyRelatedArtists?: (spotifyArtistId: string) => Promise<SpotifyArtistProfile[]>;
   spotifySearch?: (query: string, limit: number) => Promise<SpotifyArtistProfile[]>;
   spotifyArtistById?: (spotifyArtistId: string) => Promise<SpotifyArtistProfile | null>;
+  spotifySearchByName?: (name: string) => Promise<SpotifyArtistProfile | null>;
+  spotifySeveralArtistsByIds?: (spotifyArtistIds: string[]) => Promise<SpotifyArtistProfile[]>;
   lastfmSimilarArtists?: (artistName: string, limit: number) => Promise<LastFmSimilarArtist[]>;
   lastfmArtistInfo?: (artistName: string) => Promise<LastFmArtistInfo | null>;
   musicBrainzSearch?: (artistName: string) => Promise<MusicBrainzArtistMetadata | null>;
@@ -303,8 +307,95 @@ export async function findSimilarArtists(input: SimilarArtistsFinderInput): Prom
   const consolidated = await consolidateSimilarArtistCandidates(enriched, input, env);
   const verified = await verifySimilarArtistCandidates(consolidated, input, env);
   const artists = rankDiscoveryCandidates(verified, input, userProvided);
-  debugTierCounts(artists);
-  return artists;
+  const spotifyEnriched = await enrichSimilarArtistsWithSpotify(artists, input);
+  debugTierCounts(spotifyEnriched);
+  return spotifyEnriched;
+}
+
+// Caps the number of "search by exact name" lookups so a large similar-artist
+// list can't trigger dozens of extra Spotify API calls in one analysis run.
+const MAX_SPOTIFY_NAME_SEARCH_LOOKUPS = 10;
+
+async function enrichSimilarArtistsWithSpotify(
+  artists: SimilarArtist[],
+  input: SimilarArtistsFinderInput
+): Promise<SimilarArtist[]> {
+  const env = input.env ?? process.env;
+  if (isMockMode(env.MOCK_AI)) {
+    return artists;
+  }
+
+  if (!env.SPOTIFY_CLIENT_ID || !env.SPOTIFY_CLIENT_SECRET) {
+    debugLog("spotify", "similar artist Spotify enrichment skipped", {
+      reason: "missing Spotify credentials"
+    });
+    return artists;
+  }
+
+  const severalByIds = input.spotifySeveralArtistsByIds ?? ((ids: string[]) => getSeveralSpotifyArtistsByIds(ids, env));
+  const searchByName = input.spotifySearchByName ?? ((name: string) => searchSpotifyArtistByName(name, env));
+
+  // Cache keyed by Spotify artist ID so an artist referenced twice (e.g. once
+  // with an ID and once resolved by name to the same ID) is only fetched once.
+  const profileById = new Map<string, SpotifyArtistProfile>();
+  const idByArtistName = new Map<string, string>();
+
+  for (const artist of artists) {
+    const id = artist.spotifyId?.trim() || (artist.spotifyUrl ? extractSpotifyArtistId(artist.spotifyUrl) : null);
+    if (id) {
+      idByArtistName.set(artist.name, id);
+    }
+  }
+
+  const idsToFetch = Array.from(new Set(idByArtistName.values()));
+  if (idsToFetch.length > 0) {
+    try {
+      const profiles = await severalByIds(idsToFetch);
+      for (const profile of profiles) {
+        profileById.set(profile.id, profile);
+      }
+    } catch (error) {
+      warnLog("spotify", "Batch Spotify artist lookup failed for similar artists.", {
+        idsRequested: idsToFetch.length,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  let nameSearchLookups = 0;
+  const enriched: SimilarArtist[] = [];
+  for (const artist of artists) {
+    const knownId = idByArtistName.get(artist.name);
+    let profile = knownId ? profileById.get(knownId) ?? null : null;
+
+    if (!profile && !knownId && nameSearchLookups < MAX_SPOTIFY_NAME_SEARCH_LOOKUPS) {
+      nameSearchLookups += 1;
+      try {
+        profile = await searchByName(artist.name);
+      } catch (error) {
+        warnLog("spotify", "Spotify search-by-name lookup failed for a similar artist.", {
+          artistName: artist.name,
+          error: error instanceof Error ? error.message : String(error)
+        });
+        profile = null;
+      }
+    }
+
+    enriched.push({ ...artist, spotify: profile ? toSpotifyMetadata(profile) : null });
+  }
+
+  return enriched;
+}
+
+function toSpotifyMetadata(profile: SpotifyArtistProfile): SimilarArtist["spotify"] {
+  return {
+    id: profile.id,
+    url: profile.spotifyUrl,
+    imageUrl: profile.images[0] ?? null,
+    followers: profile.followers,
+    popularity: profile.popularity,
+    genres: profile.genres
+  };
 }
 
 export function groupSimilarArtistsByTier(similarArtists: SimilarArtist[]): SimilarArtistsByTier {
@@ -2133,7 +2224,15 @@ export function mapSpotifyArtistToSimilarArtist(
     },
     discardedTags: cleanedGenreResult.discardedTags,
     matchedQuery: null,
-    searchRelevanceBoost: 0
+    searchRelevanceBoost: 0,
+    spotify: {
+      id: artist.id,
+      url: artist.spotifyUrl,
+      imageUrl: artist.images[0] ?? null,
+      followers: artist.followers,
+      popularity: artist.popularity,
+      genres: artist.genres
+    }
   };
 }
 
@@ -2425,7 +2524,8 @@ function buildMockSimilarArtist(artist: SimilarArtistSeed, input: SimilarArtists
       sizeSignalSource: "manual",
       platforms: {}
     },
-    discardedTags: []
+    discardedTags: [],
+    spotify: null
   };
 }
 
@@ -2493,7 +2593,8 @@ function normalizeUserProvidedArtists(input: SimilarArtistsFinderInput): Similar
           sizeSignalSource: "unknown",
           platforms: {}
         },
-        discardedTags: []
+        discardedTags: [],
+        spotify: null
       };
     });
 }

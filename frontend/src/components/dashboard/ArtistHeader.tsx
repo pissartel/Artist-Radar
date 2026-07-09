@@ -84,14 +84,26 @@ export default function ArtistHeader({ artist }: ArtistHeaderProps) {
 
           {artist.platforms && artist.platforms.length > 0 && (
             <div className="flex items-center gap-1.5">
-              {artist.platforms.map((platform) => (
-                <span
-                  key={platform.type}
-                  className="text-xs px-2 py-1 rounded-md bg-white/5 border border-slate-400/10 text-gray-400 font-medium hover:text-gray-200 hover:border-accent/35 transition-colors"
-                >
-                  {PLATFORM_LABELS[platform.type]}
-                </span>
-              ))}
+              {artist.platforms.map((platform) =>
+                platform.url ? (
+                  <a
+                    key={platform.type}
+                    href={platform.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs px-2 py-1 rounded-md bg-white/5 border border-slate-400/10 text-gray-400 font-medium hover:text-gray-200 hover:border-accent/35 transition-colors"
+                  >
+                    {PLATFORM_LABELS[platform.type]}
+                  </a>
+                ) : (
+                  <span
+                    key={platform.type}
+                    className="text-xs px-2 py-1 rounded-md bg-white/5 border border-slate-400/10 text-gray-400 font-medium"
+                  >
+                    {PLATFORM_LABELS[platform.type]}
+                  </span>
+                ),
+              )}
             </div>
           )}
         </div>

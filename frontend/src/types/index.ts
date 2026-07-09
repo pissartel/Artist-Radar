@@ -57,11 +57,23 @@ export interface SimilarArtist {
 // | "video_director"
 export type OpportunityType = "venue" | "concert" | "opening_slot" | "festival";
 
+// Reliable booking category inferred by the backend mapper from opportunity
+// type, source metadata, and title. Used by frontend filters (booking tabs,
+// explorer). "unknown" is kept only when classification isn't possible.
+export type OpportunityCategory =
+  | "concert"
+  | "venue"
+  | "festival"
+  | "opening_slot"
+  | "contact"
+  | "unknown";
+
 // Generic entity covering booking opportunities today and future artist
 // growth opportunities (labels, playlists, creative providers, ...).
 export interface Opportunity {
   id: string;
   type: OpportunityType;
+  category: OpportunityCategory;
   title: string;
   location: string;
   city?: string;

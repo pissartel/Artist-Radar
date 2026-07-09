@@ -83,6 +83,37 @@ export function getOpportunityTitle(opportunity: Opportunity): string {
   return opportunity.title || "Untitled opportunity";
 }
 
+const MAX_DISPLAY_TITLE_LENGTH = 80;
+
+// Strips a trailing " - <source name>" / " | <source name>" segment that
+// merely repeats the source hostname (e.g. "... - France TV" when the
+// source is france.tv), then truncates overly long scraped titles.
+export function getDisplayTitle(opportunity: Opportunity): string {
+  const rawTitle = getOpportunityTitle(opportunity);
+  const source = getOpportunitySource(opportunity);
+  const withoutSourceSuffix = stripTrailingSourceLabel(rawTitle, source);
+  return truncateTitle(withoutSourceSuffix);
+}
+
+function stripTrailingSourceLabel(title: string, source: string | null): string {
+  if (!source) return title;
+  const segments = title.split(/\s+[-|]\s+/);
+  if (segments.length <= 1) return title;
+
+  const lastSegment = segments[segments.length - 1].toLowerCase();
+  const sourceNamePart = source.split(".")[0].toLowerCase();
+  const looksLikeSource =
+    lastSegment.length > 0 &&
+    (lastSegment.includes(sourceNamePart) || sourceNamePart.includes(lastSegment));
+
+  return looksLikeSource ? segments.slice(0, -1).join(" - ").trim() : title;
+}
+
+function truncateTitle(title: string, maxLength = MAX_DISPLAY_TITLE_LENGTH): string {
+  if (title.length <= maxLength) return title;
+  return `${title.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
 export function getOpportunitySubtitle(opportunity: Opportunity): string {
   const parts = [
     opportunity.city ?? opportunity.location,

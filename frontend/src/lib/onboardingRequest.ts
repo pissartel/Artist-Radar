@@ -3,6 +3,28 @@ import type { OnboardingFormData } from "@/types";
 
 const ONBOARDING_STORAGE_KEY = "artistRadarOnboardingData";
 
+export function mapOnboardingDataToArtistRadarRequest(
+  onboarding: Partial<OnboardingFormData>
+): ArtistRadarRequest | null {
+  const artistName = onboarding.artistName?.trim();
+  const genre = onboarding.mainGenre?.trim();
+  const location = onboarding.city?.trim() || onboarding.countryOfOrigin?.trim();
+
+  if (!artistName || !genre || !location) {
+    return null;
+  }
+
+  const spotifyUrl = onboarding.spotifyUrl?.trim();
+
+  return {
+    artistName,
+    genre,
+    location,
+    enableBooking: onboarding.mainGoal !== "similar_artists",
+    ...(spotifyUrl ? { spotifyUrl } : {}),
+  };
+}
+
 export function readOnboardingRequest(): ArtistRadarRequest | null {
   let stored: string | null;
   try {
@@ -22,21 +44,5 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
     return null;
   }
 
-  const artistName = onboarding.artistName?.trim();
-  const genre = onboarding.mainGenre?.trim();
-  const location = onboarding.city?.trim() || onboarding.countryOfOrigin?.trim();
-
-  if (!artistName || !genre || !location) {
-    return null;
-  }
-
-  const spotifyUrl = onboarding.spotifyUrl?.trim();
-
-  return {
-    artistName,
-    genre,
-    location,
-    enableBooking: onboarding.mainGoal !== "similar_artists",
-    ...(spotifyUrl ? { spotifyUrl } : {}),
-  };
+  return mapOnboardingDataToArtistRadarRequest(onboarding);
 }

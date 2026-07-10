@@ -1,71 +1,67 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { ArtistRadarErrorState } from "@/components/dashboard/ArtistRadarStates";
-import { useArtistRadarData } from "@/lib/useArtistRadarData";
+import { DEFAULT_ANALYSIS_STEPS } from "@/lib/analysisSteps";
+import { fetchAnalysisJobStatus } from "@/lib/artistRadarClient";
+import type { AnalysisJobStatus } from "@/types/artistRadar";
 
-const STEP_INTERVAL_MS = 3000;
+const POLL_INTERVAL_MS = 1500;
 const COMPLETION_HOLD_MS = 500;
 
-const ANALYSIS_STEPS = [
-  "Analyzing artist profile",
-  "Finding similar artists",
-  "Mapping music scene",
-  "Scanning venues and concerts",
-  "Scoring booking opportunities",
-  "Building dashboard",
-];
-
-export default function AnalyzingPage() {
+function AnalyzingContent() {
   const router = useRouter();
-  const { state, refetch } = useArtistRadarData();
-  const [activeStep, setActiveStep] = useState(0);
+  const searchParams = useSearchParams();
+  const jobId = searchParams.get("jobId");
 
-  const isRunning = state.status === "checking-onboarding" || state.status === "loading";
-
-  useEffect(() => {
-    if (!isRunning) {
-      return;
-    }
-    const stepTimer = setInterval(() => {
-      // Stop one step short of the end while still running so the checklist
-      // never sits fully "active" on the last item before the analysis is
-      // actually done; the success handler below fills in the final step.
-      setActiveStep((step) => (step < ANALYSIS_STEPS.length - 2 ? step + 1 : step));
-    }, STEP_INTERVAL_MS);
-    return () => clearInterval(stepTimer);
-  }, [isRunning]);
+  const query = useQuery<AnalysisJobStatus>({
+    queryKey: ["analysisJobStatus", jobId],
+    queryFn: () => fetchAnalysisJobStatus(jobId as string),
+    enabled: Boolean(jobId),
+    refetchInterval: (currentQuery) => {
+      if (currentQuery.state.status === "error") {
+        return false;
+      }
+      const status = currentQuery.state.data?.status;
+      return status === "completed" || status === "failed" ? false : POLL_INTERVAL_MS;
+    },
+  });
 
   useEffect(() => {
-    if (state.status === "empty") {
+    if (!jobId) {
       router.replace("/onboarding");
     }
-  }, [state.status, router]);
+  }, [jobId, router]);
 
   useEffect(() => {
-    if (state.status !== "success") {
+    if (query.data?.status !== "completed") {
       return;
     }
-    // If the API resolves before the checklist animation catches up, mark
-    // every step as completed and hold briefly before navigating away so the
-    // loading state never jumps straight to the dashboard mid-checklist.
-    setActiveStep(ANALYSIS_STEPS.length);
     const navigateTimer = setTimeout(() => {
-      router.replace("/overview");
+      router.replace(`/overview?jobId=${encodeURIComponent(jobId as string)}`);
     }, COMPLETION_HOLD_MS);
     return () => clearTimeout(navigateTimer);
-  }, [state.status, router]);
+  }, [query.data?.status, jobId, router]);
 
-  if (state.status === "error") {
+  if (!jobId) {
+    return null;
+  }
+
+  const isFailed = query.data?.status === "failed" || query.isError;
+  if (isFailed) {
+    const message = query.data?.error ?? "Something went wrong while analyzing this artist. Please try again.";
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="w-full max-w-sm">
-          <ArtistRadarErrorState message={state.message} onRetry={refetch} />
+          <ArtistRadarErrorState message={message} onRetry={() => router.replace("/onboarding")} />
         </div>
       </div>
     );
   }
+
+  const steps = query.data?.steps ?? DEFAULT_ANALYSIS_STEPS;
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -87,12 +83,12 @@ export default function AnalyzingPage() {
         </p>
 
         <ul className="mt-6 flex flex-col gap-2.5 text-left bg-card rounded-xl border border-slate-400/10 shadow-card-glow p-4">
-          {ANALYSIS_STEPS.map((step, index) => {
-            const isComplete = index < activeStep;
-            const isActive = index === activeStep;
+          {steps.map((step) => {
+            const isComplete = step.status === "completed";
+            const isActive = step.status === "running";
 
             return (
-              <li key={step} className="flex items-center gap-2.5 text-sm">
+              <li key={step.id} className="flex items-center gap-2.5 text-sm">
                 {isComplete ? (
                   <span className="w-4 h-4 shrink-0 rounded-full bg-accent-green/20 text-accent-green flex items-center justify-center text-[10px] leading-none">
                     ✓
@@ -111,7 +107,7 @@ export default function AnalyzingPage() {
                         : "text-gray-600"
                   }
                 >
-                  {step}
+                  {step.label}
                 </span>
               </li>
             );
@@ -119,5 +115,13 @@ export default function AnalyzingPage() {
         </ul>
       </div>
     </div>
+  );
+}
+
+export default function AnalyzingPage() {
+  return (
+    <Suspense fallback={null}>
+      <AnalyzingContent />
+    </Suspense>
   );
 }

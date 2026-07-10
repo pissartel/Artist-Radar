@@ -2,7 +2,7 @@
 
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { ArtistRadarClientError, fetchArtistRadarData } from "@/lib/artistRadarClient";
+import { ArtistRadarClientError, fetchAnalysisJobResult, fetchArtistRadarData } from "@/lib/artistRadarClient";
 import { readOnboardingRequest } from "@/lib/onboardingRequest";
 import type { ArtistRadarRequest, ArtistRadarResponse } from "@/types/artistRadar";
 
@@ -39,8 +39,14 @@ function toErrorMessage(error: unknown): string {
  * Shared by the Overview, Booking, and Similar Artists pages (and their detail
  * pages) so they all render the same cached ArtistRadarResponse instead of
  * each page issuing its own fetch/mock data.
+ *
+ * When `jobId` is passed (the Overview page reads it from `?jobId=...` after
+ * the /analyzing redirect), the already-computed result for that analysis job
+ * is read instead of re-running the pipeline via POST /api/artist-radar. The
+ * query key is unchanged either way, so pages that don't know about the
+ * jobId (Booking, Similar Artists) still hit the same warmed cache entry.
  */
-export function useArtistRadarData(): UseArtistRadarDataResult {
+export function useArtistRadarData(jobId?: string | null): UseArtistRadarDataResult {
   const [request, setRequest] = useState<ArtistRadarRequest | null | undefined>(undefined);
 
   useEffect(() => {
@@ -49,7 +55,8 @@ export function useArtistRadarData(): UseArtistRadarDataResult {
 
   const query: UseQueryResult<ArtistRadarResponse> = useQuery({
     queryKey: buildQueryKey(request ?? null),
-    queryFn: () => fetchArtistRadarData(request as ArtistRadarRequest),
+    queryFn: () =>
+      jobId ? fetchAnalysisJobResult(jobId) : fetchArtistRadarData(request as ArtistRadarRequest),
     enabled: Boolean(request),
   });
 

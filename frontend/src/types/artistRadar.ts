@@ -17,3 +17,30 @@ export interface ArtistRadarRequest {
 export interface ArtistRadarResponse extends DashboardData {
   warnings: string[];
 }
+
+// Job model for POST /api/artist-analysis and GET /api/artist-analysis/:jobId/status.
+export type AnalysisStep =
+  | "artist_profile"
+  | "similar_artists"
+  | "music_scene"
+  | "venues_and_concerts"
+  | "booking_scoring"
+  | "dashboard_build";
+
+export type StepStatus = "pending" | "running" | "completed" | "failed";
+
+export interface AnalysisStepState {
+  id: AnalysisStep;
+  label: string;
+  status: StepStatus;
+}
+
+export type AnalysisJobState = "queued" | "running" | "completed" | "failed";
+
+export interface AnalysisJobStatus {
+  jobId: string;
+  status: AnalysisJobState;
+  currentStep?: AnalysisStep;
+  steps: AnalysisStepState[];
+  error?: string;
+}

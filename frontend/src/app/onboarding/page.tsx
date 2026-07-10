@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { MainGoal, OnboardingFormData } from "@/types";
 import FormField from "@/components/onboarding/FormField";
+import { createAnalysisJob, ArtistRadarClientError } from "@/lib/artistRadarClient";
+import { mapOnboardingDataToArtistRadarRequest } from "@/lib/onboardingRequest";
 
 const MAIN_GOAL_OPTIONS: { value: MainGoal; label: string }[] = [
   { value: "booking_opportunities", label: "Find booking opportunities" },
@@ -38,6 +40,8 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [formData, setFormData] = useState<OnboardingFormData>(INITIAL_FORM_DATA);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   function updateField<K extends keyof OnboardingFormData>(
     field: K,
@@ -60,7 +64,7 @@ export default function OnboardingPage() {
     return nextErrors;
   }
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
     const nextErrors = validate();
@@ -69,16 +73,35 @@ export default function OnboardingPage() {
       return;
     }
 
-    try {
-      window.localStorage.setItem(
-        "artistRadarOnboardingData",
-        JSON.stringify(formData)
-      );
-    } catch {
-      // localStorage unavailable — safe to ignore, dashboard still uses mock data.
+    const artistRadarRequest = mapOnboardingDataToArtistRadarRequest(formData);
+    if (!artistRadarRequest) {
+      return;
     }
 
-    router.push("/analyzing");
+    setSubmitError(null);
+    setIsSubmitting(true);
+
+    try {
+      const { jobId } = await createAnalysisJob(artistRadarRequest);
+
+      try {
+        window.localStorage.setItem(
+          "artistRadarOnboardingData",
+          JSON.stringify(formData)
+        );
+      } catch {
+        // localStorage unavailable — safe to ignore, dashboard still uses mock data.
+      }
+
+      router.push(`/analyzing?jobId=${encodeURIComponent(jobId)}`);
+    } catch (error) {
+      setIsSubmitting(false);
+      setSubmitError(
+        error instanceof ArtistRadarClientError
+          ? error.message
+          : "Failed to start the analysis. Please try again."
+      );
+    }
   }
 
   return (
@@ -244,11 +267,18 @@ export default function OnboardingPage() {
             </select>
           </FormField>
 
+          {submitError ? (
+            <p className="text-xs text-red-400" role="alert">
+              {submitError}
+            </p>
+          ) : null}
+
           <button
             type="submit"
-            className="mt-1 w-full bg-accent hover:bg-accent/90 text-white font-semibold text-sm py-2.5 rounded-lg transition-colors duration-150 shadow-card"
+            disabled={isSubmitting}
+            className="mt-1 w-full bg-accent hover:bg-accent/90 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm py-2.5 rounded-lg transition-colors duration-150 shadow-card"
           >
-            Analyze artist
+            {isSubmitting ? "Starting analysis..." : "Analyze artist"}
           </button>
         </form>
       </div>

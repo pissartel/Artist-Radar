@@ -1,54 +1,6 @@
 import { mapPipelineResultToArtistRadarResponse } from "@/lib/server/artistRadarMapper";
 import { ArtistInputSchema, runOpportunitySearch, warnLog } from "@/lib/server/backendPipeline";
-import type { ArtistRadarRequest } from "@/types/artistRadar";
-
-interface RawRequestBody {
-  artistName?: unknown;
-  genre?: unknown;
-  location?: unknown;
-  enableBooking?: unknown;
-  spotifyUrl?: unknown;
-}
-
-function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | null {
-  const { artistName, genre, location, enableBooking, spotifyUrl } = body;
-
-  if (
-    typeof artistName !== "string" || !artistName.trim() ||
-    typeof genre !== "string" || !genre.trim() ||
-    typeof location !== "string" || !location.trim()
-  ) {
-    return null;
-  }
-
-  if (enableBooking !== undefined && typeof enableBooking !== "boolean") {
-    return null;
-  }
-
-  if (spotifyUrl !== undefined && typeof spotifyUrl !== "string") {
-    return null;
-  }
-
-  return {
-    artistName: artistName.trim(),
-    genre: genre.trim(),
-    location: location.trim(),
-    enableBooking,
-    ...(spotifyUrl?.trim() ? { spotifyUrl: spotifyUrl.trim() } : {}),
-  };
-}
-
-function isValidHttpUrl(value: string | undefined): value is string {
-  if (!value) {
-    return false;
-  }
-
-  try {
-    return ["http:", "https:"].includes(new URL(value).protocol);
-  } catch {
-    return false;
-  }
-}
+import { parseArtistRadarRequestBody, type RawArtistRadarRequestBody } from "@/lib/server/artistRadarRequest";
 
 function logBookingProviderDiagnostics(): void {
   warnLog("artist-radar-api", "Booking provider diagnostics", {
@@ -60,14 +12,14 @@ function logBookingProviderDiagnostics(): void {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  let body: RawRequestBody;
+  let body: RawArtistRadarRequestBody;
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
 
-  const artistRadarRequest = parseArtistRadarRequest(body);
+  const artistRadarRequest = parseArtistRadarRequestBody(body);
   if (!artistRadarRequest) {
     return Response.json(
       { error: "artistName, genre and location are required strings." },
@@ -83,7 +35,7 @@ export async function POST(request: Request): Promise<Response> {
       artist: artistRadarRequest.artistName,
       city: artistRadarRequest.location,
       genre: artistRadarRequest.genre,
-      spotifyUrl: isValidHttpUrl(artistRadarRequest.spotifyUrl) ? artistRadarRequest.spotifyUrl : undefined,
+      spotifyUrl: artistRadarRequest.spotifyUrl,
     });
 
     const result = await runOpportunitySearch(input);

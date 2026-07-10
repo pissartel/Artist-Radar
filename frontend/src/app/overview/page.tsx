@@ -1,5 +1,7 @@
 "use client";
 
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import MainLayout from "@/components/layout/MainLayout";
 import ArtistHeader from "@/components/dashboard/ArtistHeader";
 import KpiGrid from "@/components/dashboard/KpiGrid";
@@ -13,8 +15,10 @@ import {
 } from "@/components/dashboard/ArtistRadarStates";
 import { useArtistRadarData } from "@/lib/useArtistRadarData";
 
-export default function OverviewPage() {
-  const { state, refetch } = useArtistRadarData();
+function OverviewContent() {
+  const searchParams = useSearchParams();
+  const jobId = searchParams.get("jobId");
+  const { state, refetch } = useArtistRadarData(jobId);
 
   if (state.status === "checking-onboarding" || state.status === "loading") {
     return (
@@ -56,5 +60,19 @@ export default function OverviewPage() {
         similarArtistCount={similarArtists.length}
       />
     </MainLayout>
+  );
+}
+
+export default function OverviewPage() {
+  return (
+    <Suspense
+      fallback={
+        <MainLayout>
+          <ArtistRadarLoadingState />
+        </MainLayout>
+      }
+    >
+      <OverviewContent />
+    </Suspense>
   );
 }

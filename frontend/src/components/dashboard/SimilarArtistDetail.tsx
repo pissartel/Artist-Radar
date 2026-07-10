@@ -42,7 +42,11 @@ export default function SimilarArtistDetail({
 
       <div className="mt-4 flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-12 h-12 rounded-full bg-accent/15 border border-accent/25 flex items-center justify-center flex-shrink-0 overflow-hidden">
+          <div
+            className={`w-12 h-12 rounded-full bg-accent/15 flex items-center justify-center flex-shrink-0 overflow-hidden ${
+              artist.imageUrl ? "" : "border border-accent/25"
+            }`}
+          >
             {artist.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img

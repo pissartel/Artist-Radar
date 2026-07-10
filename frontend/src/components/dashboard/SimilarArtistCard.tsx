@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { SimilarArtist } from "@/types";
 import { formatGenrePreview, formatMonthlyListeners } from "@/lib/similarArtist";
+import MatchScoreBadge from "@/components/common/MatchScoreBadge";
 
 export const TIER_LABELS: Record<string, string> = {
   emerging: "Emerging",
@@ -65,9 +66,7 @@ export default function SimilarArtistCard({
       >
         <div className="flex items-start justify-between gap-2">
           <ArtistAvatar imageUrl={artist.imageUrl} name={artist.name} sizeClassName="w-10 h-10" />
-          <span className="text-xs font-semibold text-accent-light bg-accent/15 border border-accent/25 px-2 py-0.5 rounded-full tabular-nums">
-            {artist.matchScore}%
-          </span>
+          <MatchScoreBadge score={artist.matchScore} />
         </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-white truncate">{artist.name}</p>
@@ -115,9 +114,7 @@ export default function SimilarArtistCard({
             </p>
           </div>
         </div>
-        <span className="text-xs font-semibold text-accent-light bg-accent/15 border border-accent/25 px-2 py-0.5 rounded-full tabular-nums flex-shrink-0">
-          {artist.matchScore}%
-        </span>
+        <MatchScoreBadge score={artist.matchScore} className="flex-shrink-0" />
       </div>
 
       <div className="flex flex-wrap gap-1" title={artist.genres.join(", ")}>

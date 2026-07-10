@@ -27,7 +27,9 @@ interface ArtistAvatarProps {
 function ArtistAvatar({ imageUrl, name, sizeClassName }: ArtistAvatarProps) {
   return (
     <div
-      className={`${sizeClassName} rounded-full bg-accent/15 border border-accent/25 flex items-center justify-center flex-shrink-0 overflow-hidden`}
+      className={`${sizeClassName} rounded-full bg-accent/15 flex items-center justify-center flex-shrink-0 overflow-hidden ${
+        imageUrl ? "" : "border border-accent/25"
+      }`}
     >
       {imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element

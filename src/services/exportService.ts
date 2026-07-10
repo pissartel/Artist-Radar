@@ -61,6 +61,9 @@ interface ArtistBookingOutput {
     bandSize: number | null;
     sourceUrls: string[];
     confidenceScore: number;
+    imageUrl: string | null;
+    imageSource: string | null;
+    imageConfidence: number | null;
   };
   warnings: string[];
 }
@@ -353,7 +356,10 @@ function buildArtistOutput(artistProfile: OpportunitySearchRunResult["artistProf
       monthlyListeners: artistProfile.platformStats.spotifyFollowers ?? null,
       bandSize: null,
       sourceUrls: collectArtistSourceUrls(artistProfile),
-      confidenceScore: Math.round(artistProfile.confidence * 100)
+      confidenceScore: Math.round(artistProfile.confidence * 100),
+      imageUrl: artistProfile.imageUrl ?? null,
+      imageSource: artistProfile.imageSource ?? null,
+      imageConfidence: artistProfile.imageConfidence ?? null
     },
     warnings: artistProfile.notes
   };
@@ -367,7 +373,10 @@ function mapSimilarArtistForBookingOutput(artist: SimilarArtist): Record<string,
     country: artist.country,
     score: artist.totalRelevance,
     reasons: artist.evidenceNotes.length > 0 ? artist.evidenceNotes : [artist.reason],
-    sourceUrls: artist.sourceUrls
+    sourceUrls: artist.sourceUrls,
+    imageUrl: artist.imageUrl ?? null,
+    imageSource: artist.imageSource ?? null,
+    imageConfidence: artist.imageConfidence ?? null
   };
 }
 

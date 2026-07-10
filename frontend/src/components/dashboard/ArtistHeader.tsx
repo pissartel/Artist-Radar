@@ -23,7 +23,12 @@ export default function ArtistHeader({ artist }: ArtistHeaderProps) {
 
   return (
     <div className="bg-card rounded-xl border border-slate-400/10 shadow-card-glow p-5 mb-6 flex items-start gap-4 sm:gap-5">
-      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-accent/20 border-2 border-accent/30 flex items-center justify-center flex-shrink-0 overflow-hidden">
+      <div
+        className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0 overflow-hidden ${
+          artist.imageUrl ? "" : "border-2 border-accent/30"
+        }`}
+      >
+
         {artist.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img

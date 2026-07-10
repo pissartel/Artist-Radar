@@ -1,7 +1,6 @@
-import type { ArtistMetrics, BookingSource, CityOpportunityStat } from "@/types";
+import type { ArtistMetrics, CityOpportunityStat } from "@/types";
 import TopCitiesPanel from "./TopCitiesPanel";
 import ArtistMetricsPanel from "./ArtistMetricsPanel";
-import SourcesPanel from "./SourcesPanel";
 import FilterButton from "./FilterButton";
 
 interface BookingInsightsPanelProps {
@@ -9,7 +8,6 @@ interface BookingInsightsPanelProps {
   topCities: CityOpportunityStat[];
   similarArtistCount: number;
   opportunityCount: number;
-  sources: BookingSource[];
 }
 
 export default function BookingInsightsPanel({
@@ -17,7 +15,6 @@ export default function BookingInsightsPanel({
   topCities,
   similarArtistCount,
   opportunityCount,
-  sources,
 }: BookingInsightsPanelProps) {
   return (
     <aside className="flex flex-col gap-3">
@@ -34,7 +31,6 @@ export default function BookingInsightsPanel({
         opportunityCount={opportunityCount}
       />
       <TopCitiesPanel cities={topCities} />
-      <SourcesPanel sources={sources} />
     </aside>
   );
 }

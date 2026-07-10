@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ArtistMetrics, Opportunity, BookingSource, CityOpportunityStat } from "@/types";
+import type { ArtistMetrics, Opportunity, CityOpportunityStat } from "@/types";
 import BookingTabs from "./BookingTabs";
 import BookingInsightsPanel from "./BookingInsightsPanel";
 
@@ -8,7 +8,6 @@ interface BookingSectionProps {
   topCities: CityOpportunityStat[];
   metrics?: ArtistMetrics;
   similarArtistCount: number;
-  sources: BookingSource[];
 }
 
 export default function BookingSection({
@@ -16,7 +15,6 @@ export default function BookingSection({
   topCities,
   metrics,
   similarArtistCount,
-  sources,
 }: BookingSectionProps) {
   return (
     <section className="mb-8">
@@ -47,7 +45,6 @@ export default function BookingSection({
             topCities={topCities}
             similarArtistCount={similarArtistCount}
             opportunityCount={opportunities.length}
-            sources={sources}
           />
         </div>
       </div>

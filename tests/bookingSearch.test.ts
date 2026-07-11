@@ -307,7 +307,10 @@ describe("Booking Search core", () => {
       }
     });
 
-    const result = await searchBookingOpportunities(input, { providers: [provider] });
+    const result = await searchBookingOpportunities(input, {
+      providers: [provider],
+      now: new Date("2026-06-15T00:00:00Z")
+    });
 
     expect(result.targets.some((target) => target.sourceUrl === "https://example.test/pop-punk-venue")).toBe(true);
     expect(result.opportunities[0]?.sourceUrl).toBe("https://example.test/pop-punk-venue");
@@ -714,9 +717,12 @@ describe("Booking Search core", () => {
       now: new Date("2026-06-09T12:00:00Z")
     });
 
-    expect(result.opportunities.map((opportunity) => opportunity.name)).toEqual(["Future Pop Punk", "Recent Emo"]);
+    expect(result.opportunities.map((opportunity) => opportunity.name)).toEqual(["Future Pop Punk"]);
+    expect(result.targets.some((target) => target.name === "Recent Emo" && target.opportunityKind === "historical_signal")).toBe(true);
+    expect(result.rejectedByReason.pastEvent).toBe(2);
     expect(result.warnings).toEqual(expect.arrayContaining([
       "Booking relevance rejected 1 events older than 24 months.",
+      "Booking relevance excluded 1 past events from actionable opportunities (kept as historical signals).",
       "Booking relevance rejected 2 genre-mismatch candidates."
     ]));
   });
@@ -744,7 +750,7 @@ describe("Booking Search core", () => {
               sourceType: "similar_artist_live_history",
               sourceProvider: "similar_artist_live_history:test",
               genres: ["pop punk"],
-              eventDate: "2025-09-01",
+              eventDate: "2026-09-01",
               confidence: 0.86,
               derivedFromSimilarArtist: {
                 name: "Comparable Punk Band",
@@ -831,7 +837,7 @@ describe("Booking Search core", () => {
     expect(result.opportunities[0]?.derivedFromSimilarArtist?.name).toBe("Comparable Punk Band");
   });
 
-  it("keeps future and recent specialized scene agenda events with strict pop punk evidence", async () => {
+  it("keeps future specialized scene agenda events and treats recent past ones as historical signals with strict pop punk evidence", async () => {
     const provider = buildSceneAgendaBookingSourceProvider({
       env: { ENABLE_SCENE_AGENDAS: "true" },
       now: new Date("2026-06-09T12:00:00Z"),
@@ -854,11 +860,10 @@ describe("Booking Search core", () => {
       now: new Date("2026-06-09T12:00:00Z")
     });
 
-    expect(result.opportunities.map((opportunity) => opportunity.name)).toEqual(expect.arrayContaining([
-      "Future Easycore Night",
-      "Recent Emo Venue History"
-    ]));
+    expect(result.opportunities.map((opportunity) => opportunity.name)).toEqual(["Future Easycore Night"]);
+    expect(result.opportunities.some((opportunity) => opportunity.name === "Recent Emo Venue History")).toBe(false);
     expect(result.opportunities.some((opportunity) => opportunity.name === "Old Punk Archive")).toBe(false);
+    expect(result.targets.some((target) => target.name === "Recent Emo Venue History" && target.opportunityKind === "historical_signal")).toBe(true);
     expect(result.warnings).toEqual(expect.arrayContaining([
       "Booking relevance rejected 1 events older than 24 months."
     ]));

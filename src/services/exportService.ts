@@ -217,6 +217,7 @@ export async function writeBookingRequestOutputs({
   const bookingWarnings = bookingResult.bookingSearch?.warnings ?? [];
   const sourceMetadata = bookingResult.bookingSearch?.sourceMetadata ?? [];
   const sourcesUsed = bookingResult.bookingSearch?.sourcesUsed ?? collectSourcesUsed(bookingResult.opportunities);
+  const rejectedByReason = bookingResult.bookingSearch?.rejectedByReason ?? null;
   const artistOutput = buildArtistOutput(artistData);
   const similarArtistsOutput = {
     similarArtists: flattenedSimilarArtists.map(mapSimilarArtistForBookingOutput),
@@ -227,7 +228,8 @@ export async function writeBookingRequestOutputs({
       opportunities: bookingOpportunities,
       sourcesUsed,
       warnings: bookingWarnings,
-      sourceMetadata
+      sourceMetadata,
+      rejectedByReason
     }
   };
 

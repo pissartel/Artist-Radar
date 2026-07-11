@@ -122,14 +122,18 @@ describe("handleAnalysisRequested", () => {
     expect(outcome).toEqual({ status: "completed" });
   });
 
-  it("marks the job failed when the pipeline throws", async () => {
+  it("marks the job failed when the pipeline throws, without leaking the internal error to the persisted/returned message", async () => {
     loadAnalysisJobForExecution.mockResolvedValue({ jobId: "job-1", status: "queued", requestPayload: request });
-    runOpportunitySearch.mockRejectedValue(new Error("Pipeline exploded"));
+    runOpportunitySearch.mockRejectedValue(new Error("Spotify API key abc123 rejected: connection to internal-host failed"));
 
     const outcome = await handleAnalysisRequested({ jobId: "job-1", step: fakeStep, logger: fakeLogger });
 
-    expect(failAnalysisJob).toHaveBeenCalledWith("job-1", "Pipeline exploded");
+    expect(failAnalysisJob).toHaveBeenCalledWith("job-1", "Analysis failed. Please try again.");
     expect(completeAnalysisJob).not.toHaveBeenCalled();
-    expect(outcome).toEqual({ status: "failed", error: "Pipeline exploded" });
+    expect(outcome).toEqual({ status: "failed", error: "Analysis failed. Please try again." });
+    expect(fakeLogger.error).toHaveBeenCalledWith(
+      "analysis job failed",
+      expect.objectContaining({ jobId: "job-1", error: expect.stringContaining("Spotify API key abc123") })
+    );
   });
 });

@@ -65,10 +65,15 @@ export async function handleAnalysisRequested({
     logger.info("analysis job completed", { jobId });
     return { status: "completed" as const };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Analysis failed. Please try again.";
-    await step.run("mark-failed", () => failAnalysisJob(jobId, message));
-    logger.error("analysis job failed", { jobId, error: message });
-    return { status: "failed" as const, error: message };
+    // Log the real pipeline error server-side only. The persisted/returned
+    // message is user-facing (surfaced verbatim on /analyzing), so it must
+    // never leak internal pipeline details (API error bodies, stack traces,
+    // credentials) to the browser.
+    const detail = error instanceof Error ? error.message : String(error);
+    logger.error("analysis job failed", { jobId, error: detail });
+    const publicMessage = "Analysis failed. Please try again.";
+    await step.run("mark-failed", () => failAnalysisJob(jobId, publicMessage));
+    return { status: "failed" as const, error: publicMessage };
   }
 }
 

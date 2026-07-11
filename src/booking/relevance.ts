@@ -1,5 +1,5 @@
 import { matchBookingGenres } from "./genreMatching.js";
-import type { BookingSearchInput, BookingTarget } from "./types.js";
+import type { BookingSearchInput, BookingTarget, DateConfidence, OpportunityKind } from "./types.js";
 import type { SimilarArtist } from "../schemas.js";
 
 export interface BookingRelevanceEnv {
@@ -15,8 +15,10 @@ export interface BookingRelevanceSummary {
   openAgendaCandidatesFound: number;
   openAgendaCandidatesKept: number;
   rejectedOldEvents: number;
+  rejectedPastEvents: number;
   rejectedGenreMismatchEvents: number;
   rejectedMissingDateEvents: number;
+  rejectedLowConfidenceEvents: number;
   warnings: string[];
 }
 
@@ -53,8 +55,10 @@ export function filterBookingTargetsForRelevance(
     openAgendaCandidatesFound: targets.filter((target) => target.sourceType === "openagenda").length,
     openAgendaCandidatesKept: 0,
     rejectedOldEvents: 0,
+    rejectedPastEvents: 0,
     rejectedGenreMismatchEvents: 0,
     rejectedMissingDateEvents: 0,
+    rejectedLowConfidenceEvents: 0,
     warnings: []
   };
   const kept: BookingTarget[] = [];
@@ -67,18 +71,29 @@ export function filterBookingTargetsForRelevance(
       summary.rejectedOldEvents += 1;
       continue;
     }
-    if (dateStatus.rejectReason === "missing_date" && target.confidence < HIGH_CONFIDENCE_WITHOUT_DATE) {
+    const keptByConfidenceWithoutDate = dateStatus.rejectReason === "missing_date" && target.confidence >= HIGH_CONFIDENCE_WITHOUT_DATE;
+    if (dateStatus.rejectReason === "missing_date" && !keptByConfidenceWithoutDate) {
       summary.rejectedMissingDateEvents += 1;
       continue;
     }
     if (!genreStatus.keep) {
-      summary.rejectedGenreMismatchEvents += 1;
+      if (genreStatus.rejectReason === "lowConfidence") {
+        summary.rejectedLowConfidenceEvents += 1;
+      } else {
+        summary.rejectedGenreMismatchEvents += 1;
+      }
       continue;
+    }
+    if (dateStatus.isPastEvent) {
+      summary.rejectedPastEvents += 1;
     }
 
     const enriched = {
       ...target,
       isFutureEvent: dateStatus.isFutureEvent,
+      isPastEvent: dateStatus.isPastEvent,
+      dateConfidence: dateStatus.dateConfidence,
+      opportunityKind: keptByConfidenceWithoutDate ? "actionable" : dateStatus.opportunityKind,
       ageMonths: dateStatus.ageMonths,
       confidence: genreStatus.level === "generic" ? Math.min(target.confidence, 0.45) : target.confidence,
       evidence: [
@@ -86,7 +101,7 @@ export function filterBookingTargetsForRelevance(
         dateStatus.evidence,
         genreStatus.evidence
       ].filter(Boolean)
-    };
+    } satisfies BookingTarget;
     if (enriched.sourceType === "openagenda") {
       summary.openAgendaCandidatesKept += 1;
     }
@@ -99,11 +114,17 @@ export function filterBookingTargetsForRelevance(
   if (summary.rejectedOldEvents > 0) {
     summary.warnings.push(`Booking relevance rejected ${summary.rejectedOldEvents} events older than ${recentMonths} months.`);
   }
+  if (summary.rejectedPastEvents > 0) {
+    summary.warnings.push(`Booking relevance excluded ${summary.rejectedPastEvents} past events from actionable opportunities (kept as historical signals).`);
+  }
   if (summary.rejectedGenreMismatchEvents > 0) {
     summary.warnings.push(`Booking relevance rejected ${summary.rejectedGenreMismatchEvents} genre-mismatch candidates.`);
   }
   if (summary.rejectedMissingDateEvents > 0) {
     summary.warnings.push(`Booking relevance rejected ${summary.rejectedMissingDateEvents} low-confidence candidates without parseable event dates.`);
+  }
+  if (summary.rejectedLowConfidenceEvents > 0) {
+    summary.warnings.push(`Booking relevance rejected ${summary.rejectedLowConfidenceEvents} low-confidence candidates without genre evidence.`);
   }
 
   return { targets: kept, summary };
@@ -161,50 +182,111 @@ export function isStrongSimilarArtistForBooking(input: BookingSearchInput, artis
   return compareArtistPopularity(input, artist).score >= 50 || artist.bookingCategory === "support_target";
 }
 
-function classifyBookingGenreEvidence(input: BookingSearchInput, target: BookingTarget): { keep: boolean; level: string; evidence: string } {
+function classifyBookingGenreEvidence(input: BookingSearchInput, target: BookingTarget): {
+  keep: boolean;
+  level: string;
+  evidence: string;
+  rejectReason: "genreMismatch" | "lowConfidence" | null;
+} {
   const text = [target.description, ...target.evidence, ...(target.pastProgramming ?? [])].filter(Boolean).join(" ");
   const genreMatch = matchBookingGenres([input.genre, ...(input.artistProfile?.genres ?? [])], target.genres, text);
   const normalizedText = text.toLowerCase();
 
   if (REJECT_GENRE_PATTERN.test(normalizedText) && !PUNK_CROSSOVER_PATTERN.test(normalizedText)) {
-    return { keep: false, level: "incompatible", evidence: "Rejected explicit incompatible genre evidence." };
+    return { keep: false, level: "incompatible", evidence: "Rejected explicit incompatible genre evidence.", rejectReason: "genreMismatch" };
   }
   if (genreMatch.level === "exact" || genreMatch.level === "related") {
-    return { keep: true, level: genreMatch.level, evidence: `Strict genre filter kept ${genreMatch.level} match: ${genreMatch.matchedGenres.join(", ")}.` };
+    return { keep: true, level: genreMatch.level, evidence: `Strict genre filter kept ${genreMatch.level} match: ${genreMatch.matchedGenres.join(", ")}.`, rejectReason: null };
   }
   if (genreMatch.level === "generic") {
-    return { keep: false, level: "generic", evidence: "Rejected generic genre evidence without compatible programming proof." };
+    return { keep: false, level: "generic", evidence: "Rejected generic genre evidence without compatible programming proof.", rejectReason: "genreMismatch" };
   }
   if (target.sourceType === "openagenda") {
-    return { keep: false, level: genreMatch.level, evidence: "Rejected OpenAgenda candidate without compatible genre evidence." };
+    return { keep: false, level: genreMatch.level, evidence: "Rejected OpenAgenda candidate without compatible genre evidence.", rejectReason: "genreMismatch" };
   }
+  const keep = target.confidence >= HIGH_CONFIDENCE_WITHOUT_DATE;
   return {
-    keep: target.confidence >= HIGH_CONFIDENCE_WITHOUT_DATE,
+    keep,
     level: genreMatch.level,
-    evidence: target.confidence >= HIGH_CONFIDENCE_WITHOUT_DATE
+    evidence: keep
       ? "Kept high-confidence source despite incomplete genre evidence."
-      : "Rejected weak genre evidence."
+      : "Rejected weak genre evidence.",
+    rejectReason: keep ? null : "lowConfidence"
   };
 }
 
-function classifyEventDate(eventDate: string | null, recentMonths: number, now: Date): {
+interface EventDateClassification {
   isFutureEvent: boolean | null;
+  isPastEvent: boolean;
+  dateConfidence: DateConfidence;
+  opportunityKind: OpportunityKind;
   ageMonths: number | null;
-  rejectReason: "old_event" | "missing_date" | null;
+  rejectReason: "old_event" | "missing_date" | "past_event" | null;
   evidence: string;
-} {
-  const parsed = eventDate ? new Date(eventDate) : null;
-  if (!parsed || Number.isNaN(parsed.getTime())) {
-    return { isFutureEvent: null, ageMonths: null, rejectReason: "missing_date", evidence: "No parseable event date." };
+}
+
+// Compares YYYY-MM-DD date-only strings (never full Date/timezone math) so an
+// event dated "today" in the source's own local date is never misclassified
+// as past/future due to timezone offsets.
+function toDateOnlyString(value: Date | string): string | null {
+  if (typeof value === "string") {
+    const isoPrefix = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (isoPrefix) return isoPrefix[1];
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
   }
-  if (parsed.getTime() >= now.getTime()) {
-    return { isFutureEvent: true, ageMonths: 0, rejectReason: null, evidence: `Future event date: ${formatDate(parsed)}.` };
+  return value.toISOString().slice(0, 10);
+}
+
+export function classifyEventDate(eventDate: string | null, recentMonths: number, now: Date = new Date()): EventDateClassification {
+  const todayIso = toDateOnlyString(now)!;
+  const eventIso = eventDate ? toDateOnlyString(eventDate) : null;
+
+  if (!eventIso) {
+    return {
+      isFutureEvent: null,
+      isPastEvent: false,
+      dateConfidence: "unclear",
+      opportunityKind: "historical_signal",
+      ageMonths: null,
+      rejectReason: "missing_date",
+      evidence: "No parseable event date."
+    };
   }
-  const ageMonths = monthsBetween(parsed, now);
+
+  if (eventIso >= todayIso) {
+    return {
+      isFutureEvent: true,
+      isPastEvent: false,
+      dateConfidence: "verified",
+      opportunityKind: "actionable",
+      ageMonths: 0,
+      rejectReason: null,
+      evidence: `Future event date: ${eventIso}.`
+    };
+  }
+
+  const ageMonths = monthsBetween(new Date(`${eventIso}T00:00:00Z`), new Date(`${todayIso}T00:00:00Z`));
   if (ageMonths > recentMonths) {
-    return { isFutureEvent: false, ageMonths, rejectReason: "old_event", evidence: `Rejected old event date: ${formatDate(parsed)}.` };
+    return {
+      isFutureEvent: false,
+      isPastEvent: true,
+      dateConfidence: "verified",
+      opportunityKind: "historical_signal",
+      ageMonths,
+      rejectReason: "old_event",
+      evidence: `Rejected old event date: ${eventIso}.`
+    };
   }
-  return { isFutureEvent: false, ageMonths, rejectReason: null, evidence: `Recent event date: ${formatDate(parsed)}.` };
+  return {
+    isFutureEvent: false,
+    isPastEvent: true,
+    dateConfidence: "verified",
+    opportunityKind: "historical_signal",
+    ageMonths,
+    rejectReason: "past_event",
+    evidence: `Past event date: ${eventIso}; kept as a historical signal, not an actionable opportunity.`
+  };
 }
 
 function countBookingUsefulSimilarArtists(input: BookingSearchInput): number {
@@ -236,8 +318,4 @@ function firstPositive(values: Array<number | null | undefined>): number | null 
 
 function monthsBetween(left: Date, right: Date): number {
   return Math.max(0, (right.getFullYear() - left.getFullYear()) * 12 + right.getMonth() - left.getMonth());
-}
-
-function formatDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
 }

@@ -32,6 +32,9 @@ export type BookingSourceType =
 
 export type ContactCandidateType = "email" | "contact_form" | "social" | "phone" | "unknown";
 
+export type DateConfidence = "verified" | "unclear";
+export type OpportunityKind = "actionable" | "historical_signal";
+
 export interface BookingSearchInput {
   artist: string;
   city: string;
@@ -67,6 +70,9 @@ export interface BookingTarget {
   eventDate?: string | null;
   eventDateRange?: { start: string; end: string } | null;
   isFutureEvent?: boolean | null;
+  isPastEvent?: boolean | null;
+  dateConfidence?: DateConfidence | null;
+  opportunityKind?: OpportunityKind | null;
   ageMonths?: number | null;
   deadline?: string | null;
   recommendedAction?: BookingSuggestedAction | null;
@@ -160,11 +166,22 @@ export interface BookingOpportunity {
   eventDate: string | null;
   dateRange: { start: string; end: string } | null;
   isFutureEvent: boolean | null;
+  isPastEvent: boolean | null;
+  dateConfidence: DateConfidence;
+  opportunityKind: OpportunityKind;
   ageMonths: number | null;
   derivedFromSimilarArtist?: DerivedFromSimilarArtist | null;
   target: BookingTarget;
   bookingScore: BookingScore;
   internalReview: OpportunityInternalReview;
+}
+
+export interface BookingRejectedByReason {
+  pastEvent: number;
+  missingDate: number;
+  genreMismatch: number;
+  duplicate: number;
+  lowConfidence: number;
 }
 
 export interface BookingSearchResult {
@@ -174,4 +191,5 @@ export interface BookingSearchResult {
   sourcesUsed: string[];
   warnings: string[];
   sourceMetadata: BookingSourceMetadata[];
+  rejectedByReason: BookingRejectedByReason;
 }

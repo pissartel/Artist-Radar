@@ -1,7 +1,7 @@
 import { pickBestContact } from "./contactExtraction.js";
 import { filterBookingTargetsForRelevance, sourcePriorityBonus, type BookingRelevanceEnv } from "./relevance.js";
 import { recommendBookingAction, scoreBookingCompatibility } from "./scoring.js";
-import type { BookingOpportunity, BookingSearchInput, BookingSearchResult, BookingSourceMetadata, BookingSourceType, BookingTarget } from "./types.js";
+import type { BookingOpportunity, BookingRejectedByReason, BookingSearchInput, BookingSearchResult, BookingSourceMetadata, BookingSourceType, BookingTarget } from "./types.js";
 import {
   buildDefaultBookingSourceProviders,
   type BookingSourceProvider,
@@ -26,14 +26,22 @@ export async function searchBookingOpportunities(
   const providerResults = await Promise.all(
     providers.map((provider) => runProviderSafely(provider, input))
   );
-  const rawTargets = dedupeTargets(providerResults.flatMap((result) => result.targets.map((target) => ({
+  const deduped = dedupeTargets(providerResults.flatMap((result) => result.targets.map((target) => ({
     ...target,
     sourceProvider: target.sourceProvider ?? result.sourceProvider
   }))));
-  const relevance = filterBookingTargetsForRelevance(input, rawTargets, options.env, options.now);
-  logBookingRelevanceSummary(relevance.summary);
+  const relevance = filterBookingTargetsForRelevance(input, deduped.targets, options.env, options.now);
+  const rejectedByReason: BookingRejectedByReason = {
+    pastEvent: relevance.summary.rejectedOldEvents + relevance.summary.rejectedPastEvents,
+    missingDate: relevance.summary.rejectedMissingDateEvents,
+    genreMismatch: relevance.summary.rejectedGenreMismatchEvents,
+    duplicate: deduped.duplicateCount,
+    lowConfidence: relevance.summary.rejectedLowConfidenceEvents
+  };
+  logBookingRelevanceSummary(relevance.summary, rejectedByReason);
   const targets = relevance.targets;
   const opportunities = targets
+    .filter((target) => target.opportunityKind !== "historical_signal")
     .map((target) => buildOpportunity(input, target))
     .sort((left, right) => right.score - left.score)
     .slice(0, input.limit);
@@ -54,7 +62,8 @@ export async function searchBookingOpportunities(
       targetCount: result.targets.length,
       warnings: result.warnings,
       metadata: result.metadata
-    }))
+    })),
+    rejectedByReason
   };
 }
 
@@ -105,6 +114,9 @@ function buildOpportunity(input: BookingSearchInput, target: BookingTarget): Boo
     suggestedAction,
     eventDate: target.eventDate ?? null,
     isFutureEvent: target.isFutureEvent ?? null,
+    isPastEvent: target.isPastEvent ?? null,
+    dateConfidence: target.dateConfidence ?? "unclear",
+    opportunityKind: target.opportunityKind ?? "actionable",
     ageMonths: target.ageMonths ?? null,
     derivedFromSimilarArtist: target.derivedFromSimilarArtist ?? null,
     target: {
@@ -147,16 +159,19 @@ function buildFitSummary(target: BookingTarget, action: string, warnings: string
   return `${target.name} needs more verification before outreach.${warningSuffix}`;
 }
 
-function dedupeTargets(targets: BookingTarget[]): BookingTarget[] {
+function dedupeTargets(targets: BookingTarget[]): { targets: BookingTarget[]; duplicateCount: number } {
   const seen = new Set<string>();
-  return targets.filter((target) => {
+  let duplicateCount = 0;
+  const deduped = targets.filter((target) => {
     const key = `${target.sourceUrl ?? ""}:${target.name}:${target.category}`;
     if (seen.has(key)) {
+      duplicateCount += 1;
       return false;
     }
     seen.add(key);
     return true;
   });
+  return { targets: deduped, duplicateCount };
 }
 
 function collectSourcesUsed(targets: BookingTarget[]): string[] {
@@ -167,7 +182,10 @@ function uniqueStrings(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
 
-function logBookingRelevanceSummary(summary: ReturnType<typeof filterBookingTargetsForRelevance>["summary"]): void {
+function logBookingRelevanceSummary(
+  summary: ReturnType<typeof filterBookingTargetsForRelevance>["summary"],
+  rejectedByReason: BookingRejectedByReason
+): void {
   warnLog("booking", [
     "Booking relevance filters:",
     `- Similar artists considered: ${summary.similarArtistsConsidered}`,
@@ -178,7 +196,13 @@ function logBookingRelevanceSummary(summary: ReturnType<typeof filterBookingTarg
     `- OpenAgenda candidates found: ${summary.openAgendaCandidatesFound}`,
     `- OpenAgenda candidates kept after date/genre filters: ${summary.openAgendaCandidatesKept}`,
     `- Rejected old events: ${summary.rejectedOldEvents}`,
-    `- Rejected genre-mismatch events: ${summary.rejectedGenreMismatchEvents}`
+    `- Rejected genre-mismatch events: ${summary.rejectedGenreMismatchEvents}`,
+    "Rejected candidates by reason:",
+    `- Past event: ${rejectedByReason.pastEvent}`,
+    `- Missing date: ${rejectedByReason.missingDate}`,
+    `- Genre mismatch: ${rejectedByReason.genreMismatch}`,
+    `- Duplicate: ${rejectedByReason.duplicate}`,
+    `- Low confidence: ${rejectedByReason.lowConfidence}`
   ].join("\n"));
 }
 

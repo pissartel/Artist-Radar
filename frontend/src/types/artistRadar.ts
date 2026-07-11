@@ -19,13 +19,11 @@ export interface ArtistRadarResponse extends DashboardData {
 }
 
 // Job model for POST /api/artist-analysis and GET /api/artist-analysis/:jobId/status.
-export type AnalysisStep =
-  | "artist_profile"
-  | "similar_artists"
-  | "music_scene"
-  | "venues_and_concerts"
-  | "booking_scoring"
-  | "dashboard_build";
+// These are the only real, coarse-grained phases the backend can report
+// today: runOpportunitySearch() is a single opaque call, so we don't
+// fabricate granular per-step progress until it's split into instrumented
+// stages.
+export type AnalysisStep = "preparing" | "running_pipeline" | "building_dashboard";
 
 export type StepStatus = "pending" | "running" | "completed" | "failed";
 

@@ -9,7 +9,7 @@ interface RouteParams {
 // POST /api/artist-radar.
 export async function GET(_request: Request, { params }: RouteParams): Promise<Response> {
   const { jobId } = await params;
-  const status = getAnalysisJobStatus(jobId);
+  const status = await getAnalysisJobStatus(jobId);
 
   if (!status) {
     return Response.json({ error: "Analysis job not found." }, { status: 404 });
@@ -19,7 +19,7 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<R
     return Response.json({ error: "Analysis job is not completed yet." }, { status: 409 });
   }
 
-  const result = getAnalysisJobResult(jobId);
+  const result = await getAnalysisJobResult(jobId);
   if (!result) {
     return Response.json({ error: "Analysis job result is unavailable." }, { status: 404 });
   }

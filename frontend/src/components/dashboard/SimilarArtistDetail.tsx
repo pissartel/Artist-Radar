@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { Opportunity, SimilarArtist } from "@/types";
 import { PLATFORM_LABELS, TIER_LABELS } from "./SimilarArtistCard";
 import MatchReasonsList from "./MatchReasonsList";
-import MatchScoreBadge from "@/components/common/MatchScoreBadge";
 import { formatOpportunityDate, getUrlHostname } from "@/lib/opportunity";
 import { formatMonthlyListeners, getSharedGenres } from "@/lib/similarArtist";
 
@@ -76,12 +75,9 @@ export default function SimilarArtistDetail({
             </p>
           </div>
         </div>
-        <MatchScoreBadge
-          score={artist.matchScore}
-          size="md"
-          label="match"
-          className="flex-shrink-0"
-        />
+        <span className="text-sm font-semibold text-emerald-400 bg-emerald-400/10 border border-emerald-400/25 px-3 py-1 rounded-full tabular-nums flex-shrink-0">
+          {artist.matchScore}% match
+        </span>
       </div>
 
       <div className="mt-6 flex flex-col gap-4">

@@ -5,7 +5,6 @@ import {
   getOpportunitySubtitle,
   getShortRelevanceReason,
 } from "@/lib/opportunity";
-import MatchScoreBadge from "@/components/common/MatchScoreBadge";
 
 export const TYPE_LABELS: Record<string, string> = {
   venue: "Venue",
@@ -23,6 +22,21 @@ const TYPE_COLORS: Record<string, string> = {
 
 interface BookingOpportunityCardProps {
   opportunity: Opportunity;
+}
+
+function ScoreBadge({ score }: { score: number }) {
+  const color =
+    score >= 85
+      ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/25"
+      : score >= 70
+        ? "text-accent-light bg-accent/10 border-accent/25"
+        : "text-yellow-400 bg-yellow-400/10 border-yellow-400/25";
+
+  return (
+    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border tabular-nums ${color}`}>
+      {score}%
+    </span>
+  );
 }
 
 export default function BookingOpportunityCard({
@@ -75,7 +89,7 @@ export default function BookingOpportunityCard({
           >
             {TYPE_LABELS[opportunity.type] ?? opportunity.type}
           </span>
-          <MatchScoreBadge score={opportunity.matchScore} />
+          <ScoreBadge score={opportunity.matchScore} />
         </div>
 
         {relevanceReason && (

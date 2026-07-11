@@ -3,7 +3,6 @@ import type { Opportunity, SimilarArtist } from "@/types";
 import { TYPE_LABELS } from "./BookingOpportunityCard";
 import MatchReasonsList from "./MatchReasonsList";
 import SimilarArtistCard from "./SimilarArtistCard";
-import MatchScoreBadge from "@/components/common/MatchScoreBadge";
 import { formatOpportunityDate, getUrlHostname } from "@/lib/opportunity";
 
 interface OpportunityDetailProps {
@@ -60,12 +59,9 @@ export default function OpportunityDetail({
             </p>
           </div>
         </div>
-        <MatchScoreBadge
-          score={opportunity.matchScore}
-          size="md"
-          label="match"
-          className="flex-shrink-0"
-        />
+        <span className="text-sm font-semibold text-emerald-400 bg-emerald-400/10 border border-emerald-400/25 px-3 py-1 rounded-full tabular-nums flex-shrink-0">
+          {opportunity.matchScore}% match
+        </span>
       </div>
 
       <div className="mt-6 flex flex-col gap-4">

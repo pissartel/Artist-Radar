@@ -17,13 +17,13 @@ export default function FormField({
     <div>
       <label
         htmlFor={htmlFor}
-        className="flex items-center gap-1 text-xs font-medium text-gray-400 mb-1.5"
+        className="flex items-center gap-1 text-xs font-semibold text-foreground-secondary mb-1.5"
       >
         {label}
-        {required && <span className="text-accent-light">*</span>}
+        {required && <span className="text-accent-text">*</span>}
       </label>
       {children}
-      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
+      {error && <p className="text-xs text-danger-text mt-1">{error}</p>}
     </div>
   );
 }

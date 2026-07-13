@@ -28,15 +28,15 @@ interface ArtistAvatarProps {
 function ArtistAvatar({ imageUrl, name, sizeClassName }: ArtistAvatarProps) {
   return (
     <div
-      className={`${sizeClassName} rounded-full bg-accent/15 flex items-center justify-center flex-shrink-0 overflow-hidden ${
-        imageUrl ? "" : "border border-accent/25"
+      className={`${sizeClassName} rounded-full bg-accent-tint flex items-center justify-center flex-shrink-0 overflow-hidden ${
+        imageUrl ? "" : "border border-accent-tint"
       }`}
     >
       {imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={imageUrl} alt={name} className="w-full h-full object-cover" />
       ) : (
-        <span className="text-accent-light text-base font-semibold">{name.charAt(0)}</span>
+        <span className="text-accent-text text-base font-semibold">{name.charAt(0)}</span>
       )}
     </div>
   );
@@ -62,21 +62,21 @@ export default function SimilarArtistCard({
     return (
       <Link
         href={`/similar-artists/${artist.id}`}
-        className="bg-card-alt rounded-xl p-4 border border-slate-400/10 shadow-card flex flex-col gap-3 w-44 flex-shrink-0 hover:bg-card-hover hover:border-accent/35 hover:shadow-card-hover transition-all duration-200"
+        className="bg-surface-elevated rounded-xl p-4 border border-border shadow-card flex flex-col gap-3 w-44 flex-shrink-0 hover:bg-surface hover:border-primary/35 hover:shadow-card-hover transition-all duration-200 focus-visible:outline-none focus-visible:shadow-focus"
       >
         <div className="flex items-start justify-between gap-2">
           <ArtistAvatar imageUrl={artist.imageUrl} name={artist.name} sizeClassName="w-10 h-10" />
           <MatchScoreBadge score={artist.matchScore} />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-white truncate">{artist.name}</p>
+          <p className="text-sm font-semibold text-foreground truncate">{artist.name}</p>
           <p
-            className="text-xs text-gray-400 mt-0.5 truncate"
+            className="text-xs text-foreground-secondary mt-0.5 truncate"
             title={artist.genres.join(", ")}
           >
             {formatGenrePreview(artist.genres, MAX_VISIBLE_GENRE_CHIPS)}
           </p>
-          <p className="text-xs text-gray-600 mt-0.5 truncate">
+          <p className="text-xs text-foreground-muted mt-0.5 truncate">
             {artist.location}
             {followers && <span> · {followers} followers</span>}
           </p>
@@ -89,7 +89,7 @@ export default function SimilarArtistCard({
               event.stopPropagation();
               window.open(spotifyPlatform.url, "_blank", "noopener,noreferrer");
             }}
-            className="self-start text-[10px] text-accent-light hover:text-white border border-accent/30 hover:border-accent-light hover:bg-accent/10 px-2 py-1 rounded-lg transition-all duration-150"
+            className="self-start text-[10px] text-accent-text hover:text-foreground border border-primary/30 hover:border-accent-text hover:bg-accent-tint px-2 py-1 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
           >
             Spotify ↗
           </button>
@@ -102,13 +102,13 @@ export default function SimilarArtistCard({
   const hiddenGenreCount = artist.genres.length - visibleGenres.length;
 
   return (
-    <div className="bg-card rounded-xl p-4 border border-slate-400/10 shadow-card hover:bg-card-hover hover:border-accent/30 hover:shadow-card-hover transition-all duration-200 flex flex-col gap-3">
+    <div className="bg-surface rounded-xl p-4 border border-border shadow-card hover:bg-surface-elevated hover:border-primary/30 hover:shadow-card-hover transition-all duration-200 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-3 min-w-0">
           <ArtistAvatar imageUrl={artist.imageUrl} name={artist.name} sizeClassName="w-11 h-11" />
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-white truncate">{artist.name}</p>
-            <p className="text-xs text-gray-500 truncate">
+            <p className="text-sm font-semibold text-foreground truncate">{artist.name}</p>
+            <p className="text-xs text-foreground-muted truncate">
               {artist.location}
               {followers && <span> · {followers} followers</span>}
             </p>
@@ -121,25 +121,25 @@ export default function SimilarArtistCard({
         {visibleGenres.map((genre) => (
           <span
             key={genre}
-            className="text-[10px] text-gray-400 bg-white/5 border border-slate-400/10 px-1.5 py-0.5 rounded-md"
+            className="text-[10px] text-foreground-secondary bg-white/5 border border-border px-1.5 py-0.5 rounded-md"
           >
             {genre}
           </span>
         ))}
         {hiddenGenreCount > 0 && (
-          <span className="text-[10px] text-gray-500 bg-white/5 border border-slate-400/10 px-1.5 py-0.5 rounded-md">
+          <span className="text-[10px] text-foreground-muted bg-white/5 border border-border px-1.5 py-0.5 rounded-md">
             +{hiddenGenreCount}
           </span>
         )}
         {artist.artistTier && (
-          <span className="text-[10px] text-accent-light bg-accent/10 border border-accent/20 px-1.5 py-0.5 rounded-md">
+          <span className="text-[10px] text-accent-text bg-accent-tint border border-accent-tint px-1.5 py-0.5 rounded-md">
             {TIER_LABELS[artist.artistTier] ?? artist.artistTier}
           </span>
         )}
       </div>
 
       {artist.reason && (
-        <p className="text-xs text-gray-400 leading-relaxed">{artist.reason}</p>
+        <p className="text-xs text-foreground-secondary leading-relaxed">{artist.reason}</p>
       )}
 
       <div className="flex items-center justify-between gap-2 mt-auto pt-1">
@@ -152,26 +152,26 @@ export default function SimilarArtistCard({
                   href={platform.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[10px] text-accent-light hover:text-white bg-accent/10 border border-accent/20 hover:border-accent-light px-1.5 py-0.5 rounded-md transition-colors"
+                  className="text-[10px] text-accent-text hover:text-foreground bg-accent-tint border border-accent-tint hover:border-accent-text px-1.5 py-0.5 rounded-md transition-colors"
                 >
                   {PLATFORM_LABELS[platform.type] ?? platform.type}
                 </a>
               ) : (
                 <span
                   key={platform.type}
-                  className="text-[10px] text-gray-500 bg-white/5 border border-slate-400/10 px-1.5 py-0.5 rounded-md"
+                  className="text-[10px] text-foreground-muted bg-white/5 border border-border px-1.5 py-0.5 rounded-md"
                 >
                   {PLATFORM_LABELS[platform.type] ?? platform.type}
                 </span>
               ),
             )
           ) : (
-            <span className="text-[10px] text-gray-700">No platform links yet</span>
+            <span className="text-[10px] text-foreground-disabled">No platform links yet</span>
           )}
         </div>
         <Link
           href={`/similar-artists/${artist.id}`}
-          className="text-xs text-accent-light hover:text-white border border-accent/30 hover:border-accent-light hover:bg-accent/10 px-3 py-1.5 rounded-lg transition-all duration-150 whitespace-nowrap"
+          className="text-xs text-accent-text hover:text-foreground border border-primary/30 hover:border-accent-text hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 whitespace-nowrap focus-visible:outline-none focus-visible:shadow-focus"
         >
           View details
         </Link>

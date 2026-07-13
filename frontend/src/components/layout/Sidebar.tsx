@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "@/lib/navigation";
@@ -8,12 +9,17 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden md:flex w-56 min-h-screen bg-sidebar flex-col py-8 px-4 border-r border-white/5 flex-shrink-0">
+    <aside className="hidden md:flex w-56 min-h-screen bg-surface flex-col py-8 px-4 border-r border-border flex-shrink-0">
       <div className="mb-10 px-2">
-        <span className="text-accent-light font-bold text-lg tracking-tight">
-          Artist Radar
-        </span>
-        <p className="text-[10px] text-gray-600 mt-0.5 uppercase tracking-widest">
+        <Image
+          src="/brand/logo-next-stage-dark.png"
+          alt="NextStage"
+          width={136}
+          height={32}
+          priority
+          className="h-8 w-auto"
+        />
+        <p className="text-[10px] text-foreground-muted mt-1.5 uppercase tracking-widest">
           Booking Intelligence
         </p>
       </div>
@@ -26,17 +32,17 @@ export default function Sidebar() {
               key={item.href}
               href={item.href}
               aria-current={isActive ? "page" : undefined}
-              className={`px-3 py-2.5 rounded-lg text-sm transition-all duration-150 group flex items-center gap-2.5 ${
+              className={`px-3 py-2.5 rounded-lg text-sm transition-all duration-150 group flex items-center gap-2.5 focus-visible:outline-none focus-visible:shadow-focus ${
                 isActive
-                  ? "text-white bg-white/5"
-                  : "text-gray-400 hover:text-white hover:bg-white/5"
+                  ? "text-foreground bg-surface-elevated font-bold"
+                  : "text-foreground-muted font-semibold hover:text-foreground hover:bg-white/[0.03]"
               }`}
             >
               <span
                 className={`w-1.5 h-1.5 rounded-full transition-colors flex-shrink-0 ${
                   isActive
-                    ? "bg-accent-light"
-                    : "bg-white/10 group-hover:bg-accent-light"
+                    ? "bg-accent-text"
+                    : "bg-white/10 group-hover:bg-accent-text"
                 }`}
               />
               {item.label}
@@ -44,8 +50,8 @@ export default function Sidebar() {
           );
         })}
       </nav>
-      <div className="mt-auto pt-6 border-t border-white/5 px-2">
-        <p className="text-[10px] text-gray-700 uppercase tracking-widest">
+      <div className="mt-auto pt-6 border-t border-border px-2">
+        <p className="text-[10px] text-foreground-disabled uppercase tracking-widest">
           MVP v0.1
         </p>
       </div>

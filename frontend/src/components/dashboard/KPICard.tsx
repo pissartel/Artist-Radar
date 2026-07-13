@@ -10,10 +10,17 @@ interface IconConfig {
   svg: React.ReactNode;
 }
 
+// Icon tint per metric follows the semantic role table in
+// docs/brand/design-system.md §2 (info = venue/secondary data points,
+// warning = concert/festival "event" category, success = positive/growth
+// metrics, accent = match %/outreach). The brand doc doesn't define a
+// dedicated 6-color data-viz palette, so two metrics share a tint here —
+// flagged as a design follow-up in the PR description rather than
+// inventing new off-brand hues.
 const KPI_ICONS: Record<string, IconConfig> = {
   "compatible-venues": {
-    color: "text-purple-400",
-    bg: "bg-purple-500/15",
+    color: "text-info-text",
+    bg: "bg-info-tint",
     svg: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
         <rect x="6" y="3" width="12" height="19" rx="1" />
@@ -25,8 +32,8 @@ const KPI_ICONS: Record<string, IconConfig> = {
     ),
   },
   "concerts-found": {
-    color: "text-blue-400",
-    bg: "bg-blue-500/15",
+    color: "text-warning-text",
+    bg: "bg-warning-tint",
     svg: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -37,8 +44,8 @@ const KPI_ICONS: Record<string, IconConfig> = {
     ),
   },
   "festivals": {
-    color: "text-orange-400",
-    bg: "bg-orange-500/15",
+    color: "text-warning-text",
+    bg: "bg-warning-tint",
     svg: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -46,8 +53,8 @@ const KPI_ICONS: Record<string, IconConfig> = {
     ),
   },
   "similar-artists": {
-    color: "text-emerald-400",
-    bg: "bg-emerald-500/15",
+    color: "text-success-text",
+    bg: "bg-success-tint",
     svg: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -58,8 +65,8 @@ const KPI_ICONS: Record<string, IconConfig> = {
     ),
   },
   "contacts-found": {
-    color: "text-fuchsia-400",
-    bg: "bg-fuchsia-500/15",
+    color: "text-accent-text",
+    bg: "bg-accent-tint",
     svg: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20 7H4a2 2 0 0 0-2 2v6c0 1.1.9 2 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" />
@@ -69,8 +76,8 @@ const KPI_ICONS: Record<string, IconConfig> = {
     ),
   },
   "avg-match-score": {
-    color: "text-rose-400",
-    bg: "bg-rose-500/15",
+    color: "text-accent-text",
+    bg: "bg-accent-tint",
     svg: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
@@ -84,7 +91,7 @@ export default function KpiCard({ metric }: KpiCardProps) {
   const iconConfig = KPI_ICONS[metric.id];
 
   return (
-    <div className="bg-card rounded-xl p-4 border border-slate-400/10 shadow-card hover:bg-card-hover hover:border-accent/30 transition-all duration-200 group">
+    <div className="bg-surface rounded-xl p-4 border border-border shadow-card hover:bg-surface-elevated hover:border-primary/30 transition-all duration-200 group">
       {iconConfig && (
         <div
           className={`inline-flex items-center justify-center w-7 h-7 rounded-lg ${iconConfig.bg} ${iconConfig.color} mb-2.5`}
@@ -92,13 +99,13 @@ export default function KpiCard({ metric }: KpiCardProps) {
           {iconConfig.svg}
         </div>
       )}
-      <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-1 truncate">
+      <p className="text-[10px] text-foreground-muted uppercase tracking-widest mb-1 truncate">
         {metric.label}
       </p>
-      <p className="text-2xl font-bold text-white tabular-nums">
+      <p className="text-2xl font-bold text-foreground tabular-nums">
         {metric.value}
         {metric.unit && (
-          <span className="text-base text-gray-500 ml-1">{metric.unit}</span>
+          <span className="text-base text-foreground-muted ml-1">{metric.unit}</span>
         )}
       </p>
     </div>

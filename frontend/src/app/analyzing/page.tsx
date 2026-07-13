@@ -76,7 +76,7 @@ export default function AnalyzingPage() {
         aria-label="Analyzing artist profile"
       >
         <div
-          className="w-12 h-12 mx-auto rounded-full border-2 border-accent/20 border-t-accent-light animate-spin"
+          className="w-12 h-12 mx-auto rounded-full border-2 border-primary/20 border-t-primary animate-spin"
           aria-hidden="true"
         />
         <h1 className="text-lg font-semibold text-white mt-5">
@@ -94,21 +94,21 @@ export default function AnalyzingPage() {
             return (
               <li key={step} className="flex items-center gap-2.5 text-sm">
                 {isComplete ? (
-                  <span className="w-4 h-4 shrink-0 rounded-full bg-accent-green/20 text-accent-green flex items-center justify-center text-[10px] leading-none">
+                  <span className="w-4 h-4 shrink-0 rounded-full bg-success-tint text-success flex items-center justify-center text-[10px] leading-none">
                     ✓
                   </span>
                 ) : isActive ? (
-                  <span className="w-4 h-4 shrink-0 rounded-full border-2 border-accent/20 border-t-accent-light animate-spin" />
+                  <span className="w-4 h-4 shrink-0 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
                 ) : (
-                  <span className="w-4 h-4 shrink-0 rounded-full border border-slate-400/20" />
+                  <span className="w-4 h-4 shrink-0 rounded-full border border-border-strong" />
                 )}
                 <span
                   className={
                     isComplete
-                      ? "text-gray-400"
+                      ? "text-foreground-secondary"
                       : isActive
-                        ? "text-white font-medium"
-                        : "text-gray-600"
+                        ? "text-foreground font-medium"
+                        : "text-foreground-muted"
                   }
                 >
                   {step}

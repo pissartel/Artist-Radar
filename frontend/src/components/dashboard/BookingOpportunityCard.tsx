@@ -38,7 +38,7 @@ export default function BookingOpportunityCard({
   const relevanceReason = getShortRelevanceReason(opportunity);
 
   return (
-    <div className="bg-surface rounded-xl p-4 border border-border shadow-card hover:bg-surface-elevated hover:border-primary/30 hover:shadow-card-hover transition-all duration-200 flex gap-4">
+    <div className="bg-surface rounded-xl p-4 border border-border-subtle shadow-card hover:bg-surface-elevated hover:border-border-accent hover:shadow-card-hover transition-all duration-200 flex gap-4">
       <div className="w-11 h-11 rounded-xl bg-accent-tint border border-accent-tint flex items-center justify-center flex-shrink-0">
         <span className="text-accent-text text-base font-semibold">
           {title.charAt(0)}
@@ -91,7 +91,7 @@ export default function BookingOpportunityCard({
         <div className="mt-3">
           <Link
             href={`/opportunities/${opportunity.id}`}
-            className="text-xs text-accent-text hover:text-foreground border border-primary/30 hover:border-accent-text hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
+            className="text-xs text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
           >
             View details
           </Link>

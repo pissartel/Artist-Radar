@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #EEEEF2; font-family: 'Manrope', sans-serif; }
+    a { color: #9333EA; text-decoration: none; }
+    a:hover { color: #C084FC; }
+    ::selection { background: rgba(147,51,234,0.3); }
+  </style>
+</helmet>
+
+<section style="padding: 56px; display: flex; flex-direction: column; gap: 40px; max-width: 1560px;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <div style="font-size: 13px; font-family: 'JetBrains Mono', monospace; color: #6E6E7A; letter-spacing: 0.08em;">NEXTSTAGE · DESIGN SYSTEM &amp; FLOW</div>
+    <div style="font-size: 28px; font-weight: 800; color: #12101F; letter-spacing: -0.02em;">Landing → Artist Info → AI Pipeline → Dashboard</div>
+    <div style="font-size: 14px; color: #55545F; max-width: 700px;">Dark, near-black app surfaces; violet accent used sparingly for key actions and highlights; the indigo→pink logo gradient reserved for hero CTAs and the mark itself. Manrope throughout.</div>
+  </div>
+
+  <!-- ============ DESIGN TOKENS ============ -->
+  <div data-screen-label="Design tokens" style="display: flex; flex-direction: column; gap: 20px;">
+    <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9A99A6; letter-spacing: 0.08em;">01 · FOUNDATIONS</div>
+    <div style="background: #0B0A10; border-radius: 20px; padding: 40px; display: flex; flex-direction: column; gap: 32px;">
+
+      <!-- Colors -->
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 13px; font-weight: 700; color: #6E6C7A; letter-spacing: 0.06em; text-transform: uppercase;">Color</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 14px;">
+          <div style="width: 140px;"><div style="height: 64px; border-radius: 10px; background: #0B0A10; border: 1px solid rgba(255,255,255,0.12);"></div><div style="font-size: 12px; color: #F5F5F7; margin-top: 6px; font-weight: 600;">App bg</div><div style="font-size: 11px; color: #6E6C7A; font-family: 'JetBrains Mono', monospace;">#0B0A10</div></div>
+          <div style="width: 140px;"><div style="height: 64px; border-radius: 10px; background: #16151D; border: 1px solid rgba(255,255,255,0.08);"></div><div style="font-size: 12px; color: #F5F5F7; margin-top: 6px; font-weight: 600;">Surface</div><div style="font-size: 11px; color: #6E6C7A; font-family: 'JetBrains Mono', monospace;">#16151D</div></div>
+          <div style="width: 140px;"><div style="height: 64px; border-radius: 10px; background: #1D1B26;"></div><div style="font-size: 12px; color: #F5F5F7; margin-top: 6px; font-weight: 600;">Surface raised</div><div style="font-size: 11px; color: #6E6C7A; font-family: 'JetBrains Mono', monospace;">#1D1B26</div></div>
+          <div style="width: 140px;"><div style="height: 64px; border-radius: 10px; background: #9333EA;"></div><div style="font-size: 12px; color: #F5F5F7; margin-top: 6px; font-weight: 600;">Violet accent</div><div style="font-size: 11px; color: #6E6C7A; font-family: 'JetBrains Mono', monospace;">#9333EA</div></div>
+          <div style="width: 140px;"><div style="height: 64px; border-radius: 10px; background: linear-gradient(135deg,#4B4DF7,#9333EA,#F43F5E);"></div><div style="font-size: 12px; color: #F5F5F7; margin-top: 6px; font-weight: 600;">Brand gradient</div><div style="font-size: 11px; color: #6E6C7A; font-family: 'JetBrains Mono', monospace;">CTAs only</div></div>
+          <div style="width: 140px;"><div style="height: 64px; border-radius: 10px; background: #22C55E;"></div><div style="font-size: 12px; color: #F5F5F7; margin-top: 6px; font-weight: 600;">Success</div><div style="font-size: 11px; color: #6E6C7A; font-family: 'JetBrains Mono', monospace;">#22C55E</div></div>
+          <div style="width: 140px;"><div style="height: 64px; border-radius: 10px; background: #F97316;"></div><div style="font-size: 12px; color: #F5F5F7; margin-top: 6px; font-weight: 600;">Warning</div><div style="font-size: 11px; color: #6E6C7A; font-family: 'JetBrains Mono', monospace;">#F97316</div></div>
+          <div style="width: 140px;"><div style="height: 64px; border-radius: 10px; background: #3B82F6;"></div><div style="font-size: 12px; color: #F5F5F7; margin-top: 6px; font-weight: 600;">Info</div><div style="font-size: 11px; color: #6E6C7A; font-family: 'JetBrains Mono', monospace;">#3B82F6</div></div>
+        </div>
+      </div>
+
+      <!-- Type -->
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="font-size: 13px; font-weight: 700; color: #6E6C7A; letter-spacing: 0.06em; text-transform: uppercase;">Type — Manrope</div>
+        <div style="font-size: 44px; font-weight: 800; color: #F5F5F7; letter-spacing: -0.02em;">Aa Headline 800</div>
+        <div style="font-size: 22px; font-weight: 700; color: #F5F5F7; letter-spacing: -0.01em;">Aa Subhead 700</div>
+        <div style="font-size: 16px; font-weight: 500; color: #B4B2BF;">Aa Body 500 — the quick brown fox jumps over the lazy dog.</div>
+        <div style="font-size: 13px; font-weight: 600; color: #6E6C7A; letter-spacing: 0.06em; text-transform: uppercase;">Aa Label / Eyebrow 600</div>
+      </div>
+
+      <!-- Buttons -->
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="font-size: 13px; font-weight: 700; color: #6E6C7A; letter-spacing: 0.06em; text-transform: uppercase;">Buttons</div>
+        <div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+          <div style="padding: 14px 26px; border-radius: 12px; background: linear-gradient(135deg,#4B4DF7,#9333EA,#F43F5E); color: #FFFFFF; font-weight: 700; font-size: 15px;">Primary CTA</div>
+          <div style="padding: 14px 26px; border-radius: 12px; background: #9333EA; color: #FFFFFF; font-weight: 700; font-size: 15px;">Solid violet</div>
+          <div style="padding: 14px 26px; border-radius: 12px; background: #1D1B26; border: 1px solid rgba(255,255,255,0.1); color: #F5F5F7; font-weight: 700; font-size: 15px;">Secondary</div>
+          <div style="padding: 13px 26px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.14); color: #B4B2BF; font-weight: 700; font-size: 15px;">Ghost</div>
+          <div style="padding: 5px 12px; border-radius: 999px; background: rgba(147,51,234,0.15); color: #C084FC; font-weight: 700; font-size: 12px;">90% match</div>
+          <div style="padding: 5px 12px; border-radius: 999px; background: rgba(34,197,94,0.12); color: #4ADE80; font-weight: 700; font-size: 12px;">Opening Slot</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ LANDING ============ -->
+  <div data-screen-label="Landing page" style="display: flex; flex-direction: column; gap: 16px;">
+    <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9A99A6; letter-spacing: 0.08em;">02 · LANDING PAGE</div>
+    <div style="width: 1440px; background: #0B0A10; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.25);">
+
+      <!-- nav -->
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 24px 56px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <svg width="30" height="30" viewBox="0 0 64 64" fill="none">
+            <defs><linearGradient id="lg1" x1="14" y1="14" x2="56" y2="46" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#6D6BFF"></stop><stop offset="0.5" stop-color="#A855F7"></stop><stop offset="1" stop-color="#FB5B76"></stop></linearGradient></defs>
+            <path d="M14 58 V10 Q 32 32 46 58 V16" stroke="url(#lg1)" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"></path>
+            <path d="M46 4.5 L38 15 H54 Z" fill="url(#lg1)" stroke="url(#lg1)" stroke-width="5" stroke-linejoin="round"></path>
+          </svg>
+          <div style="font-size: 19px; font-weight: 800; color: #F5F5F7; letter-spacing: -0.02em;">NextStage</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 36px;">
+          <div style="font-size: 14px; font-weight: 600; color: #B4B2BF;">Product</div>
+          <div style="font-size: 14px; font-weight: 600; color: #B4B2BF;">How it works</div>
+          <div style="font-size: 14px; font-weight: 600; color: #B4B2BF;">Pricing</div>
+          <div style="font-size: 14px; font-weight: 600; color: #F5F5F7;">Sign in</div>
+          <div style="padding: 11px 22px; border-radius: 10px; background: linear-gradient(135deg,#4B4DF7,#9333EA,#F43F5E); color: #FFFFFF; font-weight: 700; font-size: 14px;">Get started</div>
+        </div>
+      </div>
+
+      <!-- hero -->
+      <div style="display: flex; flex-direction: column; align-items: center; text-align: center; gap: 22px; padding: 96px 56px 72px;">
+        <div style="padding: 7px 16px; border-radius: 999px; background: rgba(147,51,234,0.12); color: #C084FC; font-size: 13px; font-weight: 700; letter-spacing: 0.02em;">AI-powered booking intelligence</div>
+        <div style="font-size: 60px; font-weight: 800; color: #F5F5F7; letter-spacing: -0.03em; line-height: 1.05; max-width: 820px;">Find your next stage, before anyone else does.</div>
+        <div style="font-size: 18px; font-weight: 500; color: #9997A6; max-width: 560px; line-height: 1.5;">NextStage scans venues, festivals and similar artists to surface the booking opportunities that actually fit your sound.</div>
+        <div style="display: flex; gap: 14px; margin-top: 8px;">
+          <div style="padding: 16px 30px; border-radius: 12px; background: linear-gradient(135deg,#4B4DF7,#9333EA,#F43F5E); color: #FFFFFF; font-weight: 700; font-size: 16px;">Analyze my artist profile</div>
+          <div style="padding: 15px 30px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.14); color: #F5F5F7; font-weight: 700; font-size: 16px;">See how it works</div>
+        </div>
+      </div>
+
+      <!-- features -->
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; padding: 0 56px 96px;">
+        <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 30px; display: flex; flex-direction: column; gap: 16px;">
+          <div style="width: 44px; height: 44px; border-radius: 10px; background: rgba(147,51,234,0.14); display: flex; align-items: center; justify-content: center;"><div style="width: 18px; height: 18px; border-radius: 5px; border: 2px solid #C084FC;"></div></div>
+          <div style="font-size: 17px; font-weight: 700; color: #F5F5F7;">Discover opportunities</div>
+          <div style="font-size: 14px; color: #9997A6; line-height: 1.5;">Compatible venues, festivals and opening slots ranked to your genre and reach.</div>
+        </div>
+        <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 30px; display: flex; flex-direction: column; gap: 16px;">
+          <div style="width: 44px; height: 44px; border-radius: 10px; background: rgba(59,130,246,0.14); display: flex; align-items: center; justify-content: center;"><div style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid #60A5FA;"></div></div>
+          <div style="font-size: 17px; font-weight: 700; color: #F5F5F7;">AI similarity matching</div>
+          <div style="font-size: 14px; color: #9997A6; line-height: 1.5;">See the artists closest to your sound and where their momentum is heading.</div>
+        </div>
+        <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 30px; display: flex; flex-direction: column; gap: 16px;">
+          <div style="width: 44px; height: 44px; border-radius: 10px; background: rgba(34,197,94,0.14); display: flex; align-items: center; justify-content: center;"><div style="width: 16px; height: 16px; transform: rotate(45deg); border: 2px solid #4ADE80;"></div></div>
+          <div style="font-size: 17px; font-weight: 700; color: #F5F5F7;">Booking scores</div>
+          <div style="font-size: 14px; color: #9997A6; line-height: 1.5;">Every lead scored so you spend outreach time where it converts.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ARTIST INFO FORM ============ -->
+  <div data-screen-label="Artist info form" style="display: flex; flex-direction: column; gap: 16px;">
+    <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9A99A6; letter-spacing: 0.08em;">03 · ARTIST INFO FORM</div>
+    <div style="width: 1440px; height: 900px; background: #0B0A10; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center;">
+      <div style="width: 560px; display: flex; flex-direction: column; gap: 28px;">
+        <div style="display: flex; flex-direction: column; gap: 8px; align-items: center; text-align: center;">
+          <div style="font-size: 12px; font-weight: 700; color: #C084FC; letter-spacing: 0.08em;">STEP 1 OF 2</div>
+          <div style="font-size: 30px; font-weight: 800; color: #F5F5F7; letter-spacing: -0.02em;">Tell us about your project</div>
+          <div style="font-size: 15px; color: #9997A6;">We'll use this to find your booking opportunities.</div>
+        </div>
+
+        <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 32px; display: flex; flex-direction: column; gap: 20px;">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 13px; font-weight: 600; color: #B4B2BF;">Artist / band name</div>
+            <div style="padding: 13px 16px; border-radius: 10px; background: #0B0A10; border: 1px solid rgba(255,255,255,0.1); color: #F5F5F7; font-size: 15px;">Marigold Youth</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 13px; font-weight: 600; color: #B4B2BF;">Location / country</div>
+            <div style="padding: 13px 16px; border-radius: 10px; background: #0B0A10; border: 1px solid rgba(255,255,255,0.1); color: #F5F5F7; font-size: 15px;">France</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 13px; font-weight: 600; color: #B4B2BF;">Spotify or streaming link</div>
+            <div style="padding: 13px 16px; border-radius: 10px; background: #0B0A10; border: 1px solid rgba(255,255,255,0.1); color: #6E6C7A; font-size: 15px;">open.spotify.com/artist/...</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 13px; font-weight: 600; color: #B4B2BF;">Social link (Instagram, etc.)</div>
+            <div style="padding: 13px 16px; border-radius: 10px; background: #0B0A10; border: 1px solid rgba(255,255,255,0.1); color: #6E6C7A; font-size: 15px;">instagram.com/...</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; justify-content: space-between; align-items: center;">
+          <div style="font-size: 14px; font-weight: 600; color: #9997A6;">Back</div>
+          <div style="padding: 14px 30px; border-radius: 12px; background: linear-gradient(135deg,#4B4DF7,#9333EA,#F43F5E); color: #FFFFFF; font-weight: 700; font-size: 15px;">Analyze my profile →</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ AI PIPELINE ============ -->
+  <div data-screen-label="AI pipeline" style="display: flex; flex-direction: column; gap: 16px;">
+    <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9A99A6; letter-spacing: 0.08em;">04 · AI ANALYSIS PIPELINE</div>
+    <div style="width: 1440px; height: 900px; background: #0B0A10; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center;">
+      <div style="width: 560px; display: flex; flex-direction: column; align-items: center; gap: 26px; text-align: center;">
+        <div style="width: 96px; height: 96px; border-radius: 50%; border: 4px solid rgba(147,51,234,0.16); border-top-color: #C084FC; border-right-color: #C084FC;"></div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-size: 28px; font-weight: 800; color: #F5F5F7; letter-spacing: -0.02em;">Analyzing your artist profile…</div>
+          <div style="font-size: 15px; color: #9997A6; max-width: 420px;">We're running the real analysis now. This can take a few seconds.</div>
+        </div>
+
+        <div style="width: 100%; background: #16151D; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 10px; display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: center; gap: 14px; padding: 14px 18px;">
+            <div style="width: 26px; height: 26px; border-radius: 50%; background: rgba(34,197,94,0.15); display: flex; align-items: center; justify-content: center; color: #4ADE80; font-size: 14px; font-weight: 800;">✓</div>
+            <div style="font-size: 15px; font-weight: 500; color: #9997A6;">Analyzing artist profile</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px; padding: 14px 18px;">
+            <div style="width: 26px; height: 26px; border-radius: 50%; border: 3px solid rgba(147,51,234,0.2); border-top-color: #C084FC;"></div>
+            <div style="font-size: 15px; font-weight: 700; color: #F5F5F7;">Finding similar artists</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px; padding: 14px 18px;">
+            <div style="width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.14);"></div>
+            <div style="font-size: 15px; font-weight: 500; color: #5C5A66;">Mapping music scene</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px; padding: 14px 18px;">
+            <div style="width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.14);"></div>
+            <div style="font-size: 15px; font-weight: 500; color: #5C5A66;">Scanning venues and concerts</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px; padding: 14px 18px;">
+            <div style="width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.14);"></div>
+            <div style="font-size: 15px; font-weight: 500; color: #5C5A66;">Scoring booking opportunities</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px; padding: 14px 18px;">
+            <div style="width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.14);"></div>
+            <div style="font-size: 15px; font-weight: 500; color: #5C5A66;">Building dashboard</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DASHBOARD ============ -->
+  <div style="display: flex; flex-direction: column; gap: 16px;">
+    <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9A99A6; letter-spacing: 0.08em;">05 · DASHBOARD</div>
+
+    <!-- Overview -->
+    <div data-screen-label="Dashboard — Overview" style="width: 1440px; height: 940px; background: #0B0A10; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.25); display: flex;">
+
+      <!-- sidebar -->
+      <div style="width: 248px; flex-shrink: 0; border-right: 1px solid rgba(255,255,255,0.06); padding: 28px 20px; display: flex; flex-direction: column; gap: 34px;">
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <div style="font-size: 20px; font-weight: 800; color: #C084FC; letter-spacing: -0.02em;">Artist Radar</div>
+          <div style="font-size: 11px; font-weight: 700; color: #5C5A66; letter-spacing: 0.1em;">BOOKING INTELLIGENCE</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; background: #1D1B26;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #C084FC;"></div>
+            <div style="font-size: 15px; font-weight: 700; color: #F5F5F7;">Overview</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #4A4855;"></div>
+            <div style="font-size: 15px; font-weight: 600; color: #9997A6;">Similar Artists</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #4A4855;"></div>
+            <div style="font-size: 15px; font-weight: 600; color: #9997A6;">Booking</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px;">
+            <div style="width: 6px; height: 6px; border-radius: 50%; background: #4A4855;"></div>
+            <div style="font-size: 15px; font-weight: 600; color: #9997A6;">Settings</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- main -->
+      <div style="flex: 1; padding: 32px 40px; display: flex; flex-direction: column; gap: 24px; overflow: hidden;">
+
+        <div style="display: flex; align-items: center; gap: 22px; background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 26px 30px;">
+          <div style="width: 68px; height: 68px; border-radius: 50%; background: rgba(147,51,234,0.14); border: 2px solid rgba(147,51,234,0.4); display: flex; align-items: center; justify-content: center; color: #C084FC; font-size: 24px; font-weight: 800;">M</div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="font-size: 26px; font-weight: 800; color: #F5F5F7;">Marigold Youth</div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="padding: 4px 12px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 12px; font-weight: 700;">Pop punk</div>
+              <div style="color: #5C5A66;">·</div>
+              <div style="font-size: 14px; color: #9997A6;">France</div>
+            </div>
+          </div>
+          <div style="margin-left: auto; display: flex; gap: 44px;">
+            <div><div style="font-size: 11px; font-weight: 700; color: #5C5A66; letter-spacing: 0.08em;">MONTHLY LISTENERS</div><div style="font-size: 22px; font-weight: 800; color: #F5F5F7;">12,400</div></div>
+            <div><div style="font-size: 11px; font-weight: 700; color: #5C5A66; letter-spacing: 0.08em;">GROWTH</div><div style="font-size: 22px; font-weight: 800; color: #4ADE80;">+18%</div></div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+          <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 20px;">
+            <div style="width: 34px; height: 34px; border-radius: 8px; background: rgba(147,51,234,0.14); margin-bottom: 14px; display: flex; align-items: center; justify-content: center;"><div style="width: 13px; height: 13px; border-radius: 3px; border: 2px solid #C084FC;"></div></div>
+            <div style="font-size: 11px; font-weight: 700; color: #5C5A66; letter-spacing: 0.06em;">COMPATIBLE VENUES</div>
+            <div style="font-size: 26px; font-weight: 800; color: #F5F5F7;">14</div>
+          </div>
+          <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 20px;">
+            <div style="width: 34px; height: 34px; border-radius: 8px; background: rgba(59,130,246,0.14); margin-bottom: 14px; display: flex; align-items: center; justify-content: center;"><div style="width: 13px; height: 13px; border-radius: 50%; border: 2px solid #60A5FA;"></div></div>
+            <div style="font-size: 11px; font-weight: 700; color: #5C5A66; letter-spacing: 0.06em;">CONCERTS FOUND</div>
+            <div style="font-size: 26px; font-weight: 800; color: #F5F5F7;">31</div>
+          </div>
+          <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 20px;">
+            <div style="width: 34px; height: 34px; border-radius: 8px; background: rgba(249,115,22,0.14); margin-bottom: 14px; display: flex; align-items: center; justify-content: center;"><div style="width: 12px; height: 12px; transform: rotate(45deg); border: 2px solid #FB923C;"></div></div>
+            <div style="font-size: 11px; font-weight: 700; color: #5C5A66; letter-spacing: 0.06em;">FESTIVALS</div>
+            <div style="font-size: 26px; font-weight: 800; color: #F5F5F7;">5</div>
+          </div>
+          <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 20px;">
+            <div style="width: 34px; height: 34px; border-radius: 8px; background: rgba(34,197,94,0.14); margin-bottom: 14px; display: flex; align-items: center; justify-content: center;"><div style="width: 14px; height: 9px; border-radius: 6px 6px 0 0; border: 2px solid #4ADE80; border-bottom: none;"></div></div>
+            <div style="font-size: 11px; font-weight: 700; color: #5C5A66; letter-spacing: 0.06em;">SIMILAR ARTISTS</div>
+            <div style="font-size: 26px; font-weight: 800; color: #F5F5F7;">63</div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="font-size: 12px; font-weight: 700; color: #6E6C7A; letter-spacing: 0.08em;">SIMILAR ARTISTS</div>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;">
+            <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;"><div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(147,51,234,0.14); color: #C084FC; display: flex; align-items: center; justify-content: center; font-weight: 800;">N</div><div style="padding: 3px 10px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 11px; font-weight: 700;">90%</div></div>
+              <div style="font-size: 15px; font-weight: 700; color: #F5F5F7;">Nova &amp; the Faultlines</div>
+              <div style="font-size: 13px; color: #6E6C7A;">pop punk, easycore</div>
+              <div style="font-size: 12px; color: #5C5A66;">France · 585 followers</div>
+            </div>
+            <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;"><div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(147,51,234,0.14); color: #C084FC; display: flex; align-items: center; justify-content: center; font-weight: 800;">P</div><div style="padding: 3px 10px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 11px; font-weight: 700;">89%</div></div>
+              <div style="font-size: 15px; font-weight: 700; color: #F5F5F7;">Paper Static</div>
+              <div style="font-size: 13px; color: #6E6C7A;">pop punk, punk rock</div>
+              <div style="font-size: 12px; color: #5C5A66;">France · 581 followers</div>
+            </div>
+            <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;"><div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(147,51,234,0.14); color: #C084FC; display: flex; align-items: center; justify-content: center; font-weight: 800;">H</div><div style="padding: 3px 10px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 11px; font-weight: 700;">74%</div></div>
+              <div style="font-size: 15px; font-weight: 700; color: #F5F5F7;">Halyard</div>
+              <div style="font-size: 13px; color: #6E6C7A;">post-hardcore</div>
+              <div style="font-size: 12px; color: #5C5A66;">Canada · 828 followers</div>
+            </div>
+            <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;"><div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(147,51,234,0.14); color: #C084FC; display: flex; align-items: center; justify-content: center; font-weight: 800;">C</div><div style="padding: 3px 10px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 11px; font-weight: 700;">46%</div></div>
+              <div style="font-size: 15px; font-weight: 700; color: #F5F5F7;">Concrete Bloom</div>
+              <div style="font-size: 13px; color: #6E6C7A;">alt rock</div>
+              <div style="font-size: 12px; color: #5C5A66;">UK · 412 followers</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 3px; height: 16px; border-radius: 2px; background: #9333EA;"></div>
+            <div style="font-size: 12px; font-weight: 700; color: #F5F5F7; letter-spacing: 0.08em;">BOOKING OPPORTUNITIES</div>
+            <div style="padding: 2px 10px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 11px; font-weight: 700;">10</div>
+          </div>
+          <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <div style="width: 36px; height: 36px; border-radius: 50%; background: rgba(147,51,234,0.14); color: #C084FC; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px;">P</div>
+              <div><div style="font-size: 14px; font-weight: 700; color: #F5F5F7;">Paper Static (@paper_static)</div><div style="font-size: 12px; color: #6E6C7A;">France</div></div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <div style="padding: 3px 10px; border-radius: 999px; background: rgba(34,197,94,0.12); color: #4ADE80; font-size: 11px; font-weight: 700;">Opening Slot</div>
+              <div style="padding: 3px 10px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 11px; font-weight: 700;">90%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Similar Artists page -->
+    <div data-screen-label="Dashboard — Similar Artists" style="width: 1440px; height: 900px; background: #0B0A10; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.25); display: flex; margin-top: 16px;">
+      <div style="width: 248px; flex-shrink: 0; border-right: 1px solid rgba(255,255,255,0.06); padding: 28px 20px; display: flex; flex-direction: column; gap: 34px;">
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <div style="font-size: 20px; font-weight: 800; color: #C084FC; letter-spacing: -0.02em;">Artist Radar</div>
+          <div style="font-size: 11px; font-weight: 700; color: #5C5A66; letter-spacing: 0.1em;">BOOKING INTELLIGENCE</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px;"><div style="width: 6px; height: 6px; border-radius: 50%; background: #4A4855;"></div><div style="font-size: 15px; font-weight: 600; color: #9997A6;">Overview</div></div>
+          <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; background: #1D1B26;"><div style="width: 6px; height: 6px; border-radius: 50%; background: #C084FC;"></div><div style="font-size: 15px; font-weight: 700; color: #F5F5F7;">Similar Artists</div></div>
+          <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px;"><div style="width: 6px; height: 6px; border-radius: 50%; background: #4A4855;"></div><div style="font-size: 15px; font-weight: 600; color: #9997A6;">Booking</div></div>
+          <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px;"><div style="width: 6px; height: 6px; border-radius: 50%; background: #4A4855;"></div><div style="font-size: 15px; font-weight: 600; color: #9997A6;">Settings</div></div>
+        </div>
+      </div>
+      <div style="flex: 1; padding: 32px 40px; display: flex; flex-direction: column; gap: 24px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div><div style="font-size: 24px; font-weight: 800; color: #F5F5F7;">Similar Artists</div><div style="font-size: 14px; color: #9997A6;">63 artists sound-matched to Marigold Youth</div></div>
+          <div style="padding: 12px 18px; border-radius: 10px; background: #16151D; border: 1px solid rgba(255,255,255,0.1); color: #9997A6; font-size: 14px; font-weight: 600;">Search artists…</div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <div style="padding: 8px 16px; border-radius: 999px; background: #9333EA; color: #FFFFFF; font-size: 13px; font-weight: 700;">All genres</div>
+          <div style="padding: 8px 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.1); color: #9997A6; font-size: 13px; font-weight: 600;">Pop punk</div>
+          <div style="padding: 8px 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.1); color: #9997A6; font-size: 13px; font-weight: 600;">Alt rock</div>
+          <div style="padding: 8px 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.1); color: #9997A6; font-size: 13px; font-weight: 600;">Post-hardcore</div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+          <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 12px;"><div style="display: flex; align-items: center; justify-content: space-between;"><div style="width: 42px; height: 42px; border-radius: 50%; background: rgba(147,51,234,0.14); color: #C084FC; display: flex; align-items: center; justify-content: center; font-weight: 800;">N</div><div style="padding: 3px 10px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 11px; font-weight: 700;">90%</div></div><div style="font-size: 16px; font-weight: 700; color: #F5F5F7;">Nova &amp; the Faultlines</div><div style="font-size: 13px; color: #6E6C7A;">pop punk, easycore</div><div style="font-size: 12px; color: #5C5A66;">France · 585 followers</div><div style="margin-top: 4px; padding: 9px; text-align: center; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); color: #F5F5F7; font-size: 13px; font-weight: 700;">View profile</div></div>
+          <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 12px;"><div style="display: flex; align-items: center; justify-content: space-between;"><div style="width: 42px; height: 42px; border-radius: 50%; background: rgba(147,51,234,0.14); color: #C084FC; display: flex; align-items: center; justify-content: center; font-weight: 800;">P</div><div style="padding: 3px 10px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 11px; font-weight: 700;">89%</div></div><div style="font-size: 16px; font-weight: 700; color: #F5F5F7;">Paper Static</div><div style="font-size: 13px; color: #6E6C7A;">pop punk, punk rock</div><div style="font-size: 12px; color: #5C5A66;">France · 581 followers</div><div style="margin-top: 4px; padding: 9px; text-align: center; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); color: #F5F5F7; font-size: 13px; font-weight: 700;">View profile</div></div>
+          <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 12px;"><div style="display: flex; align-items: center; justify-content: space-between;"><div style="width: 42px; height: 42px; border-radius: 50%; background: rgba(147,51,234,0.14); color: #C084FC; display: flex; align-items: center; justify-content: center; font-weight: 800;">H</div><div style="padding: 3px 10px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 11px; font-weight: 700;">74%</div></div><div style="font-size: 16px; font-weight: 700; color: #F5F5F7;">Halyard</div><div style="font-size: 13px; color: #6E6C7A;">post-hardcore</div><div style="font-size: 12px; color: #5C5A66;">Canada · 828 followers</div><div style="margin-top: 4px; padding: 9px; text-align: center; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); color: #F5F5F7; font-size: 13px; font-weight: 700;">View profile</div></div>
+          <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 12px;"><div style="display: flex; align-items: center; justify-content: space-between;"><div style="width: 42px; height: 42px; border-radius: 50%; background: rgba(147,51,234,0.14); color: #C084FC; display: flex; align-items: center; justify-content: center; font-weight: 800;">C</div><div style="padding: 3px 10px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 11px; font-weight: 700;">46%</div></div><div style="font-size: 16px; font-weight: 700; color: #F5F5F7;">Concrete Bloom</div><div style="font-size: 13px; color: #6E6C7A;">alt rock</div><div style="font-size: 12px; color: #5C5A66;">UK · 412 followers</div><div style="margin-top: 4px; padding: 9px; text-align: center; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); color: #F5F5F7; font-size: 13px; font-weight: 700;">View profile</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Booking page -->
+    <div data-screen-label="Dashboard — Booking" style="width: 1440px; height: 900px; background: #0B0A10; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.25); display: flex; margin-top: 16px;">
+      <div style="width: 248px; flex-shrink: 0; border-right: 1px solid rgba(255,255,255,0.06); padding: 28px 20px; display: flex; flex-direction: column; gap: 34px;">
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <div style="font-size: 20px; font-weight: 800; color: #C084FC; letter-spacing: -0.02em;">Artist Radar</div>
+          <div style="font-size: 11px; font-weight: 700; color: #5C5A66; letter-spacing: 0.1em;">BOOKING INTELLIGENCE</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px;"><div style="width: 6px; height: 6px; border-radius: 50%; background: #4A4855;"></div><div style="font-size: 15px; font-weight: 600; color: #9997A6;">Overview</div></div>
+          <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px;"><div style="width: 6px; height: 6px; border-radius: 50%; background: #4A4855;"></div><div style="font-size: 15px; font-weight: 600; color: #9997A6;">Similar Artists</div></div>
+          <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; background: #1D1B26;"><div style="width: 6px; height: 6px; border-radius: 50%; background: #C084FC;"></div><div style="font-size: 15px; font-weight: 700; color: #F5F5F7;">Booking</div></div>
+          <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px;"><div style="width: 6px; height: 6px; border-radius: 50%; background: #4A4855;"></div><div style="font-size: 15px; font-weight: 600; color: #9997A6;">Settings</div></div>
+        </div>
+      </div>
+      <div style="flex: 1; padding: 32px 40px; display: flex; flex-direction: column; gap: 22px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="font-size: 24px; font-weight: 800; color: #F5F5F7;">Booking Opportunities</div>
+          <div style="padding: 3px 12px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 12px; font-weight: 700;">10</div>
+        </div>
+        <div style="display: flex; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 14px;">
+          <div style="padding: 8px 16px; border-radius: 10px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 13px; font-weight: 700;">All 10</div>
+          <div style="padding: 8px 16px; font-size: 13px; font-weight: 600; color: #9997A6;">Venues 2</div>
+          <div style="padding: 8px 16px; font-size: 13px; font-weight: 600; color: #9997A6;">Concerts 3</div>
+          <div style="padding: 8px 16px; font-size: 13px; font-weight: 600; color: #9997A6;">Festivals 0</div>
+          <div style="padding: 8px 16px; font-size: 13px; font-weight: 600; color: #9997A6;">Opening Slots 5</div>
+          <div style="padding: 8px 16px; font-size: 13px; font-weight: 600; color: #9997A6;">Contacts 2</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 18px 22px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 14px;"><div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(147,51,234,0.14); color: #C084FC; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px;">P</div><div><div style="font-size: 14px; font-weight: 700; color: #F5F5F7;">Paper Static (@paper_static)</div><div style="font-size: 12px; color: #6E6C7A;">France · Opening slot</div></div></div>
+            <div style="display: flex; gap: 8px; align-items: center;"><div style="padding: 3px 10px; border-radius: 999px; background: rgba(34,197,94,0.12); color: #4ADE80; font-size: 11px; font-weight: 700;">Opening Slot</div><div style="padding: 3px 10px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 11px; font-weight: 700;">90%</div></div>
+          </div>
+          <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 18px 22px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 14px;"><div style="width: 38px; height: 38px; border-radius: 8px; background: rgba(59,130,246,0.14); color: #60A5FA; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px;">V</div><div><div style="font-size: 14px; font-weight: 700; color: #F5F5F7;">Le Sonic Room</div><div style="font-size: 12px; color: #6E6C7A;">Lyon, France · Venue, 320 cap</div></div></div>
+            <div style="display: flex; gap: 8px; align-items: center;"><div style="padding: 3px 10px; border-radius: 999px; background: rgba(59,130,246,0.12); color: #60A5FA; font-size: 11px; font-weight: 700;">Venue</div><div style="padding: 3px 10px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 11px; font-weight: 700;">82%</div></div>
+          </div>
+          <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 18px 22px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 14px;"><div style="width: 38px; height: 38px; border-radius: 8px; background: rgba(249,115,22,0.14); color: #FB923C; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px;">C</div><div><div style="font-size: 14px; font-weight: 700; color: #F5F5F7;">Nuits Indé Festival</div><div style="font-size: 12px; color: #6E6C7A;">Marseille, France · Concert · Sep 12</div></div></div>
+            <div style="display: flex; gap: 8px; align-items: center;"><div style="padding: 3px 10px; border-radius: 999px; background: rgba(249,115,22,0.12); color: #FB923C; font-size: 11px; font-weight: 700;">Concert</div><div style="padding: 3px 10px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 11px; font-weight: 700;">77%</div></div>
+          </div>
+          <div style="background: #16151D; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 18px 22px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 14px;"><div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(147,51,234,0.14); color: #C084FC; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px;">H</div><div><div style="font-size: 14px; font-weight: 700; color: #F5F5F7;">Halyard mgmt (contact)</div><div style="font-size: 12px; color: #6E6C7A;">Toronto, Canada · Contact</div></div></div>
+            <div style="display: flex; gap: 8px; align-items: center;"><div style="padding: 3px 10px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 11px; font-weight: 700;">Contact</div><div style="padding: 3px 10px; border-radius: 999px; background: rgba(147,51,234,0.14); color: #C084FC; font-size: 11px; font-weight: 700;">68%</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+</x-dc>
+</body>
+</html>

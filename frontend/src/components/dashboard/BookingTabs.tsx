@@ -32,17 +32,17 @@ interface BookingTabsProps {
 function EmptyTabState({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="w-10 h-10 rounded-full bg-white/5 border border-slate-400/10 flex items-center justify-center mb-3">
-        <span className="text-gray-600 text-lg">—</span>
+      <div className="w-10 h-10 rounded-full bg-white/5 border border-border flex items-center justify-center mb-3">
+        <span className="text-foreground-disabled text-lg">—</span>
       </div>
-      <p className="text-sm text-gray-500">{message}</p>
+      <p className="text-sm text-foreground-muted">{message}</p>
     </div>
   );
 }
 
 function RawJsonTab({ opportunities }: { opportunities: Opportunity[] }) {
   return (
-    <pre className="bg-[#0d1117] rounded-xl p-4 border border-slate-400/10 text-xs text-emerald-400 overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed font-mono shadow-card">
+    <pre className="bg-background rounded-xl p-4 border border-border text-xs text-success-text overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed font-mono shadow-card">
       {JSON.stringify(opportunities, null, 2)}
     </pre>
   );
@@ -66,16 +66,16 @@ export default function BookingTabs({ opportunities }: BookingTabsProps) {
 
   return (
     <div>
-      <div className="flex gap-1 mb-4 overflow-x-auto pb-1 bg-card-alt/50 rounded-xl p-1.5 border border-slate-400/10">
+      <div className="flex gap-1 mb-4 overflow-x-auto pb-1 bg-surface-elevated/50 rounded-xl p-1.5 border border-border">
         {TABS.map((tab) => (
           <button
             key={tab}
             type="button"
             onClick={() => setActiveTab(tab)}
-            className={`text-xs font-medium px-3 py-1.5 rounded-lg whitespace-nowrap transition-all duration-150 flex-shrink-0 ${
+            className={`text-xs px-3 py-1.5 rounded-lg whitespace-nowrap transition-all duration-150 flex-shrink-0 focus-visible:outline-none focus-visible:shadow-focus ${
               activeTab === tab
-                ? "bg-accent/25 text-accent-light border border-accent/35 shadow-sm"
-                : "text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent"
+                ? "bg-accent-tint text-accent-text border border-accent-tint font-bold"
+                : "text-foreground-muted font-medium hover:text-foreground-secondary hover:bg-white/5 border border-transparent"
             }`}
           >
             {tab}

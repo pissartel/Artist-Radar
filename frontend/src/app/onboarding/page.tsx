@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { MainGoal, OnboardingFormData } from "@/types";
 import FormField from "@/components/onboarding/FormField";
+import Button from "@/components/ui/Button";
 
 const MAIN_GOAL_OPTIONS: { value: MainGoal; label: string }[] = [
   { value: "booking_opportunities", label: "Find booking opportunities" },
@@ -29,10 +31,10 @@ const INITIAL_FORM_DATA: OnboardingFormData = {
 type FormErrors = Partial<Record<"artistName" | "countryOfOrigin" | "mainGenre", string>>;
 
 const inputClass =
-  "w-full bg-card-alt border border-slate-400/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30 transition-colors";
+  "w-full bg-background border border-border-strong rounded-md px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-primary focus:shadow-focus transition-colors";
 
 const inputErrorClass =
-  "w-full bg-card-alt border border-red-400/50 rounded-lg px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-red-400/70 focus:ring-1 focus:ring-red-400/30 transition-colors";
+  "w-full bg-background border border-danger rounded-md px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-danger focus:shadow-focus transition-colors";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -85,13 +87,18 @@ export default function OnboardingPage() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-2xl">
         <div className="text-center mb-6">
-          <span className="text-accent-light font-bold text-lg tracking-tight">
-            Artist Radar
-          </span>
-          <h1 className="text-xl sm:text-2xl font-bold text-white mt-3">
+          <Image
+            src="/brand/logo-next-stage-dark.png"
+            alt="NextStage"
+            width={136}
+            height={32}
+            priority
+            className="h-8 w-auto mx-auto"
+          />
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground mt-3">
             Tell us about your artist project
           </h1>
-          <p className="text-sm text-gray-400 mt-1.5">
+          <p className="text-sm text-foreground-secondary mt-1.5">
             We&apos;ll use this to prepare your personalized dashboard with
             similar artists and booking opportunities.
           </p>
@@ -100,7 +107,7 @@ export default function OnboardingPage() {
         <form
           onSubmit={handleSubmit}
           noValidate
-          className="bg-card rounded-xl border border-slate-400/10 shadow-card-glow p-5 sm:p-6 flex flex-col gap-5"
+          className="bg-surface rounded-xl border border-border shadow-card-glow p-5 sm:p-6 flex flex-col gap-5"
         >
           <FormField label="Artist name" htmlFor="artistName" required error={errors.artistName}>
             <input
@@ -244,12 +251,9 @@ export default function OnboardingPage() {
             </select>
           </FormField>
 
-          <button
-            type="submit"
-            className="mt-1 w-full bg-accent hover:bg-accent/90 text-white font-semibold text-sm py-2.5 rounded-lg transition-colors duration-150 shadow-card"
-          >
+          <Button type="submit" variant="primary" className="mt-1 w-full">
             Analyze artist
-          </button>
+          </Button>
         </form>
       </div>
     </div>

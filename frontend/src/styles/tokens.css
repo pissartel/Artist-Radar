@@ -1,0 +1,148 @@
+/**
+ * NextStage design tokens — single source of truth.
+ * Values transcribed from docs/brand/design-system.md and docs/brand/brand-guidelines.md.
+ *
+ * Layer 1 (--color-*, --gradient-*, --radius-*, --shadow-*, --border-*, --space-*):
+ *   raw brand palette values, as specified by the design system.
+ * Layer 2 (--background, --surface, --foreground, --primary, ...):
+ *   semantic roles that components should consume. Mapped onto layer 1 so the
+ *   palette can change in one place without touching component code.
+ */
+
+:root {
+  /* ---- Layer 1: brand palette ---- */
+
+  /* Core neutrals */
+  --color-bg: #0b0a10;
+  --color-surface: #16151d;
+  --color-surface-raised: #1d1b26;
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-strong: rgba(255, 255, 255, 0.1);
+  --color-border-subtle: rgba(255, 255, 255, 0.14);
+
+  /* Text */
+  --color-text-primary: #f5f5f7;
+  --color-text-secondary: #b4b2bf;
+  --color-text-tertiary: #9997a6;
+  --color-text-muted: #6e6c7a;
+  --color-text-disabled: #5c5a66;
+  --color-text-inverse: #12101f;
+  --color-text-light-bg: #fafafc;
+
+  /* Accent (brand violet) */
+  --color-accent: #9333ea;
+  --color-accent-hover: #7e22ce;
+  --color-accent-active: #6b21a8;
+  --color-accent-onDark: #c084fc;
+  --color-accent-tint: rgba(147, 51, 234, 0.14);
+  --color-accent-tint-strong: rgba(147, 51, 234, 0.4);
+
+  /* Brand gradient (logo + primary CTA only) */
+  --gradient-brand: linear-gradient(135deg, #4b4df7 0%, #9333ea 50%, #f43f5e 100%);
+  --gradient-brand-onDark: linear-gradient(135deg, #6d6bff 0%, #a855f7 50%, #fb5b76 100%);
+
+  /* Semantic / status */
+  --color-success: #22c55e;
+  --color-success-text: #4ade80;
+  --color-success-tint: rgba(34, 197, 94, 0.12);
+
+  --color-warning: #f97316;
+  --color-warning-text: #fb923c;
+  --color-warning-tint: rgba(249, 115, 22, 0.14);
+
+  --color-info: #3b82f6;
+  --color-info-text: #60a5fa;
+  --color-info-tint: rgba(59, 130, 246, 0.14);
+
+  /* Spacing (2px base unit) */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 14px;
+  --space-8: 16px;
+  --space-9: 18px;
+  --space-10: 20px;
+  --space-12: 24px;
+  --space-14: 28px;
+  --space-16: 32px;
+  --space-20: 40px;
+  --space-24: 48px;
+  --space-28: 56px;
+  --space-32: 64px;
+  --space-40: 80px;
+  --space-48: 96px;
+
+  /* Border radius */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-2xl: 16px;
+  --radius-3xl: 20px;
+  --radius-full: 999px;
+  --radius-circle: 50%;
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px rgba(18, 16, 31, 0.08);
+  --shadow-frame: 0 20px 60px rgba(0, 0, 0, 0.25);
+
+  /* Borders */
+  --border-hairline: 1px solid var(--color-border);
+  --border-input: 1px solid var(--color-border-strong);
+  --border-ghost: 1px solid var(--color-border-subtle);
+  --border-accent: 2px solid var(--color-accent-tint-strong);
+
+  /* ---- Layer 2: semantic roles ---- */
+
+  --background: var(--color-bg);
+  --surface: var(--color-surface);
+  --surface-elevated: var(--color-surface-raised);
+
+  --foreground: var(--color-text-primary);
+  --foreground-secondary: var(--color-text-secondary);
+  --foreground-muted: var(--color-text-tertiary);
+  --foreground-disabled: var(--color-text-disabled);
+  --foreground-inverse: var(--color-text-inverse);
+
+  --border: var(--color-border);
+  --border-strong: var(--color-border-strong);
+
+  --primary: var(--color-accent);
+  --primary-hover: var(--color-accent-hover);
+  --primary-active: var(--color-accent-active);
+  --primary-foreground: #ffffff;
+
+  --secondary: var(--color-surface-raised);
+  --secondary-hover: #24222f;
+  --secondary-foreground: var(--color-text-primary);
+
+  /* Accent text/icon/badge/link role — distinct from --primary (solid CTAs) */
+  --accent-text: var(--color-accent-onDark);
+  --accent-tint: var(--color-accent-tint);
+  --muted: var(--color-text-muted);
+
+  /* No dedicated red exists in the brand system — the design system's own
+     input error state (design-system.md §11) uses the warning color for
+     validation errors, so "destructive" is aliased to warning rather than
+     inventing an off-brand red. */
+  --danger: var(--color-warning);
+  --danger-text: var(--color-warning-text);
+  --danger-tint: var(--color-warning-tint);
+
+  --success: var(--color-success);
+  --success-text: var(--color-success-text);
+  --success-tint: var(--color-success-tint);
+
+  --warning: var(--color-warning);
+  --warning-text: var(--color-warning-text);
+  --warning-tint: var(--color-warning-tint);
+
+  --info: var(--color-info);
+  --info-text: var(--color-info-text);
+  --info-tint: var(--color-info-tint);
+
+  --focus-ring: 0 0 0 3px rgba(147, 51, 234, 0.35);
+}

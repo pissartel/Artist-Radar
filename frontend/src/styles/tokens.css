@@ -93,7 +93,6 @@
   --border-hairline: 1px solid var(--color-border);
   --border-input: 1px solid var(--color-border-strong);
   --border-ghost: 1px solid var(--color-border-subtle);
-  --border-accent: 2px solid var(--color-accent-tint-strong);
 
   /* ---- Layer 2: semantic roles ---- */
 
@@ -109,6 +108,13 @@
 
   --border: var(--color-border);
   --border-strong: var(--color-border-strong);
+
+  /* Purple-tinted border roles for on-brand surfaces (opportunity cards,
+     secondary buttons) — kept distinct from the neutral --border/--border-strong
+     roles above, which read as washed-out white against the dark surface. */
+  --border-subtle: var(--color-accent-tint);
+  --border-accent: var(--color-accent-tint-strong);
+  --border-accent-hover: var(--color-accent-onDark);
 
   --primary: var(--color-accent);
   --primary-hover: var(--color-accent-hover);

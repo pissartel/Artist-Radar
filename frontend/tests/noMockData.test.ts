@@ -3,11 +3,11 @@ import path from "path";
 import { describe, expect, it } from "vitest";
 
 const PAGES_USING_REAL_DATA = [
-  "src/app/overview/page.tsx",
-  "src/app/booking/page.tsx",
-  "src/app/similar-artists/page.tsx",
-  "src/app/opportunities/[id]/page.tsx",
-  "src/app/similar-artists/[id]/page.tsx",
+  "src/app/(app)/overview/page.tsx",
+  "src/app/(app)/booking/page.tsx",
+  "src/app/(app)/similar-artists/page.tsx",
+  "src/app/(app)/opportunities/[id]/page.tsx",
+  "src/app/(app)/similar-artists/[id]/page.tsx",
 ];
 
 describe("no mock data used when API data exists", () => {

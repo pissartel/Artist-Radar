@@ -9,3 +9,9 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Booking", href: "/booking" },
   { label: "Settings", href: "/settings" },
 ];
+
+/** Public marketing landing page. */
+export const LANDING_ROUTE = "/";
+
+/** MVP entry point — redirects into the product flow (currently the onboarding form). */
+export const MVP_ENTRY_ROUTE = "/app";

@@ -1,6 +1,5 @@
 "use client";
 
-import MainLayout from "@/components/layout/MainLayout";
 import BookingExplorer from "@/components/dashboard/BookingExplorer";
 import WarningsBanner from "@/components/dashboard/WarningsBanner";
 import {
@@ -14,33 +13,21 @@ export default function BookingPage() {
   const { state, refetch } = useArtistRadarData();
 
   if (state.status === "checking-onboarding" || state.status === "loading") {
-    return (
-      <MainLayout>
-        <ArtistRadarLoadingState />
-      </MainLayout>
-    );
+    return <ArtistRadarLoadingState />;
   }
 
   if (state.status === "empty") {
-    return (
-      <MainLayout>
-        <ArtistRadarEmptyOnboardingState />
-      </MainLayout>
-    );
+    return <ArtistRadarEmptyOnboardingState />;
   }
 
   if (state.status === "error") {
-    return (
-      <MainLayout>
-        <ArtistRadarErrorState message={state.message} onRetry={refetch} />
-      </MainLayout>
-    );
+    return <ArtistRadarErrorState message={state.message} onRetry={refetch} />;
   }
 
   const { artist, bookingOpportunities, warnings } = state.data;
 
   return (
-    <MainLayout>
+    <>
       <WarningsBanner warnings={warnings} />
       <div className="mb-6">
         <h1 className="text-xl font-bold text-foreground">Booking</h1>
@@ -54,6 +41,6 @@ export default function BookingPage() {
         artistCity={artist.city}
         artistCountry={artist.country}
       />
-    </MainLayout>
+    </>
   );
 }

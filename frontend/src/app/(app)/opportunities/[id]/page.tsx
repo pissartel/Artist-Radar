@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { use } from "react";
-import MainLayout from "@/components/layout/MainLayout";
 import OpportunityDetail from "@/components/dashboard/OpportunityDetail";
 import {
   ArtistRadarEmptyOnboardingState,
@@ -21,27 +20,15 @@ export default function OpportunityDetailPage({ params }: OpportunityDetailPageP
   const { state, refetch } = useArtistRadarData();
 
   if (state.status === "checking-onboarding" || state.status === "loading") {
-    return (
-      <MainLayout>
-        <ArtistRadarLoadingState />
-      </MainLayout>
-    );
+    return <ArtistRadarLoadingState />;
   }
 
   if (state.status === "empty") {
-    return (
-      <MainLayout>
-        <ArtistRadarEmptyOnboardingState />
-      </MainLayout>
-    );
+    return <ArtistRadarEmptyOnboardingState />;
   }
 
   if (state.status === "error") {
-    return (
-      <MainLayout>
-        <ArtistRadarErrorState message={state.message} onRetry={refetch} />
-      </MainLayout>
-    );
+    return <ArtistRadarErrorState message={state.message} onRetry={refetch} />;
   }
 
   const { bookingOpportunities, similarArtists } = state.data;
@@ -49,21 +36,19 @@ export default function OpportunityDetailPage({ params }: OpportunityDetailPageP
 
   if (!opportunity) {
     return (
-      <MainLayout>
-        <div className="max-w-lg">
-          <Link
-            href="/booking"
-            className="text-xs text-accent-text hover:text-foreground transition-colors"
-          >
-            ← Back to Booking
-          </Link>
-          <h1 className="text-xl font-bold text-foreground mt-4">Opportunity not found</h1>
-          <p className="text-sm text-foreground-secondary mt-1.5">
-            We couldn&apos;t find an opportunity with this ID. It may have been removed or the
-            link is incorrect.
-          </p>
-        </div>
-      </MainLayout>
+      <div className="max-w-lg">
+        <Link
+          href="/booking"
+          className="text-xs text-accent-text hover:text-foreground transition-colors"
+        >
+          ← Back to Booking
+        </Link>
+        <h1 className="text-xl font-bold text-foreground mt-4">Opportunity not found</h1>
+        <p className="text-sm text-foreground-secondary mt-1.5">
+          We couldn&apos;t find an opportunity with this ID. It may have been removed or the
+          link is incorrect.
+        </p>
+      </div>
     );
   }
 
@@ -71,9 +56,5 @@ export default function OpportunityDetailPage({ params }: OpportunityDetailPageP
     opportunity.relatedSimilarArtistIds?.includes(artist.id),
   );
 
-  return (
-    <MainLayout>
-      <OpportunityDetail opportunity={opportunity} relatedArtists={relatedArtists} />
-    </MainLayout>
-  );
+  return <OpportunityDetail opportunity={opportunity} relatedArtists={relatedArtists} />;
 }

@@ -79,7 +79,10 @@ export default function AnalyzingPage() {
           className="w-12 h-12 mx-auto rounded-full border-2 border-loader-track border-t-primary animate-spin"
           aria-hidden="true"
         />
-        <h1 className="text-lg font-semibold text-foreground mt-5">
+        <p className="text-xs font-bold text-accent-text tracking-widest uppercase">
+          Step 2 of 2
+        </p>
+        <h1 className="text-lg font-semibold text-foreground mt-2">
           Analyzing your artist profile...
         </h1>
         <p className="text-sm text-foreground-secondary mt-1.5">
@@ -100,7 +103,9 @@ export default function AnalyzingPage() {
                 ) : isActive ? (
                   <span className="w-4 h-4 shrink-0 rounded-full border-2 border-loader-track border-t-primary animate-spin" />
                 ) : (
-                  <span className="w-4 h-4 shrink-0 rounded-full border border-border-strong" />
+                  <span className="w-4 h-4 shrink-0 rounded-full border border-border-strong flex items-center justify-center text-[10px] font-semibold text-foreground-muted leading-none">
+                    {index + 1}
+                  </span>
                 )}
                 <span
                   className={

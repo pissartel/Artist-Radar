@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { MainGoal, OnboardingFormData } from "@/types";
+import BrandLogo from "@/components/common/BrandLogo";
 import FormField from "@/components/onboarding/FormField";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -83,14 +83,7 @@ export default function OnboardingPage() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-2xl">
         <div className="text-center mb-6">
-          <Image
-            src="/brand/logo-next-stage-dark.png"
-            alt="NextStage"
-            width={136}
-            height={32}
-            priority
-            className="h-8 w-auto mx-auto"
-          />
+          <BrandLogo size={32} className="mx-auto" />
           <h1 className="text-xl sm:text-2xl font-bold text-foreground mt-3">
             Tell us about your artist project
           </h1>

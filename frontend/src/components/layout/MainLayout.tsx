@@ -1,4 +1,4 @@
-import Image from "next/image";
+import BrandLogo from "@/components/common/BrandLogo";
 import Sidebar from "./Sidebar";
 
 interface MainLayoutProps {
@@ -11,14 +11,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
       <Sidebar />
       <div className="flex flex-col flex-1 min-w-0">
         <header className="md:hidden flex items-center gap-2 px-4 py-3 bg-surface border-b border-border sticky top-0 z-10 flex-shrink-0">
-          <Image
-            src="/brand/logo-next-stage-mark.png"
-            alt="NextStage"
-            width={24}
-            height={24}
-            priority
-            className="h-6 w-6"
-          />
+          <BrandLogo variant="compact" size={24} label="" />
           <span className="text-foreground font-bold text-base tracking-tight">
             NextStage
           </span>

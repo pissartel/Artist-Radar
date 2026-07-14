@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import BrandLogo from "@/components/common/BrandLogo";
 import { NAV_ITEMS } from "@/lib/navigation";
 
 export default function Sidebar() {
@@ -11,14 +11,7 @@ export default function Sidebar() {
   return (
     <aside className="hidden md:flex w-56 min-h-screen bg-surface flex-col py-8 px-4 border-r border-border flex-shrink-0">
       <div className="mb-10 px-2">
-        <Image
-          src="/brand/logo-next-stage-dark.png"
-          alt="NextStage"
-          width={136}
-          height={32}
-          priority
-          className="h-8 w-auto"
-        />
+        <BrandLogo size={32} />
         <p className="text-[10px] text-foreground-muted mt-1.5 uppercase tracking-widest">
           Booking Intelligence
         </p>

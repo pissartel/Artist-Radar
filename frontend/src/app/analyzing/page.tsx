@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArtistRadarErrorState } from "@/components/dashboard/ArtistRadarStates";
+import StepIndicator from "@/components/onboarding/StepIndicator";
 import { useArtistRadarData } from "@/lib/useArtistRadarData";
 
 const STEP_INTERVAL_MS = 3000;
@@ -68,21 +69,19 @@ export default function AnalyzingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 sm:p-6">
       <div
         className="w-full max-w-sm text-center"
         role="status"
         aria-live="polite"
         aria-label="Analyzing artist profile"
       >
+        <StepIndicator step={2} totalSteps={2} />
         <div
-          className="w-12 h-12 mx-auto rounded-full border-2 border-loader-track border-t-primary animate-spin"
+          className="w-12 h-12 mx-auto rounded-full border-2 border-loader-track border-t-primary animate-spin mt-6"
           aria-hidden="true"
         />
-        <p className="text-xs font-bold text-accent-text tracking-widest uppercase">
-          Step 2 of 2
-        </p>
-        <h1 className="text-lg font-semibold text-foreground mt-2">
+        <h1 className="text-lg font-semibold text-foreground mt-6">
           Analyzing your artist profile...
         </h1>
         <p className="text-sm text-foreground-secondary mt-1.5">

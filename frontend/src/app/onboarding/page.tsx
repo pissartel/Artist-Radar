@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { MainGoal, OnboardingFormData } from "@/types";
 import FormField from "@/components/onboarding/FormField";
+import StepIndicator from "@/components/onboarding/StepIndicator";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
@@ -100,9 +101,7 @@ export default function OnboardingPage() {
             priority
             className="h-8 w-auto mx-auto"
           />
-          <p className="text-xs font-bold text-accent-text tracking-widest uppercase mt-4">
-            Step 1 of 2
-          </p>
+          <StepIndicator step={1} totalSteps={2} className="mt-4" />
           <h1 className="text-xl sm:text-2xl font-bold text-foreground mt-2">
             Tell us about your artist project
           </h1>

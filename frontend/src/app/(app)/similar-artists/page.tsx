@@ -1,6 +1,5 @@
 "use client";
 
-import MainLayout from "@/components/layout/MainLayout";
 import SimilarArtistsExplorer from "@/components/dashboard/SimilarArtistsExplorer";
 import WarningsBanner from "@/components/dashboard/WarningsBanner";
 import {
@@ -14,33 +13,21 @@ export default function SimilarArtistsPage() {
   const { state, refetch } = useArtistRadarData();
 
   if (state.status === "checking-onboarding" || state.status === "loading") {
-    return (
-      <MainLayout>
-        <ArtistRadarLoadingState />
-      </MainLayout>
-    );
+    return <ArtistRadarLoadingState />;
   }
 
   if (state.status === "empty") {
-    return (
-      <MainLayout>
-        <ArtistRadarEmptyOnboardingState />
-      </MainLayout>
-    );
+    return <ArtistRadarEmptyOnboardingState />;
   }
 
   if (state.status === "error") {
-    return (
-      <MainLayout>
-        <ArtistRadarErrorState message={state.message} onRetry={refetch} />
-      </MainLayout>
-    );
+    return <ArtistRadarErrorState message={state.message} onRetry={refetch} />;
   }
 
   const { similarArtists, warnings } = state.data;
 
   return (
-    <MainLayout>
+    <>
       <WarningsBanner warnings={warnings} />
       <div className="mb-6">
         <h1 className="text-xl font-bold text-foreground">Similar Artists</h1>
@@ -50,6 +37,6 @@ export default function SimilarArtistsPage() {
         </p>
       </div>
       <SimilarArtistsExplorer artists={similarArtists} />
-    </MainLayout>
+    </>
   );
 }

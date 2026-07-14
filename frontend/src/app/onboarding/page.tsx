@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { MainGoal, OnboardingFormData } from "@/types";
 import FormField from "@/components/onboarding/FormField";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
+import { LANDING_ROUTE } from "@/lib/navigation";
 
 const MAIN_GOAL_OPTIONS: { value: MainGoal; label: string }[] = [
   { value: "booking_opportunities", label: "Find booking opportunities" },
@@ -82,6 +84,13 @@ export default function OnboardingPage() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-2xl">
+        <Link
+          href={LANDING_ROUTE}
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground-muted hover:text-foreground transition-colors mb-4"
+        >
+          ← Back
+        </Link>
+
         <div className="text-center mb-6">
           <Image
             src="/brand/logo-next-stage-dark.png"
@@ -91,7 +100,10 @@ export default function OnboardingPage() {
             priority
             className="h-8 w-auto mx-auto"
           />
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground mt-3">
+          <p className="text-xs font-bold text-accent-text tracking-widest uppercase mt-4">
+            Step 1 of 2
+          </p>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground mt-2">
             Tell us about your artist project
           </h1>
           <p className="text-sm text-foreground-secondary mt-1.5">
@@ -236,7 +248,7 @@ export default function OnboardingPage() {
             </Select>
           </FormField>
 
-          <Button type="submit" variant="primary" className="mt-1 w-full">
+          <Button type="submit" variant="gradient" className="mt-1 w-full">
             Analyze artist
           </Button>
         </form>

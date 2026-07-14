@@ -1,6 +1,5 @@
 "use client";
 
-import MainLayout from "@/components/layout/MainLayout";
 import ArtistHeader from "@/components/dashboard/ArtistHeader";
 import KpiGrid from "@/components/dashboard/KpiGrid";
 import SimilarArtistsSection from "@/components/dashboard/SimilarArtistsSection";
@@ -17,33 +16,21 @@ export default function OverviewPage() {
   const { state, refetch } = useArtistRadarData();
 
   if (state.status === "checking-onboarding" || state.status === "loading") {
-    return (
-      <MainLayout>
-        <ArtistRadarLoadingState />
-      </MainLayout>
-    );
+    return <ArtistRadarLoadingState />;
   }
 
   if (state.status === "empty") {
-    return (
-      <MainLayout>
-        <ArtistRadarEmptyOnboardingState />
-      </MainLayout>
-    );
+    return <ArtistRadarEmptyOnboardingState />;
   }
 
   if (state.status === "error") {
-    return (
-      <MainLayout>
-        <ArtistRadarErrorState message={state.message} onRetry={refetch} />
-      </MainLayout>
-    );
+    return <ArtistRadarErrorState message={state.message} onRetry={refetch} />;
   }
 
   const { artist, kpis, similarArtists, bookingOpportunities, topCities, warnings } = state.data;
 
   return (
-    <MainLayout>
+    <>
       <WarningsBanner warnings={warnings} />
       <ArtistHeader artist={artist} />
       <KpiGrid metrics={kpis} />
@@ -55,6 +42,6 @@ export default function OverviewPage() {
         metrics={artist.metrics}
         similarArtistCount={similarArtists.length}
       />
-    </MainLayout>
+    </>
   );
 }

@@ -43,8 +43,8 @@ export default function BookingPage() {
     <MainLayout>
       <WarningsBanner warnings={warnings} />
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-white">Booking</h1>
-        <p className="text-sm text-gray-400 mt-1.5">
+        <h1 className="text-xl font-bold text-foreground">Booking</h1>
+        <p className="text-sm text-foreground-secondary mt-1.5">
           Explore every venue, concert, opening slot, and festival opportunity found for your
           profile to decide which ones to pursue.
         </p>

@@ -76,17 +76,17 @@ export default function AnalyzingPage() {
         aria-label="Analyzing artist profile"
       >
         <div
-          className="w-12 h-12 mx-auto rounded-full border-2 border-primary/20 border-t-primary animate-spin"
+          className="w-12 h-12 mx-auto rounded-full border-2 border-loader-track border-t-primary animate-spin"
           aria-hidden="true"
         />
-        <h1 className="text-lg font-semibold text-white mt-5">
+        <h1 className="text-lg font-semibold text-foreground mt-5">
           Analyzing your artist profile...
         </h1>
-        <p className="text-sm text-gray-400 mt-1.5">
+        <p className="text-sm text-foreground-secondary mt-1.5">
           We&apos;re running the real analysis now. This can take a few seconds.
         </p>
 
-        <ul className="mt-6 flex flex-col gap-2.5 text-left bg-card rounded-xl border border-slate-400/10 shadow-card-glow p-4">
+        <ul className="mt-6 flex flex-col gap-2.5 text-left bg-surface rounded-xl border border-border shadow-card-glow p-4">
           {ANALYSIS_STEPS.map((step, index) => {
             const isComplete = index < activeStep;
             const isActive = index === activeStep;
@@ -94,11 +94,11 @@ export default function AnalyzingPage() {
             return (
               <li key={step} className="flex items-center gap-2.5 text-sm">
                 {isComplete ? (
-                  <span className="w-4 h-4 shrink-0 rounded-full bg-success-tint text-success flex items-center justify-center text-[10px] leading-none">
+                  <span className="w-4 h-4 shrink-0 rounded-full bg-success-surface text-success flex items-center justify-center text-[10px] leading-none">
                     ✓
                   </span>
                 ) : isActive ? (
-                  <span className="w-4 h-4 shrink-0 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+                  <span className="w-4 h-4 shrink-0 rounded-full border-2 border-loader-track border-t-primary animate-spin" />
                 ) : (
                   <span className="w-4 h-4 shrink-0 rounded-full border border-border-strong" />
                 )}

@@ -19,7 +19,7 @@ export default function BookingInsightsPanel({
   return (
     <aside className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">
+        <h3 className="text-[10px] font-semibold text-foreground-muted uppercase tracking-widest">
           Insights
         </h3>
         <FilterButton />

@@ -9,6 +9,7 @@ import {
   type OpportunitySortOption,
 } from "@/lib/opportunity";
 import BookingOpportunityCard from "./BookingOpportunityCard";
+import Select from "@/components/ui/Select";
 
 interface BookingExplorerProps {
   opportunities: Opportunity[];
@@ -32,9 +33,6 @@ const SORT_OPTIONS: { label: string; value: OpportunitySortOption }[] = [
   { label: "Closest location", value: "closest_location" },
   { label: "Most actionable", value: "most_actionable" },
 ];
-
-const selectClassName =
-  "text-xs text-gray-300 bg-card border border-slate-400/15 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-accent/50 hover:border-accent/35 transition-colors";
 
 export default function BookingExplorer({
   opportunities,
@@ -113,10 +111,10 @@ export default function BookingExplorer({
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-5">
-        <select
+        <Select
+          dense
           value={category}
           onChange={(event) => setCategory(event.target.value as "all" | OpportunityCategory)}
-          className={selectClassName}
         >
           <option value="all">All categories</option>
           {categories.map((c) => (
@@ -124,72 +122,72 @@ export default function BookingExplorer({
               {CATEGORY_LABELS[c] ?? c}
             </option>
           ))}
-        </select>
-        <select value={city} onChange={(event) => setCity(event.target.value)} className={selectClassName}>
+        </Select>
+        <Select dense value={city} onChange={(event) => setCity(event.target.value)}>
           <option value="all">All cities</option>
           {cities.map((c) => (
             <option key={c} value={c}>
               {c}
             </option>
           ))}
-        </select>
-        <select
+        </Select>
+        <Select
+          dense
           value={minScore}
           onChange={(event) => setMinScore(Number(event.target.value))}
-          className={selectClassName}
         >
           {MATCH_SCORE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
-        </select>
+        </Select>
         {hasDateData && (
-          <select
+          <Select
+            dense
             value={dateFilter}
             onChange={(event) => setDateFilter(event.target.value as PresenceFilter)}
-            className={selectClassName}
           >
             <option value="all">Any date</option>
             <option value="has">Has a date</option>
             <option value="missing">No date yet</option>
-          </select>
+          </Select>
         )}
         {hasContactData && (
-          <select
+          <Select
+            dense
             value={contactFilter}
             onChange={(event) => setContactFilter(event.target.value as PresenceFilter)}
-            className={selectClassName}
           >
             <option value="all">Any contact</option>
             <option value="has">Has contact</option>
             <option value="missing">No contact yet</option>
-          </select>
+          </Select>
         )}
         {sources.length > 0 && (
-          <select value={source} onChange={(event) => setSource(event.target.value)} className={selectClassName}>
+          <Select dense value={source} onChange={(event) => setSource(event.target.value)}>
             <option value="all">All sources</option>
             {sources.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
             ))}
-          </select>
+          </Select>
         )}
-        <select
+        <Select
+          dense
           value={sortBy}
           onChange={(event) => setSortBy(event.target.value as OpportunitySortOption)}
-          className={selectClassName}
         >
           {SORT_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
-      <p className="text-xs text-gray-600 mb-3">
+      <p className="text-xs text-foreground-disabled mb-3">
         {filteredOpportunities.length} of {opportunities.length} booking opportunities
       </p>
 
@@ -200,7 +198,7 @@ export default function BookingExplorer({
           ))}
         </div>
       ) : (
-        <div className="bg-card rounded-xl border border-slate-400/10 shadow-card-glow p-6 text-sm text-gray-500">
+        <div className="bg-surface rounded-xl border border-border shadow-card-glow p-6 text-sm text-foreground-muted">
           No booking opportunities match your filters.
         </div>
       )}

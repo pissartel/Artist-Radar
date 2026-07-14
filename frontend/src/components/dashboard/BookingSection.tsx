@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ArtistMetrics, Opportunity, CityOpportunityStat } from "@/types";
 import BookingTabs from "./BookingTabs";
 import BookingInsightsPanel from "./BookingInsightsPanel";
+import Badge from "@/components/ui/Badge";
 
 interface BookingSectionProps {
   opportunities: Opportunity[];
@@ -20,17 +21,17 @@ export default function BookingSection({
     <section className="mb-8">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-1 h-5 rounded-full bg-accent" />
-          <h2 className="text-sm font-semibold text-white uppercase tracking-widest">
+          <div className="w-1 h-5 rounded-full bg-primary" />
+          <h2 className="text-sm font-semibold text-foreground uppercase tracking-widest">
             Booking Opportunities
           </h2>
-          <span className="text-xs font-medium text-accent-light bg-accent/15 border border-accent/25 px-2 py-0.5 rounded-full tabular-nums">
+          <Badge variant="accent" className="tabular-nums">
             {opportunities.length}
-          </span>
+          </Badge>
         </div>
         <Link
           href="/booking"
-          className="text-xs text-accent-light hover:text-white transition-colors"
+          className="text-xs text-accent-text hover:text-foreground transition-colors"
         >
           View all
         </Link>

@@ -2,7 +2,7 @@ export default function FilterButton() {
   return (
     <button
       type="button"
-      className="flex items-center gap-1.5 text-xs font-medium text-foreground-secondary hover:text-foreground border border-border-subtle hover:border-primary/35 hover:bg-white/5 px-2.5 py-1.5 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
+      className="flex items-center gap-1.5 text-xs font-medium text-foreground-secondary hover:text-foreground border border-border-subtle hover:border-border-accent hover:bg-white/5 px-2.5 py-1.5 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
     >
       <svg
         width="11"

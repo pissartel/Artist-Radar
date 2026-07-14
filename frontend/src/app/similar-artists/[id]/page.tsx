@@ -53,12 +53,12 @@ export default function SimilarArtistDetailPage({ params }: SimilarArtistDetailP
         <div className="max-w-lg">
           <Link
             href="/similar-artists"
-            className="text-xs text-accent-light hover:text-white transition-colors"
+            className="text-xs text-accent-text hover:text-foreground transition-colors"
           >
             ← Back to Similar Artists
           </Link>
-          <h1 className="text-xl font-bold text-white mt-4">Similar artist not found</h1>
-          <p className="text-sm text-gray-400 mt-1.5">
+          <h1 className="text-xl font-bold text-foreground mt-4">Similar artist not found</h1>
+          <p className="text-sm text-foreground-secondary mt-1.5">
             We couldn&apos;t find a similar artist with this ID. It may have been removed or
             the link is incorrect.
           </p>

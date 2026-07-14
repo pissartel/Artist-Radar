@@ -62,7 +62,7 @@ export default function SimilarArtistCard({
     return (
       <Link
         href={`/similar-artists/${artist.id}`}
-        className="bg-surface-elevated rounded-xl p-4 border border-border shadow-card flex flex-col gap-3 w-44 flex-shrink-0 hover:bg-surface hover:border-primary/35 hover:shadow-card-hover transition-all duration-200 focus-visible:outline-none focus-visible:shadow-focus"
+        className="bg-surface-elevated rounded-xl p-4 border border-border shadow-card flex flex-col gap-3 w-44 flex-shrink-0 hover:bg-surface hover:border-border-accent hover:shadow-card-hover transition-all duration-200 focus-visible:outline-none focus-visible:shadow-focus"
       >
         <div className="flex items-start justify-between gap-2">
           <ArtistAvatar imageUrl={artist.imageUrl} name={artist.name} sizeClassName="w-10 h-10" />
@@ -89,7 +89,7 @@ export default function SimilarArtistCard({
               event.stopPropagation();
               window.open(spotifyPlatform.url, "_blank", "noopener,noreferrer");
             }}
-            className="self-start text-[10px] text-accent-text hover:text-foreground border border-primary/30 hover:border-accent-text hover:bg-accent-tint px-2 py-1 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
+            className="self-start text-[10px] text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-2 py-1 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
           >
             Spotify ↗
           </button>
@@ -102,7 +102,7 @@ export default function SimilarArtistCard({
   const hiddenGenreCount = artist.genres.length - visibleGenres.length;
 
   return (
-    <div className="bg-surface rounded-xl p-4 border border-border shadow-card hover:bg-surface-elevated hover:border-primary/30 hover:shadow-card-hover transition-all duration-200 flex flex-col gap-3">
+    <div className="bg-surface rounded-xl p-4 border border-border shadow-card hover:bg-surface-elevated hover:border-border-accent hover:shadow-card-hover transition-all duration-200 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-3 min-w-0">
           <ArtistAvatar imageUrl={artist.imageUrl} name={artist.name} sizeClassName="w-11 h-11" />
@@ -171,7 +171,7 @@ export default function SimilarArtistCard({
         </div>
         <Link
           href={`/similar-artists/${artist.id}`}
-          className="text-xs text-accent-text hover:text-foreground border border-primary/30 hover:border-accent-text hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 whitespace-nowrap focus-visible:outline-none focus-visible:shadow-focus"
+          className="text-xs text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 whitespace-nowrap focus-visible:outline-none focus-visible:shadow-focus"
         >
           View details
         </Link>

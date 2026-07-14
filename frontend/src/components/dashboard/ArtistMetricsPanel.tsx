@@ -51,29 +51,29 @@ export default function ArtistMetricsPanel({
   ];
 
   return (
-    <div className="bg-card rounded-xl p-4 border border-slate-400/10 shadow-card">
-      <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest mb-3">
+    <div className="bg-surface rounded-xl p-4 border border-border shadow-card">
+      <h3 className="text-[10px] font-semibold text-foreground-muted uppercase tracking-widest mb-3">
         Artist Metrics
       </h3>
       <dl className="grid grid-cols-2 gap-x-3 gap-y-3">
         {stats.map((stat) => (
           <div key={stat.label} className="min-w-0">
-            <dt className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5 truncate">
+            <dt className="text-[10px] text-foreground-muted uppercase tracking-wider mb-0.5 truncate">
               {stat.label}
             </dt>
-            <dd className="text-sm font-semibold text-white truncate">{stat.value}</dd>
+            <dd className="text-sm font-semibold text-foreground truncate">{stat.value}</dd>
           </div>
         ))}
       </dl>
       {!hasSpotifyData && (
-        <p className="text-[11px] text-gray-500 mt-3">Spotify data unavailable for this artist.</p>
+        <p className="text-[11px] text-foreground-muted mt-3">Spotify data unavailable for this artist.</p>
       )}
       {metrics?.spotifyUrl && (
         <a
           href={metrics.spotifyUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-block text-xs text-accent-light hover:text-white transition-colors mt-3"
+          className="inline-block text-xs text-accent-text hover:text-foreground transition-colors mt-3"
         >
           View on Spotify →
         </a>

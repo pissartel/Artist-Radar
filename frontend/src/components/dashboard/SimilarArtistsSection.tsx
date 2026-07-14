@@ -15,12 +15,12 @@ export default function SimilarArtistsSection({
   return (
     <section className="mb-6">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
+        <h2 className="text-xs font-semibold text-foreground-secondary uppercase tracking-widest">
           Similar Artists
         </h2>
         <Link
           href="/similar-artists"
-          className="text-xs text-accent-light hover:text-white transition-colors"
+          className="text-xs text-accent-text hover:text-foreground transition-colors"
         >
           View all
         </Link>
@@ -32,9 +32,9 @@ export default function SimilarArtistsSection({
           ))}
         </div>
       ) : (
-        <div className="bg-card rounded-xl border border-slate-400/10 shadow-card p-6 text-center">
-          <p className="text-sm text-gray-500">No similar artists found yet.</p>
-          <p className="text-xs text-gray-600 mt-1">
+        <div className="bg-surface rounded-xl border border-border shadow-card p-6 text-center">
+          <p className="text-sm text-foreground-muted">No similar artists found yet.</p>
+          <p className="text-xs text-foreground-disabled mt-1">
             Try a broader genre or location to widen the search.
           </p>
         </div>

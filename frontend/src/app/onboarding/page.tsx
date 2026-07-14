@@ -1,12 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { MainGoal, OnboardingFormData } from "@/types";
 import FormField from "@/components/onboarding/FormField";
-import StepIndicator from "@/components/onboarding/StepIndicator";
+import OnboardingStepLayout from "@/components/onboarding/OnboardingStepLayout";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
@@ -83,175 +81,157 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4 sm:p-6">
-      <div className="w-full max-w-2xl">
-        <Link
-          href={LANDING_ROUTE}
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground-muted hover:text-foreground transition-colors mb-4"
-        >
-          ← Back
-        </Link>
+    <OnboardingStepLayout step={1} totalSteps={2} showLogo backHref={LANDING_ROUTE}>
+      <div className="text-center mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground mt-2">
+          Tell us about your artist project
+        </h1>
+        <p className="text-sm text-foreground-secondary mt-1.5">
+          We&apos;ll use this to prepare your personalized dashboard with
+          similar artists and booking opportunities.
+        </p>
+      </div>
 
-        <div className="text-center mb-6">
-          <Image
-            src="/brand/logo-next-stage-dark.png"
-            alt="NextStage"
-            width={136}
-            height={32}
-            priority
-            className="h-8 w-auto mx-auto"
+      <form
+        onSubmit={handleSubmit}
+        noValidate
+        className="bg-surface rounded-xl border border-border shadow-card-glow p-5 sm:p-6 flex flex-col gap-5"
+      >
+        <FormField label="Artist name" htmlFor="artistName" required error={errors.artistName}>
+          <Input
+            id="artistName"
+            type="text"
+            value={formData.artistName}
+            onChange={(e) => updateField("artistName", e.target.value)}
+            placeholder="e.g. Nova Ray"
+            error={Boolean(errors.artistName)}
+            aria-required="true"
           />
-          <StepIndicator step={1} totalSteps={2} className="mt-4" />
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground mt-2">
-            Tell us about your artist project
-          </h1>
-          <p className="text-sm text-foreground-secondary mt-1.5">
-            We&apos;ll use this to prepare your personalized dashboard with
-            similar artists and booking opportunities.
-          </p>
+        </FormField>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField label="Spotify URL" htmlFor="spotifyUrl">
+            <Input
+              id="spotifyUrl"
+              type="url"
+              value={formData.spotifyUrl}
+              onChange={(e) => updateField("spotifyUrl", e.target.value)}
+              placeholder="https://open.spotify.com/artist/..."
+            />
+          </FormField>
+          <FormField label="YouTube URL" htmlFor="youtubeUrl">
+            <Input
+              id="youtubeUrl"
+              type="url"
+              value={formData.youtubeUrl}
+              onChange={(e) => updateField("youtubeUrl", e.target.value)}
+              placeholder="https://youtube.com/@..."
+            />
+          </FormField>
+          <FormField label="Instagram URL" htmlFor="instagramUrl">
+            <Input
+              id="instagramUrl"
+              type="url"
+              value={formData.instagramUrl}
+              onChange={(e) => updateField("instagramUrl", e.target.value)}
+              placeholder="https://instagram.com/..."
+            />
+          </FormField>
+          <FormField label="Website URL" htmlFor="websiteUrl">
+            <Input
+              id="websiteUrl"
+              type="url"
+              value={formData.websiteUrl}
+              onChange={(e) => updateField("websiteUrl", e.target.value)}
+              placeholder="https://..."
+            />
+          </FormField>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          noValidate
-          className="bg-surface rounded-xl border border-border shadow-card-glow p-5 sm:p-6 flex flex-col gap-5"
-        >
-          <FormField label="Artist name" htmlFor="artistName" required error={errors.artistName}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField
+            label="Country of origin"
+            htmlFor="countryOfOrigin"
+            required
+            error={errors.countryOfOrigin}
+          >
             <Input
-              id="artistName"
+              id="countryOfOrigin"
               type="text"
-              value={formData.artistName}
-              onChange={(e) => updateField("artistName", e.target.value)}
-              placeholder="e.g. Nova Ray"
-              error={Boolean(errors.artistName)}
+              value={formData.countryOfOrigin}
+              onChange={(e) => updateField("countryOfOrigin", e.target.value)}
+              placeholder="e.g. France"
+              error={Boolean(errors.countryOfOrigin)}
               aria-required="true"
             />
           </FormField>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="Spotify URL" htmlFor="spotifyUrl">
-              <Input
-                id="spotifyUrl"
-                type="url"
-                value={formData.spotifyUrl}
-                onChange={(e) => updateField("spotifyUrl", e.target.value)}
-                placeholder="https://open.spotify.com/artist/..."
-              />
-            </FormField>
-            <FormField label="YouTube URL" htmlFor="youtubeUrl">
-              <Input
-                id="youtubeUrl"
-                type="url"
-                value={formData.youtubeUrl}
-                onChange={(e) => updateField("youtubeUrl", e.target.value)}
-                placeholder="https://youtube.com/@..."
-              />
-            </FormField>
-            <FormField label="Instagram URL" htmlFor="instagramUrl">
-              <Input
-                id="instagramUrl"
-                type="url"
-                value={formData.instagramUrl}
-                onChange={(e) => updateField("instagramUrl", e.target.value)}
-                placeholder="https://instagram.com/..."
-              />
-            </FormField>
-            <FormField label="Website URL" htmlFor="websiteUrl">
-              <Input
-                id="websiteUrl"
-                type="url"
-                value={formData.websiteUrl}
-                onChange={(e) => updateField("websiteUrl", e.target.value)}
-                placeholder="https://..."
-              />
-            </FormField>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField
-              label="Country of origin"
-              htmlFor="countryOfOrigin"
-              required
-              error={errors.countryOfOrigin}
-            >
-              <Input
-                id="countryOfOrigin"
-                type="text"
-                value={formData.countryOfOrigin}
-                onChange={(e) => updateField("countryOfOrigin", e.target.value)}
-                placeholder="e.g. France"
-                error={Boolean(errors.countryOfOrigin)}
-                aria-required="true"
-              />
-            </FormField>
-            <FormField label="City" htmlFor="city">
-              <Input
-                id="city"
-                type="text"
-                value={formData.city}
-                onChange={(e) => updateField("city", e.target.value)}
-                placeholder="e.g. Lyon"
-              />
-            </FormField>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField
-              label="Main genre"
-              htmlFor="mainGenre"
-              required
-              error={errors.mainGenre}
-            >
-              <Input
-                id="mainGenre"
-                type="text"
-                value={formData.mainGenre}
-                onChange={(e) => updateField("mainGenre", e.target.value)}
-                placeholder="e.g. Indie Pop"
-                error={Boolean(errors.mainGenre)}
-                aria-required="true"
-              />
-            </FormField>
-            <FormField label="Secondary genres" htmlFor="secondaryGenres">
-              <Input
-                id="secondaryGenres"
-                type="text"
-                value={formData.secondaryGenres}
-                onChange={(e) => updateField("secondaryGenres", e.target.value)}
-                placeholder="e.g. Synth-pop, Dream pop"
-              />
-            </FormField>
-          </div>
-
-          <FormField label="Target country or target cities" htmlFor="targetLocation">
+          <FormField label="City" htmlFor="city">
             <Input
-              id="targetLocation"
+              id="city"
               type="text"
-              value={formData.targetLocation}
-              onChange={(e) => updateField("targetLocation", e.target.value)}
-              placeholder="e.g. Germany, Berlin, Hamburg"
+              value={formData.city}
+              onChange={(e) => updateField("city", e.target.value)}
+              placeholder="e.g. Lyon"
             />
           </FormField>
+        </div>
 
-          <FormField label="Main goal" htmlFor="mainGoal">
-            <Select
-              id="mainGoal"
-              value={formData.mainGoal}
-              onChange={(e) => updateField("mainGoal", e.target.value as MainGoal)}
-            >
-              {MAIN_GOAL_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField
+            label="Main genre"
+            htmlFor="mainGenre"
+            required
+            error={errors.mainGenre}
+          >
+            <Input
+              id="mainGenre"
+              type="text"
+              value={formData.mainGenre}
+              onChange={(e) => updateField("mainGenre", e.target.value)}
+              placeholder="e.g. Indie Pop"
+              error={Boolean(errors.mainGenre)}
+              aria-required="true"
+            />
           </FormField>
+          <FormField label="Secondary genres" htmlFor="secondaryGenres">
+            <Input
+              id="secondaryGenres"
+              type="text"
+              value={formData.secondaryGenres}
+              onChange={(e) => updateField("secondaryGenres", e.target.value)}
+              placeholder="e.g. Synth-pop, Dream pop"
+            />
+          </FormField>
+        </div>
 
-          <Button type="submit" variant="gradient" className="mt-1 w-full">
-            Analyze artist
-          </Button>
-        </form>
-      </div>
-    </div>
+        <FormField label="Target country or target cities" htmlFor="targetLocation">
+          <Input
+            id="targetLocation"
+            type="text"
+            value={formData.targetLocation}
+            onChange={(e) => updateField("targetLocation", e.target.value)}
+            placeholder="e.g. Germany, Berlin, Hamburg"
+          />
+        </FormField>
+
+        <FormField label="Main goal" htmlFor="mainGoal">
+          <Select
+            id="mainGoal"
+            value={formData.mainGoal}
+            onChange={(e) => updateField("mainGoal", e.target.value as MainGoal)}
+          >
+            {MAIN_GOAL_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+
+        <Button type="submit" variant="gradient" className="mt-1 w-full">
+          Analyze artist
+        </Button>
+      </form>
+    </OnboardingStepLayout>
   );
 }

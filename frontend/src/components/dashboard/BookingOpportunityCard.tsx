@@ -6,6 +6,7 @@ import {
   getShortRelevanceReason,
 } from "@/lib/opportunity";
 import MatchScoreBadge from "@/components/common/MatchScoreBadge";
+import Card from "@/components/ui/Card";
 
 export const TYPE_LABELS: Record<string, string> = {
   venue: "Venue",
@@ -38,7 +39,7 @@ export default function BookingOpportunityCard({
   const relevanceReason = getShortRelevanceReason(opportunity);
 
   return (
-    <div className="bg-surface rounded-xl p-4 border border-border-subtle shadow-card hover:bg-surface-elevated hover:border-border-accent hover:shadow-card-hover transition-all duration-200 flex gap-4">
+    <Card variant="interactive" className="flex gap-4">
       <div className="w-11 h-11 rounded-xl bg-accent-tint border border-accent-tint flex items-center justify-center flex-shrink-0">
         <span className="text-accent-text text-base font-semibold">
           {title.charAt(0)}
@@ -97,6 +98,6 @@ export default function BookingOpportunityCard({
           </Link>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }

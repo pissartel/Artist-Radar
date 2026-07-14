@@ -5,13 +5,14 @@ import MatchReasonsList from "./MatchReasonsList";
 import SimilarArtistCard from "./SimilarArtistCard";
 import MatchScoreBadge from "@/components/common/MatchScoreBadge";
 import { formatOpportunityDate, getUrlHostname } from "@/lib/opportunity";
+import { cardClassName as buildCardClassName } from "@/components/ui/Card";
 
 interface OpportunityDetailProps {
   opportunity: Opportunity;
   relatedArtists: SimilarArtist[];
 }
 
-const cardClassName = "bg-surface rounded-xl p-4 border border-border shadow-card";
+const cardClassName = buildCardClassName("stat");
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (

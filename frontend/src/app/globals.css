@@ -10,6 +10,11 @@
 
 html {
   overflow-x: hidden;
+  /* Tells the browser this app only supports a dark UI so native controls
+     (select popups, date/time pickers, scrollbars) render with dark chrome
+     by default instead of assuming light mode and painting a pale panel
+     over the dark page. */
+  color-scheme: dark;
 }
 
 body {
@@ -19,6 +24,27 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+}
+
+/* Chrome/Safari paint autofilled fields with an opaque pale yellow/white
+   background via internal UA styles that ignore normal background-color
+   rules. The only reliable override is this inset box-shadow trick, paired
+   with -webkit-text-fill-color since `color` is also ignored on autofill. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--foreground);
+  -webkit-box-shadow: 0 0 0 1000px var(--input-background) inset;
+  box-shadow: 0 0 0 1000px var(--input-background) inset;
+  caret-color: var(--foreground);
+  transition: background-color 9999s ease-in-out 0s, color 9999s ease-in-out 0s;
 }
 
 :focus-visible {

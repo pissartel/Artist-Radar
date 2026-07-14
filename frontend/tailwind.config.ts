@@ -12,7 +12,10 @@ const config: Config = {
       colors: {
         background: "var(--background)",
         surface: "var(--surface)",
-        "surface-elevated": "var(--surface-elevated)",
+        // used with an opacity modifier (bg-surface-elevated/50) — see the
+        // primary/accent-text comment below for why this needs the rgb()
+        // channel-triple form instead of a plain var() reference.
+        "surface-elevated": "rgb(var(--color-surface-raised-rgb) / <alpha-value>)",
         foreground: "var(--foreground)",
         "foreground-secondary": "var(--foreground-secondary)",
         "foreground-muted": "var(--foreground-muted)",
@@ -23,16 +26,25 @@ const config: Config = {
         "border-subtle": "var(--border-subtle)",
         "border-accent": "var(--border-accent)",
         "border-accent-hover": "var(--border-accent-hover)",
-        primary: "var(--primary)",
+        // primary/accent-text are used with Tailwind opacity modifiers
+        // (e.g. border-primary/20) in several components, so they're wired
+        // to rgb(var(...) / <alpha-value>) via the *-rgb channel triples in
+        // tokens.css rather than a plain var() — see the comment there.
+        primary: "rgb(var(--color-accent-rgb) / <alpha-value>)",
         "primary-hover": "var(--primary-hover)",
         "primary-active": "var(--primary-active)",
         "primary-foreground": "var(--primary-foreground)",
         secondary: "var(--secondary)",
         "secondary-hover": "var(--secondary-hover)",
         "secondary-foreground": "var(--secondary-foreground)",
-        "accent-text": "var(--accent-text)",
+        "accent-text": "rgb(var(--color-accent-onDark-rgb) / <alpha-value>)",
         "accent-tint": "var(--accent-tint)",
         muted: "var(--muted)",
+        "input-background": "var(--input-background)",
+        "input-border": "var(--input-border)",
+        "input-border-focus": "var(--input-border-focus)",
+        "loader-track": "var(--loader-track)",
+        "success-surface": "var(--success-surface)",
         danger: "var(--danger)",
         "danger-text": "var(--danger-text)",
         "danger-tint": "var(--danger-tint)",
@@ -54,10 +66,15 @@ const config: Config = {
         // are migrated to the semantic names above.
         sidebar: "var(--surface)",
         card: "var(--surface)",
-        "card-alt": "var(--surface-elevated)",
-        "card-hover": "var(--surface-elevated)",
-        accent: "var(--primary)",
-        "accent-light": "var(--accent-text)",
+        "card-alt": "rgb(var(--color-surface-raised-rgb) / <alpha-value>)",
+        "card-hover": "rgb(var(--color-surface-raised-rgb) / <alpha-value>)",
+        // These two aliases are also used with opacity modifiers
+        // (bg-accent/10, text-accent-light/80, ...) at several unmigrated
+        // call sites, so — like primary/accent-text above — they need the
+        // rgb() channel-triple form rather than pointing at var(--primary)/
+        // var(--accent-text), which Tailwind can't decompose at build time.
+        accent: "rgb(var(--color-accent-rgb) / <alpha-value>)",
+        "accent-light": "rgb(var(--color-accent-onDark-rgb) / <alpha-value>)",
         "accent-green": "var(--success)",
       },
       backgroundImage: {

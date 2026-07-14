@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { SimilarArtist } from "@/types";
 import SimilarArtistCard from "./SimilarArtistCard";
+import Select from "@/components/ui/Select";
 
 interface SimilarArtistsExplorerProps {
   artists: SimilarArtist[];
@@ -15,9 +16,6 @@ const MATCH_SCORE_OPTIONS = [
   { label: "70%+", value: 70 },
   { label: "60%+", value: 60 },
 ];
-
-const selectClassName =
-  "text-xs text-gray-300 bg-card border border-slate-400/15 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-accent/50 hover:border-accent/35 transition-colors";
 
 export default function SimilarArtistsExplorer({
   artists,
@@ -58,46 +56,38 @@ export default function SimilarArtistsExplorer({
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search by artist name"
-          className="flex-1 min-w-[180px] text-xs text-gray-300 placeholder:text-gray-600 bg-card border border-slate-400/15 rounded-lg px-3 py-1.5 focus:outline-none focus:border-accent/50 hover:border-accent/35 transition-colors"
+          className="flex-1 min-w-[180px] text-xs text-foreground placeholder:text-muted bg-input-background border border-input-border rounded-lg px-3 py-1.5 focus:outline-none focus:border-input-border-focus focus:shadow-focus hover:border-border-accent transition-colors"
         />
-        <select
-          value={genre}
-          onChange={(event) => setGenre(event.target.value)}
-          className={selectClassName}
-        >
+        <Select dense value={genre} onChange={(event) => setGenre(event.target.value)}>
           <option value="all">All genres</option>
           {genres.map((g) => (
             <option key={g} value={g}>
               {g}
             </option>
           ))}
-        </select>
-        <select
-          value={location}
-          onChange={(event) => setLocation(event.target.value)}
-          className={selectClassName}
-        >
+        </Select>
+        <Select dense value={location} onChange={(event) => setLocation(event.target.value)}>
           <option value="all">All locations</option>
           {locations.map((l) => (
             <option key={l} value={l}>
               {l}
             </option>
           ))}
-        </select>
-        <select
+        </Select>
+        <Select
+          dense
           value={minScore}
           onChange={(event) => setMinScore(Number(event.target.value))}
-          className={selectClassName}
         >
           {MATCH_SCORE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
-      <p className="text-xs text-gray-600 mb-3">
+      <p className="text-xs text-foreground-disabled mb-3">
         {filteredArtists.length} of {artists.length} similar artists
       </p>
 
@@ -108,7 +98,7 @@ export default function SimilarArtistsExplorer({
           ))}
         </div>
       ) : (
-        <div className="bg-card rounded-xl border border-slate-400/10 shadow-card-glow p-6 text-sm text-gray-500">
+        <div className="bg-surface rounded-xl border border-border shadow-card-glow p-6 text-sm text-foreground-muted">
           No similar artists match your filters.
         </div>
       )}

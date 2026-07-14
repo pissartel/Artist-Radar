@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import type { MainGoal, OnboardingFormData } from "@/types";
 import FormField from "@/components/onboarding/FormField";
 import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
+import Select from "@/components/ui/Select";
 
 const MAIN_GOAL_OPTIONS: { value: MainGoal; label: string }[] = [
   { value: "booking_opportunities", label: "Find booking opportunities" },
@@ -29,12 +31,6 @@ const INITIAL_FORM_DATA: OnboardingFormData = {
 };
 
 type FormErrors = Partial<Record<"artistName" | "countryOfOrigin" | "mainGenre", string>>;
-
-const inputClass =
-  "w-full bg-background border border-border-strong rounded-md px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-primary focus:shadow-focus transition-colors";
-
-const inputErrorClass =
-  "w-full bg-background border border-danger rounded-md px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-danger focus:shadow-focus transition-colors";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -110,57 +106,52 @@ export default function OnboardingPage() {
           className="bg-surface rounded-xl border border-border shadow-card-glow p-5 sm:p-6 flex flex-col gap-5"
         >
           <FormField label="Artist name" htmlFor="artistName" required error={errors.artistName}>
-            <input
+            <Input
               id="artistName"
               type="text"
               value={formData.artistName}
               onChange={(e) => updateField("artistName", e.target.value)}
               placeholder="e.g. Nova Ray"
-              className={errors.artistName ? inputErrorClass : inputClass}
+              error={Boolean(errors.artistName)}
               aria-required="true"
-              aria-invalid={Boolean(errors.artistName)}
             />
           </FormField>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="Spotify URL" htmlFor="spotifyUrl">
-              <input
+              <Input
                 id="spotifyUrl"
                 type="url"
                 value={formData.spotifyUrl}
                 onChange={(e) => updateField("spotifyUrl", e.target.value)}
                 placeholder="https://open.spotify.com/artist/..."
-                className={inputClass}
               />
             </FormField>
             <FormField label="YouTube URL" htmlFor="youtubeUrl">
-              <input
+              <Input
                 id="youtubeUrl"
                 type="url"
                 value={formData.youtubeUrl}
                 onChange={(e) => updateField("youtubeUrl", e.target.value)}
                 placeholder="https://youtube.com/@..."
-                className={inputClass}
               />
             </FormField>
             <FormField label="Instagram URL" htmlFor="instagramUrl">
-              <input
+              <Input
                 id="instagramUrl"
                 type="url"
                 value={formData.instagramUrl}
                 onChange={(e) => updateField("instagramUrl", e.target.value)}
                 placeholder="https://instagram.com/..."
-                className={inputClass}
               />
             </FormField>
             <FormField label="Website URL" htmlFor="websiteUrl">
-              <input
+              <Input
                 id="websiteUrl"
                 type="url"
                 value={formData.websiteUrl}
                 onChange={(e) => updateField("websiteUrl", e.target.value)}
                 placeholder="https://..."
-                className={inputClass}
               />
             </FormField>
           </div>
@@ -172,25 +163,23 @@ export default function OnboardingPage() {
               required
               error={errors.countryOfOrigin}
             >
-              <input
+              <Input
                 id="countryOfOrigin"
                 type="text"
                 value={formData.countryOfOrigin}
                 onChange={(e) => updateField("countryOfOrigin", e.target.value)}
                 placeholder="e.g. France"
-                className={errors.countryOfOrigin ? inputErrorClass : inputClass}
+                error={Boolean(errors.countryOfOrigin)}
                 aria-required="true"
-                aria-invalid={Boolean(errors.countryOfOrigin)}
               />
             </FormField>
             <FormField label="City" htmlFor="city">
-              <input
+              <Input
                 id="city"
                 type="text"
                 value={formData.city}
                 onChange={(e) => updateField("city", e.target.value)}
                 placeholder="e.g. Lyon"
-                className={inputClass}
               />
             </FormField>
           </div>
@@ -202,53 +191,49 @@ export default function OnboardingPage() {
               required
               error={errors.mainGenre}
             >
-              <input
+              <Input
                 id="mainGenre"
                 type="text"
                 value={formData.mainGenre}
                 onChange={(e) => updateField("mainGenre", e.target.value)}
                 placeholder="e.g. Indie Pop"
-                className={errors.mainGenre ? inputErrorClass : inputClass}
+                error={Boolean(errors.mainGenre)}
                 aria-required="true"
-                aria-invalid={Boolean(errors.mainGenre)}
               />
             </FormField>
             <FormField label="Secondary genres" htmlFor="secondaryGenres">
-              <input
+              <Input
                 id="secondaryGenres"
                 type="text"
                 value={formData.secondaryGenres}
                 onChange={(e) => updateField("secondaryGenres", e.target.value)}
                 placeholder="e.g. Synth-pop, Dream pop"
-                className={inputClass}
               />
             </FormField>
           </div>
 
           <FormField label="Target country or target cities" htmlFor="targetLocation">
-            <input
+            <Input
               id="targetLocation"
               type="text"
               value={formData.targetLocation}
               onChange={(e) => updateField("targetLocation", e.target.value)}
               placeholder="e.g. Germany, Berlin, Hamburg"
-              className={inputClass}
             />
           </FormField>
 
           <FormField label="Main goal" htmlFor="mainGoal">
-            <select
+            <Select
               id="mainGoal"
               value={formData.mainGoal}
               onChange={(e) => updateField("mainGoal", e.target.value as MainGoal)}
-              className={inputClass}
             >
               {MAIN_GOAL_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </FormField>
 
           <Button type="submit" variant="primary" className="mt-1 w-full">

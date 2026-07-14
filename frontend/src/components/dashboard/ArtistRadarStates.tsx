@@ -18,7 +18,7 @@ export function ArtistRadarEmptyOnboardingState() {
     <div className="bg-surface rounded-xl border border-border shadow-card-glow p-10 flex flex-col items-center justify-center text-center">
       <p className="text-sm text-foreground font-medium">No artist search yet.</p>
       <p className="text-xs text-foreground-muted mt-1.5 max-w-sm">
-        Tell us about your artist project to get similar artists and booking opportunities.
+        Tell us about your artist project to get similar artists and opportunities.
       </p>
       <Link
         href="/onboarding"

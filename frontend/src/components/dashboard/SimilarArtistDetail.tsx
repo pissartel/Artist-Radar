@@ -6,6 +6,7 @@ import MatchScoreBadge from "@/components/common/MatchScoreBadge";
 import { formatOpportunityDate, getUrlHostname } from "@/lib/opportunity";
 import { formatMonthlyListeners, getSharedGenres } from "@/lib/similarArtist";
 import { cardClassName as buildCardClassName } from "@/components/ui/Card";
+import { productFeatures } from "@/lib/productFeatures";
 
 interface SimilarArtistDetailProps {
   artist: SimilarArtist;
@@ -181,7 +182,7 @@ export default function SimilarArtistDetail({
 
         {relatedOpportunities.length > 0 && (
           <div className={cardClassName}>
-            <SectionTitle>Related booking opportunities</SectionTitle>
+            <SectionTitle>Related opportunities</SectionTitle>
             <div className="flex flex-col gap-2">
               {relatedOpportunities.map((opportunity) => {
                 const formattedDate = formatOpportunityDate(opportunity.date);
@@ -203,38 +204,21 @@ export default function SimilarArtistDetail({
           </div>
         )}
 
-        <div className={cardClassName}>
-          <SectionTitle>Actions</SectionTitle>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="text-xs text-primary-foreground bg-primary hover:bg-primary-hover px-3 py-1.5 rounded-lg transition-colors duration-150"
-            >
-              Use as reference
-            </button>
-            <button
-              type="button"
-              className="text-xs text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150"
-            >
-              Find booking opportunities from this artist
-            </button>
-            <button
-              type="button"
-              className="text-xs text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150"
-            >
-              Save artist
-            </button>
-          </div>
-        </div>
+        {/* "Use as reference", opportunity discovery from this artist, and
+            saving are planned but not implemented yet (product backlog) —
+            no actions exist for a similar artist today beyond the platform
+            links above. */}
 
-        <details className={cardClassName}>
-          <summary className="text-[10px] font-semibold text-foreground-muted uppercase tracking-widest cursor-pointer">
-            Raw data (debug)
-          </summary>
-          <pre className="text-[11px] text-foreground-muted bg-background rounded-lg p-3 mt-3 overflow-x-auto">
-            {JSON.stringify(artist, null, 2)}
-          </pre>
-        </details>
+        {productFeatures.rawJson && (
+          <details className={cardClassName}>
+            <summary className="text-[10px] font-semibold text-foreground-muted uppercase tracking-widest cursor-pointer">
+              Raw data (debug)
+            </summary>
+            <pre className="text-[11px] text-foreground-muted bg-background rounded-lg p-3 mt-3 overflow-x-auto">
+              {JSON.stringify(artist, null, 2)}
+            </pre>
+          </details>
+        )}
       </div>
     </div>
   );

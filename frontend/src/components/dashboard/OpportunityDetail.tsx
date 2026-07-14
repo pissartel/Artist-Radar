@@ -6,6 +6,7 @@ import SimilarArtistCard from "./SimilarArtistCard";
 import MatchScoreBadge from "@/components/common/MatchScoreBadge";
 import { formatOpportunityDate, getUrlHostname } from "@/lib/opportunity";
 import { cardClassName as buildCardClassName } from "@/components/ui/Card";
+import { productFeatures } from "@/lib/productFeatures";
 
 interface OpportunityDetailProps {
   opportunity: Opportunity;
@@ -35,7 +36,7 @@ export default function OpportunityDetail({
         href="/booking"
         className="text-xs text-accent-text hover:text-foreground transition-colors"
       >
-        ← Back to Booking
+        ← Back to Opportunities
       </Link>
 
       <div className="mt-4 flex items-start justify-between gap-3 flex-wrap">
@@ -131,16 +132,13 @@ export default function OpportunityDetail({
           </div>
         )}
 
-        <div className={cardClassName}>
-          <SectionTitle>Actions</SectionTitle>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="text-xs text-primary-foreground bg-primary hover:bg-primary-hover px-3 py-1.5 rounded-lg transition-colors duration-150"
-            >
-              Save
-            </button>
-            {primarySourceUrl ? (
+        {/* Saving, outreach-draft generation, and contact tracking are
+            planned but not implemented yet (product backlog) — only the
+            "Open source" link is a real action today. */}
+        {primarySourceUrl && (
+          <div className={cardClassName}>
+            <SectionTitle>Actions</SectionTitle>
+            <div className="flex flex-wrap gap-2">
               <a
                 href={primarySourceUrl}
                 target="_blank"
@@ -149,38 +147,20 @@ export default function OpportunityDetail({
               >
                 Open source
               </a>
-            ) : (
-              <button
-                type="button"
-                disabled
-                className="text-xs text-foreground-disabled border border-border px-3 py-1.5 rounded-lg cursor-not-allowed"
-              >
-                Open source
-              </button>
-            )}
-            <button
-              type="button"
-              className="text-xs text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150"
-            >
-              Generate outreach draft
-            </button>
-            <button
-              type="button"
-              className="text-xs text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150"
-            >
-              Mark as contacted
-            </button>
+            </div>
           </div>
-        </div>
+        )}
 
-        <details className={cardClassName}>
-          <summary className="text-[10px] font-semibold text-foreground-muted uppercase tracking-widest cursor-pointer">
-            Raw data (debug)
-          </summary>
-          <pre className="text-[11px] text-foreground-muted bg-background rounded-lg p-3 mt-3 overflow-x-auto">
-            {JSON.stringify(opportunity, null, 2)}
-          </pre>
-        </details>
+        {productFeatures.rawJson && (
+          <details className={cardClassName}>
+            <summary className="text-[10px] font-semibold text-foreground-muted uppercase tracking-widest cursor-pointer">
+              Raw data (debug)
+            </summary>
+            <pre className="text-[11px] text-foreground-muted bg-background rounded-lg p-3 mt-3 overflow-x-auto">
+              {JSON.stringify(opportunity, null, 2)}
+            </pre>
+          </details>
+        )}
       </div>
     </div>
   );

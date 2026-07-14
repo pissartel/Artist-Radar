@@ -30,10 +30,11 @@ export default function BookingPage() {
     <>
       <WarningsBanner warnings={warnings} />
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground">Booking</h1>
+        <h1 className="text-xl font-bold text-foreground">Live &amp; Booking Opportunities</h1>
         <p className="text-sm text-foreground-secondary mt-1.5">
           Explore every venue, concert, opening slot, and festival opportunity found for your
-          profile to decide which ones to pursue.
+          profile to decide which ones to pursue. This is the first opportunity category
+          available — more are coming.
         </p>
       </div>
       <BookingExplorer

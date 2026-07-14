@@ -33,7 +33,7 @@ export default function SimilarArtistsPage() {
         <h1 className="text-xl font-bold text-foreground">Similar Artists</h1>
         <p className="text-sm text-foreground-secondary mt-1.5">
           Explore every similar artist found for your profile to understand your scene
-          and find useful references for booking research.
+          and find useful references for your outreach.
         </p>
       </div>
       <SimilarArtistsExplorer artists={similarArtists} />

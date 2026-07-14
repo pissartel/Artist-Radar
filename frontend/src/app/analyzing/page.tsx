@@ -14,7 +14,7 @@ const ANALYSIS_STEPS = [
   "Finding similar artists",
   "Mapping music scene",
   "Scanning venues and concerts",
-  "Scoring booking opportunities",
+  "Scoring opportunities",
   "Building dashboard",
 ];
 

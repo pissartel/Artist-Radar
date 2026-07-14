@@ -16,8 +16,8 @@ const FEATURES = [
     accent: "info" as const,
   },
   {
-    title: "Booking scores",
-    description: "Every lead scored so you spend outreach time where it converts.",
+    title: "Opportunity scores",
+    description: "Every opportunity scored so you spend outreach time where it converts.",
     accent: "success" as const,
   },
 ];
@@ -28,19 +28,32 @@ const ICON_TILE_CLASSES: Record<(typeof FEATURES)[number]["accent"], string> = {
   success: "bg-success-tint text-success-text",
 };
 
+// Categories the platform is designed to expand into beyond the current
+// live & booking MVP — see docs/brand and src/lib/productFeatures.ts. Not
+// implemented yet; listed here purely as roadmap context for visitors.
+const UPCOMING_CATEGORIES = [
+  "Playlists and media",
+  "Labels and publishers",
+  "Managers, agents and bookers",
+  "Producers and sound engineers",
+  "Collaborations",
+  "Local scenes",
+  "Professional contacts",
+];
+
 export default function LandingPage() {
   return (
     <>
       <section className="flex flex-col items-center text-center gap-6 px-6 py-20 sm:py-28">
         <Badge variant="accent" className="px-4 py-1.5 text-[13px]">
-          AI-powered booking intelligence
+          AI-powered opportunity intelligence
         </Badge>
         <h1 className="text-4xl sm:text-6xl font-extrabold text-foreground tracking-tight leading-[1.05] max-w-3xl">
-          Find your next stage, before anyone else does.
+          Find your next stage.
         </h1>
         <p className="text-base sm:text-lg font-medium text-foreground-secondary max-w-xl leading-relaxed">
-          NextStage scans venues, festivals and similar artists to surface the booking
-          opportunities that actually fit your sound.
+          Discover the artists, venues, contacts and opportunities that can move your music
+          forward.
         </p>
         <div className="flex flex-col sm:flex-row gap-3.5 mt-2 w-full sm:w-auto">
           <Link
@@ -73,6 +86,27 @@ export default function LandingPage() {
         ))}
       </section>
 
+      <section className="flex flex-col items-center text-center gap-6 px-6 pb-24">
+        <div className="max-w-2xl flex flex-col items-center gap-3">
+          <Badge variant="success">Currently available in the MVP</Badge>
+          <h2 className="text-2xl sm:text-[30px] font-extrabold text-foreground tracking-tight">
+            Starting with live and booking opportunities
+          </h2>
+          <p className="text-sm sm:text-base text-foreground-secondary">
+            NextStage is built as an artist growth platform, not just a booking tool. Live
+            venues, festivals and opening slots are the first opportunity category — more
+            opportunity categories are coming.
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-center gap-2 max-w-2xl">
+          {UPCOMING_CATEGORIES.map((category) => (
+            <Badge key={category} variant="neutral">
+              {category}
+            </Badge>
+          ))}
+        </div>
+      </section>
+
       <section
         id="how-it-works"
         className="flex flex-col items-center text-center gap-4 px-6 pb-24"
@@ -82,13 +116,13 @@ export default function LandingPage() {
         </h2>
         <p className="text-sm sm:text-base text-foreground-secondary max-w-lg">
           Share your artist profile, streaming links and target market. NextStage runs the
-          analysis and hands you a dashboard of similar artists and scored booking opportunities.
+          analysis and hands you a dashboard of similar artists and scored opportunities.
         </p>
         <Link
           href={MVP_ENTRY_ROUTE}
           className={buttonClassName("gradient", "px-7 py-4 text-base mt-2")}
         >
-          Try the MVP
+          Try It
         </Link>
       </section>
     </>

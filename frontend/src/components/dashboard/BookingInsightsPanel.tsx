@@ -1,7 +1,6 @@
 import type { ArtistMetrics, CityOpportunityStat } from "@/types";
 import TopCitiesPanel from "./TopCitiesPanel";
 import ArtistMetricsPanel from "./ArtistMetricsPanel";
-import FilterButton from "./FilterButton";
 
 interface BookingInsightsPanelProps {
   metrics?: ArtistMetrics;
@@ -18,12 +17,9 @@ export default function BookingInsightsPanel({
 }: BookingInsightsPanelProps) {
   return (
     <aside className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-[10px] font-semibold text-foreground-muted uppercase tracking-widest">
-          Insights
-        </h3>
-        <FilterButton />
-      </div>
+      <h3 className="text-[10px] font-semibold text-foreground-muted uppercase tracking-widest">
+        Insights
+      </h3>
       <ArtistMetricsPanel
         metrics={metrics}
         topCities={topCities}

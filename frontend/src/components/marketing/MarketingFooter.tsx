@@ -15,7 +15,7 @@ export default function MarketingFooter() {
           © {new Date().getFullYear()} NextStage
         </span>
       </div>
-      <p className="text-xs text-foreground-muted">Booking intelligence for independent artists.</p>
+      <p className="text-xs text-foreground-muted">Opportunity intelligence for independent artists.</p>
     </footer>
   );
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { SimilarArtist } from "@/types";
 import { formatGenrePreview, formatMonthlyListeners } from "@/lib/similarArtist";
 import MatchScoreBadge from "@/components/common/MatchScoreBadge";
+import Card, { cardClassName } from "@/components/ui/Card";
 
 export const TIER_LABELS: Record<string, string> = {
   emerging: "Emerging",
@@ -62,7 +63,7 @@ export default function SimilarArtistCard({
     return (
       <Link
         href={`/similar-artists/${artist.id}`}
-        className="bg-surface-elevated rounded-xl p-4 border border-border shadow-card flex flex-col gap-3 w-44 flex-shrink-0 hover:bg-surface hover:border-border-accent hover:shadow-card-hover transition-all duration-200 focus-visible:outline-none focus-visible:shadow-focus"
+        className={cardClassName("interactive", "flex flex-col gap-3 w-44 flex-shrink-0")}
       >
         <div className="flex items-start justify-between gap-2">
           <ArtistAvatar imageUrl={artist.imageUrl} name={artist.name} sizeClassName="w-10 h-10" />
@@ -102,7 +103,7 @@ export default function SimilarArtistCard({
   const hiddenGenreCount = artist.genres.length - visibleGenres.length;
 
   return (
-    <div className="bg-surface rounded-xl p-4 border border-border shadow-card hover:bg-surface-elevated hover:border-border-accent hover:shadow-card-hover transition-all duration-200 flex flex-col gap-3">
+    <Card variant="interactive" className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-3 min-w-0">
           <ArtistAvatar imageUrl={artist.imageUrl} name={artist.name} sizeClassName="w-11 h-11" />
@@ -176,6 +177,6 @@ export default function SimilarArtistCard({
           View details
         </Link>
       </div>
-    </div>
+    </Card>
   );
 }

@@ -5,6 +5,7 @@ import MatchReasonsList from "./MatchReasonsList";
 import MatchScoreBadge from "@/components/common/MatchScoreBadge";
 import { formatOpportunityDate, getUrlHostname } from "@/lib/opportunity";
 import { formatMonthlyListeners, getSharedGenres } from "@/lib/similarArtist";
+import { cardClassName as buildCardClassName } from "@/components/ui/Card";
 
 interface SimilarArtistDetailProps {
   artist: SimilarArtist;
@@ -12,7 +13,7 @@ interface SimilarArtistDetailProps {
   relatedOpportunities: Opportunity[];
 }
 
-const cardClassName = "bg-surface rounded-xl p-4 border border-border shadow-card";
+const cardClassName = buildCardClassName("stat");
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (

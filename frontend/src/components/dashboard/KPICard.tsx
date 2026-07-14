@@ -1,4 +1,5 @@
 import type { KpiMetric } from "@/types";
+import Card from "@/components/ui/Card";
 
 interface KpiCardProps {
   metric: KpiMetric;
@@ -91,7 +92,7 @@ export default function KpiCard({ metric }: KpiCardProps) {
   const iconConfig = KPI_ICONS[metric.id];
 
   return (
-    <div className="bg-surface rounded-xl p-4 border border-border shadow-card hover:bg-surface-elevated hover:border-border-accent transition-all duration-200 group">
+    <Card variant="stat">
       {iconConfig && (
         <div
           className={`inline-flex items-center justify-center w-7 h-7 rounded-lg ${iconConfig.bg} ${iconConfig.color} mb-2.5`}
@@ -108,6 +109,6 @@ export default function KpiCard({ metric }: KpiCardProps) {
           <span className="text-base text-foreground-muted ml-1">{metric.unit}</span>
         )}
       </p>
-    </div>
+    </Card>
   );
 }

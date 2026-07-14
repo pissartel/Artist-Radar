@@ -19,7 +19,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "NextStage",
-  description: "AI-powered booking intelligence for independent artists",
+  description: "AI-powered opportunity intelligence for independent artists",
   icons: {
     icon: "/brand/favicon.svg",
   },

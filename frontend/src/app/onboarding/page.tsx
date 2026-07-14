@@ -88,7 +88,7 @@ export default function OnboardingPage() {
         </h1>
         <p className="text-sm text-foreground-secondary mt-1.5">
           We&apos;ll use this to prepare your personalized dashboard with
-          similar artists and booking opportunities.
+          similar artists and opportunities.
         </p>
       </div>
 

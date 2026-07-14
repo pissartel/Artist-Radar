@@ -3,17 +3,23 @@
 import { useMemo, useState } from "react";
 import type { Opportunity } from "@/types";
 import { filterBookingOpportunities, type BookingTabName } from "@/lib/opportunity";
+import { productFeatures } from "@/lib/productFeatures";
 import BookingOpportunityCard from "./BookingOpportunityCard";
 
-const TABS: BookingTabName[] = [
+const BASE_TABS: BookingTabName[] = [
   "All",
   "Venues",
   "Concerts",
   "Festivals",
   "Opening Slots",
   "Contacts",
-  "Raw JSON",
 ];
+
+// Raw JSON is a developer diagnostic view, not a product tab — never shown
+// to production users. See src/lib/productFeatures.ts.
+const TABS: BookingTabName[] = productFeatures.rawJson
+  ? [...BASE_TABS, "Raw JSON"]
+  : BASE_TABS;
 
 const EMPTY_STATE_MESSAGE: Record<BookingTabName, string> = {
   All: "No booking opportunities found in this analysis",

@@ -41,7 +41,7 @@ export default function OpportunityDetailPage({ params }: OpportunityDetailPageP
           href="/booking"
           className="text-xs text-accent-text hover:text-foreground transition-colors"
         >
-          ← Back to Booking
+          ← Back to Opportunities
         </Link>
         <h1 className="text-xl font-bold text-foreground mt-4">Opportunity not found</h1>
         <p className="text-sm text-foreground-secondary mt-1.5">

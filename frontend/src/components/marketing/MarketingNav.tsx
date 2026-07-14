@@ -33,7 +33,7 @@ export default function MarketingNav() {
           href={MVP_ENTRY_ROUTE}
           className={buttonClassName("gradient", "px-5 py-2.5 text-sm")}
         >
-          Try the MVP
+          Try It
         </Link>
       </nav>
     </header>

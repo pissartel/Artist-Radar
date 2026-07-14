@@ -47,7 +47,7 @@ export default function ArtistMetricsPanel({
         : UNAVAILABLE,
     },
     { label: "Similar Artists", value: similarArtistCount.toString() },
-    { label: "Booking Opportunities", value: opportunityCount.toString() },
+    { label: "Opportunities", value: opportunityCount.toString() },
   ];
 
   return (

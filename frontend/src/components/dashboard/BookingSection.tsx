@@ -23,7 +23,7 @@ export default function BookingSection({
         <div className="flex items-center gap-3">
           <div className="w-1 h-5 rounded-full bg-primary" />
           <h2 className="text-sm font-semibold text-foreground uppercase tracking-widest">
-            Booking Opportunities
+            Opportunities
           </h2>
           <Badge variant="accent" className="tabular-nums">
             {opportunities.length}

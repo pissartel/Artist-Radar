@@ -20,7 +20,7 @@ export default function Sidebar() {
           className="h-8 w-auto"
         />
         <p className="text-[10px] text-foreground-muted mt-1.5 uppercase tracking-widest">
-          Booking Intelligence
+          Opportunity Intelligence
         </p>
       </div>
       <nav className="flex flex-col gap-0.5">

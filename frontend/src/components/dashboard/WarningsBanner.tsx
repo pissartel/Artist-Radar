@@ -10,14 +10,14 @@ export default function WarningsBanner({ warnings }: WarningsBannerProps) {
   return (
     <div
       role="status"
-      className="mb-6 rounded-xl border border-amber-400/30 bg-amber-400/10 p-4"
+      className="mb-6 rounded-xl border border-warning-tint bg-warning-tint p-4"
     >
-      <p className="text-xs font-semibold text-amber-300 uppercase tracking-widest mb-2">
+      <p className="text-xs font-semibold text-warning-text uppercase tracking-widest mb-2">
         Heads up
       </p>
       <ul className="flex flex-col gap-1">
         {warnings.map((warning) => (
-          <li key={warning} className="text-xs text-amber-200/90 leading-relaxed">
+          <li key={warning} className="text-xs text-foreground-secondary leading-relaxed">
             {warning}
           </li>
         ))}

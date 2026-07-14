@@ -91,8 +91,8 @@ const config: Config = {
       },
       boxShadow: {
         card: "var(--shadow-card)",
-        "card-hover": "0 4px 16px rgba(0,0,0,0.6), 0 2px 4px rgba(0,0,0,0.5)",
-        "card-glow": "0 0 0 1px rgba(147,51,234,0.08), 0 4px 20px rgba(0,0,0,0.5)",
+        "card-hover": "var(--shadow-card-hover)",
+        "card-glow": "var(--shadow-card-glow)",
         frame: "var(--shadow-frame)",
         focus: "var(--focus-ring)",
       },

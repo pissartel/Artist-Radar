@@ -34,21 +34,22 @@
   --color-accent-hover: #7e22ce;
   --color-accent-active: #6b21a8;
   --color-accent-onDark: #c084fc;
-  --color-accent-tint: rgba(147, 51, 234, 0.14);
-  --color-accent-tint-strong: rgba(147, 51, 234, 0.4);
-
-  /* RGB channel triples for colors that Tailwind opacity modifiers (e.g.
-     border-primary/20) need to compose at build time. Tailwind can only
-     generate `rgb(var(--x) / <alpha-value>)` output when the theme color is
-     wired to these channel-only variables — pointing a Tailwind color
-     directly at a hex/var() value (as the rest of this file does) makes any
-     `/NN` utility on it silently fail to generate, which left border-color
-     unset and falling back to the browser default of `currentColor` (i.e.
-     near-white body text) instead of a translucent purple. Only the colors
-     actually used with an opacity modifier in the app need an entry here. */
+  /* RGB channel triples — the single source of truth for the brand purple
+     and its light-on-dark variant, referenced both by the tint colors right
+     below and by tailwind.config.ts (which needs the channel-only form to
+     generate `rgb(var(--x) / <alpha-value>)` output for opacity-modifier
+     utilities like border-primary/20; pointing a Tailwind color directly at
+     a hex/var() value makes any `/NN` utility on it silently fail to
+     generate, which left border-color unset and falling back to the browser
+     default of `currentColor` — i.e. near-white body text — instead of a
+     translucent purple). Only the colors actually needed in channel form
+     have an entry here. */
   --color-accent-rgb: 147 51 234;
   --color-accent-onDark-rgb: 192 132 252;
   --color-surface-raised-rgb: 29 27 38;
+
+  --color-accent-tint: rgb(var(--color-accent-rgb) / 0.14);
+  --color-accent-tint-strong: rgb(var(--color-accent-rgb) / 0.4);
 
   /* Brand gradient (logo + primary CTA only) */
   --gradient-brand: linear-gradient(135deg, #4b4df7 0%, #9333ea 50%, #f43f5e 100%);
@@ -100,6 +101,8 @@
 
   /* Shadows */
   --shadow-card: 0 1px 3px rgba(18, 16, 31, 0.08);
+  --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.5);
+  --shadow-card-glow: 0 0 0 1px rgb(var(--color-accent-rgb) / 0.08), 0 4px 20px rgba(0, 0, 0, 0.5);
   --shadow-frame: 0 20px 60px rgba(0, 0, 0, 0.25);
 
   /* Borders */
@@ -163,7 +166,7 @@
   --info-text: var(--color-info-text);
   --info-tint: var(--color-info-tint);
 
-  --focus-ring: 0 0 0 3px rgba(147, 51, 234, 0.35);
+  --focus-ring: 0 0 0 3px rgb(var(--color-accent-rgb) / 0.35);
 
   /* Form control roles — every text/url input, select, and combobox trigger
      should consume these instead of the generic --background/--border-strong
@@ -176,7 +179,7 @@
   /* Loading spinner track — a dark, muted purple-tinted ring so the
      stationary part of a spinner never has to fall back to a bare border
      utility (and risk the currentColor/white fallback above). */
-  --loader-track: rgba(147, 51, 234, 0.18);
+  --loader-track: rgb(var(--color-accent-rgb) / 0.18);
 
   /* Alias for the tinted-green circular background used behind completed
      pipeline steps — same value as --success-tint, named for that role. */

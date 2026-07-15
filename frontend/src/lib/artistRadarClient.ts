@@ -1,13 +1,33 @@
 import type { ArtistRadarRequest, ArtistRadarResponse } from "@/types/artistRadar";
 
 export class ArtistRadarClientError extends Error {
-  constructor(message: string) {
+  /** Non-sensitive error code from the API (see route.ts), for debugging/telemetry. */
+  code?: string;
+
+  constructor(message: string, code?: string) {
     super(message);
     this.name = "ArtistRadarClientError";
+    this.code = code;
   }
 }
 
 const DEFAULT_ERROR_MESSAGE = "Failed to load Artist Radar data. Please try again.";
+
+interface StructuredErrorPayload {
+  success: false;
+  error: { code: string; message: string };
+}
+
+function isStructuredErrorPayload(payload: unknown): payload is StructuredErrorPayload {
+  return (
+    Boolean(payload) &&
+    typeof payload === "object" &&
+    (payload as { success?: unknown }).success === false &&
+    typeof (payload as { error?: unknown }).error === "object" &&
+    (payload as { error?: unknown }).error !== null &&
+    typeof (payload as { error: { message?: unknown } }).error.message === "string"
+  );
+}
 
 export async function fetchArtistRadarData(
   request: ArtistRadarRequest
@@ -26,11 +46,10 @@ export async function fetchArtistRadarData(
   const payload: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const message =
-      payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string"
-        ? payload.error
-        : DEFAULT_ERROR_MESSAGE;
-    throw new ArtistRadarClientError(message);
+    if (isStructuredErrorPayload(payload)) {
+      throw new ArtistRadarClientError(payload.error.message, payload.error.code);
+    }
+    throw new ArtistRadarClientError(DEFAULT_ERROR_MESSAGE);
   }
 
   return payload as ArtistRadarResponse;

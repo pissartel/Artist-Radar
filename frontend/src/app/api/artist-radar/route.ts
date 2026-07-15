@@ -10,6 +10,20 @@ interface RawRequestBody {
   spotifyUrl?: unknown;
 }
 
+// Structured, safe error shape returned to the client. Never includes stack
+// traces, key names/values, raw provider responses, or prompts — those stay
+// server-side via warnLog. `code` is a stable, non-sensitive identifier a
+// developer can grep server logs for; `message` is the short user-facing text.
+type ErrorCode =
+  | "INVALID_JSON"
+  | "INVALID_REQUEST"
+  | "MISSING_REQUIRED_CONFIG"
+  | "ARTIST_ANALYSIS_FAILED";
+
+function errorResponse(status: number, code: ErrorCode, message: string): Response {
+  return Response.json({ success: false, error: { code, message } }, { status });
+}
+
 function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | null {
   const { artistName, genre, location, enableBooking, spotifyUrl } = body;
 
@@ -59,19 +73,44 @@ function logBookingProviderDiagnostics(): void {
   });
 }
 
+// The AI pipeline (genre matching, relevance scoring, judging) cannot run at
+// all without an OpenAI key — unlike the optional booking-source providers
+// (Spotify, Firecrawl, OpenAgenda, ...), which each already degrade
+// gracefully on their own when unconfigured. Failing fast here with a clear
+// server log turns a missing-Production-env-var deployment mistake into an
+// immediately diagnosable error instead of a deep, opaque exception from
+// inside the OpenAI SDK.
+function getMissingRequiredEnvVars(): string[] {
+  const required = ["OPENAI_API_KEY"];
+  return required.filter((name) => !process.env[name]);
+}
+
 export async function POST(request: Request): Promise<Response> {
   let body: RawRequestBody;
   try {
     body = await request.json();
   } catch {
-    return Response.json({ error: "Request body must be valid JSON." }, { status: 400 });
+    return errorResponse(400, "INVALID_JSON", "Request body must be valid JSON.");
   }
 
   const artistRadarRequest = parseArtistRadarRequest(body);
   if (!artistRadarRequest) {
-    return Response.json(
-      { error: "artistName, genre and location are required strings." },
-      { status: 400 }
+    return errorResponse(
+      400,
+      "INVALID_REQUEST",
+      "artistName, genre and location are required strings."
+    );
+  }
+
+  const missingEnvVars = getMissingRequiredEnvVars();
+  if (missingEnvVars.length > 0) {
+    warnLog("artist-radar-api", "Missing required server configuration", {
+      missing: missingEnvVars,
+    });
+    return errorResponse(
+      500,
+      "MISSING_REQUIRED_CONFIG",
+      "The artist analysis service is not fully configured. Please try again later."
     );
   }
 
@@ -91,13 +130,15 @@ export async function POST(request: Request): Promise<Response> {
 
     return Response.json(response, { status: 200 });
   } catch (error) {
+    // Full exception (including any provider stack trace) stays server-side.
     warnLog("pipeline", "artist-radar API request failed", {
       artist: artistRadarRequest.artistName,
       error,
     });
-    return Response.json(
-      { error: "Failed to generate Artist Radar results. Please try again." },
-      { status: 500 }
+    return errorResponse(
+      500,
+      "ARTIST_ANALYSIS_FAILED",
+      "The artist analysis could not be completed."
     );
   }
 }

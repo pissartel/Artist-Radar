@@ -4,7 +4,8 @@ import {
   ArtistProfileSchema,
   ConfidenceScoreSchema,
   OpportunitySchema,
-  SimilarArtistSchema
+  SimilarArtistSchema,
+  UnifiedOpportunitySchema
 } from "../src/schemas.js";
 
 describe("schemas", () => {
@@ -212,5 +213,96 @@ describe("schemas", () => {
   it("rejects confidence outside 0 to 1", () => {
     expect(() => ConfidenceScoreSchema.parse(1.1)).toThrow();
     expect(() => ConfidenceScoreSchema.parse(-0.1)).toThrow();
+  });
+
+  it("accepts an existing concert-shaped opportunity, preserving compatibility", () => {
+    const concert = UnifiedOpportunitySchema.parse({
+      id: "concert-1",
+      type: "CONCERT",
+      name: "Fake Band at The Venue",
+      city: "Lyon",
+      country: "France",
+      sourceUrl: "https://example.com/event",
+      eventDate: "2026-09-12",
+      venueName: "The Venue",
+      headliners: ["Fake Band"],
+      lineup: ["Fake Band", "Support Act"],
+      ticketUrl: "https://example.com/tickets"
+    });
+
+    expect(concert.type).toBe("CONCERT");
+    expect(concert.headliners).toEqual(["Fake Band"]);
+  });
+
+  it("accepts an existing venue-shaped opportunity, preserving compatibility", () => {
+    const venue = UnifiedOpportunitySchema.parse({
+      id: "venue-1",
+      type: "VENUE",
+      name: "The Venue",
+      city: "Lyon",
+      country: "France",
+      contactEmail: null,
+      submissionPolicy: "Send a press kit and 2 tour dates.",
+      acceptsUnsolicitedSubmissions: true
+    });
+
+    expect(venue.type).toBe("VENUE");
+    expect(venue.contactEmail).toBeNull();
+  });
+
+  it("does not invent contact information when it is uncertain", () => {
+    const opportunity = UnifiedOpportunitySchema.parse({
+      id: "label-1",
+      type: "LABEL",
+      name: "Fake Records"
+    });
+
+    expect(opportunity.contactEmail).toBeUndefined();
+    expect(opportunity.contactFormUrl).toBeUndefined();
+  });
+
+  it("rejects event-specific fields on organization opportunity types", () => {
+    expect(() =>
+      UnifiedOpportunitySchema.parse({
+        id: "label-2",
+        type: "LABEL",
+        name: "Fake Records",
+        eventDate: "2026-09-12"
+      })
+    ).toThrow();
+  });
+
+  it("rejects organization-specific fields on event opportunity types", () => {
+    expect(() =>
+      UnifiedOpportunitySchema.parse({
+        id: "concert-2",
+        type: "CONCERT",
+        name: "Fake Band Live",
+        rosterArtists: ["Fake Band"]
+      })
+    ).toThrow();
+  });
+
+  it("rejects an invalid contact email instead of guessing one", () => {
+    expect(() =>
+      UnifiedOpportunitySchema.parse({
+        id: "booker-1",
+        type: "BOOKER",
+        name: "Fake Booking Agency",
+        contactEmail: "not-an-email"
+      })
+    ).toThrow();
+  });
+
+  it("rejects out-of-range coordinates", () => {
+    expect(() =>
+      UnifiedOpportunitySchema.parse({
+        id: "festival-1",
+        type: "FESTIVAL",
+        name: "Fake Fest",
+        latitude: 120,
+        longitude: 0
+      })
+    ).toThrow();
   });
 });

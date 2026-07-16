@@ -21,6 +21,12 @@ export { searchMusicBrainzLabelsByName } from "./connectors/musicBrainzLabelConn
 export { searchWikidataOrganizationsByName } from "./connectors/wikidataOrganizationConnector.js";
 export { importInternalVenueEventOrganizations } from "./connectors/internalVenueEventConnector.js";
 export { importTrustedDirectoryOrganizations } from "./connectors/trustedDirectoryConnector.js";
+export { discoverOrganizationsFromWeb } from "./connectors/webDiscoveryConnector.js";
+export type { WebDiscoveryConnectorOptions, WebDiscoveryResult } from "./connectors/webDiscoveryConnector.js";
+export { buildOrganizationDiscoveryQueries } from "./connectors/webDiscoveryQueryBuilder.js";
+export type { DiscoveryQuery, OrganizationDiscoveryContext } from "./connectors/webDiscoveryQueryBuilder.js";
+export { classifyOrganizationType, extractGenres, extractServices, extractTerritories } from "./connectors/webDiscoveryClassifier.js";
+export type { OrganizationClassification } from "./connectors/webDiscoveryClassifier.js";
 export type { TrustedOrganizationSeed } from "./config/trustedOrganizations.js";
 export { TRUSTED_ORGANIZATION_SEEDS } from "./config/trustedOrganizations.js";
 export { runOrganizationImport } from "./importOrganizations.js";

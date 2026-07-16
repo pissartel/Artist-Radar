@@ -308,7 +308,7 @@ function normalizeText(value: string): string {
   return value.trim().toLowerCase();
 }
 
-function scheduleMusicBrainzRequest<T>(task: () => Promise<T>): Promise<T> {
+export function scheduleMusicBrainzRequest<T>(task: () => Promise<T>): Promise<T> {
   const next = musicBrainzQueue.then(async () => {
     if (process.env.NODE_ENV !== "test" && process.env.VITEST !== "true") {
       debugLog("musicbrainz", "throttling request", { delayMs: 1000 });

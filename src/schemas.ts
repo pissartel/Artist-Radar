@@ -325,7 +325,7 @@ export const OpportunityEntityTypeSchema = z.enum([
 ]);
 
 const EVENT_OPPORTUNITY_TYPES = ["CONCERT", "FESTIVAL"] as const;
-const ORGANIZATION_OPPORTUNITY_TYPES = [
+export const ORGANIZATION_OPPORTUNITY_TYPES = [
   "VENUE",
   "LABEL",
   "BOOKER",

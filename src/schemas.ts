@@ -118,7 +118,7 @@ export const PopularitySchema = z.object({
   }).default({})
 });
 
-const OptionalUrlSchema = z.string().trim().url().nullable().optional();
+export const OptionalUrlSchema = z.string().trim().url().nullable().optional();
 
 export const SpotifyMetadataSchema = z.object({
   id: z.string().trim().min(1),
@@ -307,6 +307,135 @@ export const OpportunitySearchResultSchema = z.object({
   opportunities: z.array(OpportunitySchema)
 });
 
+/**
+ * Unified model for both live opportunities (CONCERT, FESTIVAL) and
+ * music-industry organizations (VENUE, LABEL, BOOKER, PROMOTER, MANAGER,
+ * ASSOCIATION), per issue #124. Type-specific fields stay optional and are
+ * only validated for the entity types they apply to.
+ */
+export const OpportunityEntityTypeSchema = z.enum([
+  "CONCERT",
+  "FESTIVAL",
+  "VENUE",
+  "LABEL",
+  "BOOKER",
+  "PROMOTER",
+  "MANAGER",
+  "ASSOCIATION"
+]);
+
+const EVENT_OPPORTUNITY_TYPES = ["CONCERT", "FESTIVAL"] as const;
+const ORGANIZATION_OPPORTUNITY_TYPES = [
+  "VENUE",
+  "LABEL",
+  "BOOKER",
+  "PROMOTER",
+  "MANAGER",
+  "ASSOCIATION"
+] as const;
+
+const EVENT_ONLY_FIELDS = [
+  "eventDate",
+  "doorsTime",
+  "venueName",
+  "headliners",
+  "lineup",
+  "ticketUrl",
+  "applicationDeadline"
+] as const;
+
+const ORGANIZATION_ONLY_FIELDS = [
+  "organizationType",
+  "rosterArtists",
+  "services",
+  "territories",
+  "submissionPolicy",
+  "acceptsUnsolicitedSubmissions"
+] as const;
+
+function isProvided(value: unknown): boolean {
+  if (value === undefined || value === null) {
+    return false;
+  }
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+  return true;
+}
+
+export const UnifiedOpportunitySchema = z
+  .object({
+    // Shared fields, common to every opportunity type.
+    id: z.string().trim().min(1),
+    type: OpportunityEntityTypeSchema,
+    name: z.string().trim().min(1),
+    description: z.string().trim().min(1).nullable().optional(),
+    websiteUrl: OptionalUrlSchema,
+    sourceUrl: OptionalUrlSchema,
+    country: z.string().trim().min(1).nullable().optional(),
+    city: z.string().trim().min(1).nullable().optional(),
+    address: z.string().trim().min(1).nullable().optional(),
+    latitude: z.number().min(-90).max(90).nullable().optional(),
+    longitude: z.number().min(-180).max(180).nullable().optional(),
+    genres: z.array(z.string().trim().min(1)).default([]),
+    artistSizes: z.array(ArtistTierSchema).default([]),
+    // Contact fields are never fabricated: null/absent means "uncertain", per AGENTS.md.
+    contactEmail: z.string().trim().email().nullable().optional(),
+    contactFormUrl: OptionalUrlSchema,
+    instagramUrl: OptionalUrlSchema,
+    facebookUrl: OptionalUrlSchema,
+    linkedinUrl: OptionalUrlSchema,
+    lastVerifiedAt: z.string().trim().min(1).nullable().optional(),
+    sourceName: z.string().trim().min(1).nullable().optional(),
+    confidenceScore: ConfidenceScoreSchema.nullable().optional(),
+
+    // Event-specific fields: only meaningful for CONCERT and FESTIVAL.
+    eventDate: z.string().trim().min(1).nullable().optional(),
+    doorsTime: z.string().trim().min(1).nullable().optional(),
+    venueName: z.string().trim().min(1).nullable().optional(),
+    headliners: z.array(z.string().trim().min(1)).optional(),
+    lineup: z.array(z.string().trim().min(1)).optional(),
+    ticketUrl: OptionalUrlSchema,
+    applicationDeadline: z.string().trim().min(1).nullable().optional(),
+
+    // Organization-specific fields: only meaningful for VENUE, LABEL,
+    // BOOKER, PROMOTER, MANAGER and ASSOCIATION.
+    organizationType: z.string().trim().min(1).nullable().optional(),
+    rosterArtists: z.array(z.string().trim().min(1)).optional(),
+    services: z.array(z.string().trim().min(1)).optional(),
+    territories: z.array(z.string().trim().min(1)).optional(),
+    submissionPolicy: z.string().trim().min(1).nullable().optional(),
+    acceptsUnsolicitedSubmissions: z.boolean().nullable().optional()
+  })
+  .superRefine((value, ctx) => {
+    const isEventType = (EVENT_OPPORTUNITY_TYPES as readonly string[]).includes(value.type);
+    const isOrganizationType = (ORGANIZATION_OPPORTUNITY_TYPES as readonly string[]).includes(value.type);
+
+    if (!isEventType) {
+      for (const field of EVENT_ONLY_FIELDS) {
+        if (isProvided(value[field])) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [field],
+            message: `${field} only applies to CONCERT or FESTIVAL opportunities`
+          });
+        }
+      }
+    }
+
+    if (!isOrganizationType) {
+      for (const field of ORGANIZATION_ONLY_FIELDS) {
+        if (isProvided(value[field])) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [field],
+            message: `${field} only applies to organization opportunities (VENUE, LABEL, BOOKER, PROMOTER, MANAGER, ASSOCIATION)`
+          });
+        }
+      }
+    }
+  });
+
 export type Mode = z.infer<typeof ModeSchema>;
 export type PipelineStage = z.infer<typeof PipelineStageSchema>;
 export type PipelineExecutionStatus = z.infer<typeof PipelineExecutionStatusSchema>;
@@ -335,3 +464,5 @@ export type Opportunity = z.infer<typeof OpportunitySchema>;
 export type OpportunityInternalReview = z.infer<typeof OpportunityInternalReviewSchema>;
 export type OpportunityDateRange = z.infer<typeof OpportunityDateRangeSchema>;
 export type OpportunitySearchResult = z.infer<typeof OpportunitySearchResultSchema>;
+export type OpportunityEntityType = z.infer<typeof OpportunityEntityTypeSchema>;
+export type UnifiedOpportunity = z.infer<typeof UnifiedOpportunitySchema>;

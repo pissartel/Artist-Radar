@@ -1,9 +1,13 @@
 import type { DocumentStore } from "../knowledge/documentStore.js";
+import type { WebExtractProvider } from "../providers/web/WebExtractProvider.js";
+import type { WebSearchProvider } from "../providers/web/WebSearchProvider.js";
 import { debugLog, warnLog } from "../utils/logger.js";
 import { importInternalVenueEventOrganizations } from "./connectors/internalVenueEventConnector.js";
 import { importTrustedDirectoryOrganizations } from "./connectors/trustedDirectoryConnector.js";
 import { searchMusicBrainzLabelsByName } from "./connectors/musicBrainzLabelConnector.js";
 import { searchWikidataOrganizationsByName } from "./connectors/wikidataOrganizationConnector.js";
+import { discoverOrganizationsFromWeb } from "./connectors/webDiscoveryConnector.js";
+import type { OrganizationDiscoveryContext } from "./connectors/webDiscoveryQueryBuilder.js";
 import type { TrustedOrganizationSeed } from "./config/trustedOrganizations.js";
 import type { NewOrganizationSourceRecord } from "./organization.schema.js";
 import type { OrganizationStore } from "./organizationStore.js";
@@ -14,6 +18,9 @@ export interface OrganizationImportOptions {
   wikidataQueries?: string[];
   documentStore?: DocumentStore;
   trustedOrganizationSeeds?: TrustedOrganizationSeed[];
+  webDiscoveryContext?: OrganizationDiscoveryContext;
+  webSearchProvider?: WebSearchProvider;
+  webExtractProvider?: WebExtractProvider | null;
   env?: { APP_USER_AGENT?: string };
   fetchImpl?: typeof fetch;
 }
@@ -59,6 +66,19 @@ export async function runOrganizationImport(options: OrganizationImportOptions):
     records.push(...importTrustedDirectoryOrganizations(options.trustedOrganizationSeeds));
   } catch (error) {
     warnings.push(`Trusted directory import failed: ${errorMessage(error)}`);
+  }
+
+  if (options.webDiscoveryContext && options.webSearchProvider) {
+    try {
+      const discovered = await discoverOrganizationsFromWeb(options.webDiscoveryContext, {
+        searchProvider: options.webSearchProvider,
+        extractProvider: options.webExtractProvider
+      });
+      records.push(...discovered.records);
+      warnings.push(...discovered.warnings);
+    } catch (error) {
+      warnings.push(`Web discovery import failed: ${errorMessage(error)}`);
+    }
   }
 
   debugLog("sources", "organization import fetched records", { count: records.length });

@@ -9,7 +9,8 @@ export const OrganizationSourceTypeSchema = z.enum([
   "wikidata",
   "internal_venue",
   "internal_event",
-  "trusted_directory"
+  "trusted_directory",
+  "web_discovery"
 ]);
 export type OrganizationSourceType = z.infer<typeof OrganizationSourceTypeSchema>;
 
@@ -35,12 +36,28 @@ export const OrganizationSourceRecordSchema = z.object({
   // Related organizations surfaced by the source (e.g. MusicBrainz label
   // relationships such as parent/subsidiary labels).
   relatedOrganizations: z.array(z.string().trim().min(1)).default([]),
+  // Genres, services and territories the source's content evidences for this
+  // organization (issue #126 targeted discovery). Grounded in matched text,
+  // never inferred from the search query alone.
+  genres: z.array(z.string().trim().min(1)).default([]),
+  services: z.array(z.string().trim().min(1)).default([]),
+  territories: z.array(z.string().trim().min(1)).default([]),
+  // Short human-readable statements explaining why this organization was
+  // classified/accepted (e.g. matched keywords, verified official site).
+  evidence: z.array(z.string().trim().min(1)).default([]),
   notes: z.string().trim().min(1).nullable().optional()
 });
 export type OrganizationSourceRecord = z.infer<typeof OrganizationSourceRecordSchema>;
-export type NewOrganizationSourceRecord = Omit<OrganizationSourceRecord, "extractedAt" | "relatedOrganizations"> & {
+export type NewOrganizationSourceRecord = Omit<
+  OrganizationSourceRecord,
+  "extractedAt" | "relatedOrganizations" | "genres" | "services" | "territories" | "evidence"
+> & {
   extractedAt?: string;
   relatedOrganizations?: string[];
+  genres?: string[];
+  services?: string[];
+  territories?: string[];
+  evidence?: string[];
 };
 
 // Merged, deduplicated organization as stored before RAG ingestion. Canonical

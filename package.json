@@ -16,7 +16,8 @@
   "test:artist": "tsx scripts/runArtistTest.ts",
   "test:compare-limits": "tsx scripts/compareConsolidateLimits.ts",
   "rag:ingest:booking": "tsx scripts/ragIngestBooking.ts",
-  "eval:rag:booking": "tsx scripts/ragBookingSmokeTest.ts"
+  "eval:rag:booking": "tsx scripts/ragBookingSmokeTest.ts",
+  "import:organizations": "tsx scripts/importOrganizations.ts"
   },
   "keywords": [],
   "author": "",

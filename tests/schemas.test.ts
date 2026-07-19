@@ -3,6 +3,7 @@ import {
   ArtistInputSchema,
   ArtistProfileSchema,
   ConfidenceScoreSchema,
+  EventQualityStatusSchema,
   OpportunitySchema,
   SimilarArtistSchema,
   UnifiedOpportunitySchema
@@ -302,6 +303,37 @@ describe("schemas", () => {
         name: "Fake Fest",
         latitude: 120,
         longitude: 0
+      })
+    ).toThrow();
+  });
+
+  it("accepts a concert carrying its quality validation status and evidence trail", () => {
+    const concert = UnifiedOpportunitySchema.parse({
+      id: "concert-3",
+      type: "CONCERT",
+      name: "Fake Band Live",
+      sourceUrl: "https://example.com/event",
+      qualityStatus: "PARTIAL",
+      qualityIssues: ["missing_venue_name"],
+      mergedSourceUrls: ["https://agenda.example.com/event"]
+    });
+
+    expect(concert.qualityStatus).toBe("PARTIAL");
+    expect(concert.qualityIssues).toEqual(["missing_venue_name"]);
+    expect(concert.mergedSourceUrls).toEqual(["https://agenda.example.com/event"]);
+  });
+
+  it("rejects an invalid qualityStatus value", () => {
+    expect(() => EventQualityStatusSchema.parse("REVIEW")).toThrow();
+  });
+
+  it("rejects quality validation fields on organization opportunity types", () => {
+    expect(() =>
+      UnifiedOpportunitySchema.parse({
+        id: "label-3",
+        type: "LABEL",
+        name: "Fake Records",
+        qualityStatus: "COMPLETE"
       })
     ).toThrow();
   });

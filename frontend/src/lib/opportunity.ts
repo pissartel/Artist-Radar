@@ -22,9 +22,37 @@ export const CATEGORY_LABELS: Record<OpportunityCategory, string> = {
   venue: "Venue",
   festival: "Festival",
   opening_slot: "Opening Slot",
+  organization: "Organization",
   contact: "Contact",
   unknown: "Unknown",
 };
+
+// Card layout family per the by-type redesign (issue #130): concerts,
+// festivals, and opening slots share the event layout (date + location
+// first); venues and organizations get their own layouts.
+export type OpportunityCardFamily = "event" | "venue" | "organization";
+
+export function getCardFamily(opportunity: Opportunity): OpportunityCardFamily {
+  if (opportunity.type === "venue") return "venue";
+  if (opportunity.type === "organization") return "organization";
+  return "event";
+}
+
+const ORGANIZATION_TYPE_LABELS: Record<string, string> = {
+  association: "Association",
+  collective: "Collective",
+  promoter: "Promoter",
+  booking_agency: "Booking Agency",
+  live_producer: "Live Producer",
+  springboard: "Springboard Program",
+  open_call: "Open Call",
+};
+
+export function getOrganizationTypeLabel(opportunity: Opportunity): string {
+  const rawType = opportunity.organizationType;
+  if (!rawType) return "Organization";
+  return ORGANIZATION_TYPE_LABELS[rawType] ?? "Organization";
+}
 
 export function hasBookingContact(opportunity: Opportunity): boolean {
   return Boolean(opportunity.contact);
@@ -112,15 +140,6 @@ function stripTrailingSourceLabel(title: string, source: string | null): string 
 function truncateTitle(title: string, maxLength = MAX_DISPLAY_TITLE_LENGTH): string {
   if (title.length <= maxLength) return title;
   return `${title.slice(0, maxLength - 1).trimEnd()}…`;
-}
-
-export function getOpportunitySubtitle(opportunity: Opportunity): string {
-  const parts = [
-    opportunity.city ?? opportunity.location,
-    opportunity.venue,
-    formatOpportunityDate(opportunity.date),
-  ].filter((part): part is string => Boolean(part));
-  return parts.join(" · ");
 }
 
 export function getShortRelevanceReason(opportunity: Opportunity): string | null {

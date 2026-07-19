@@ -192,6 +192,16 @@ function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpportunit
     suggested_message: opportunity.fitSummary,
     date: opportunity.eventDate,
     dateRange: opportunity.dateRange,
+    genres: opportunity.target.genres,
+    venueCapacity: opportunity.target.estimatedCapacity ?? null,
+    recentEvents: opportunity.target.pastProgramming ?? [],
+    relatedArtist: opportunity.derivedFromSimilarArtist
+      ? {
+          name: opportunity.derivedFromSimilarArtist.name,
+          popularityComparison: opportunity.derivedFromSimilarArtist.popularityComparison,
+          matchedGenres: opportunity.derivedFromSimilarArtist.matchedGenres
+        }
+      : null,
     internalReview: opportunity.internalReview
   };
 }

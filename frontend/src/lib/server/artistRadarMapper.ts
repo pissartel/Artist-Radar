@@ -33,6 +33,14 @@ const OPPORTUNITY_TYPE_MAP: Record<string, OpportunityType> = {
   event: "concert",
   concert: "concert",
   opening_slot: "opening_slot",
+  support_slot: "opening_slot",
+  association: "organization",
+  collective: "organization",
+  promoter: "organization",
+  booking_agency: "organization",
+  live_producer: "organization",
+  springboard: "organization",
+  open_call: "organization",
 };
 
 function slugify(value: string): string {
@@ -134,6 +142,13 @@ const OPPORTUNITY_TYPE_CATEGORY_MAP: Record<string, OpportunityCategory> = {
   show: "concert",
   opening_slot: "opening_slot",
   support_slot: "opening_slot",
+  association: "organization",
+  collective: "organization",
+  promoter: "organization",
+  booking_agency: "organization",
+  live_producer: "organization",
+  springboard: "organization",
+  open_call: "organization",
 };
 
 const FESTIVAL_TEXT_SIGNAL = "festival";
@@ -163,20 +178,27 @@ function mapOpportunityCategory(opportunity: BackendOpportunity): OpportunityCat
 }
 
 function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
+  const category = mapOpportunityCategory(opportunity);
   return {
     id: slugify(`${opportunity.name}-${opportunity.city ?? "unknown"}`),
     type: mapOpportunityType(opportunity.type),
-    category: mapOpportunityCategory(opportunity),
-    title: opportunity.name,
+    category,
+    title: opportunity.displayTitle || opportunity.name,
+    organizationType: category === "organization" ? opportunity.type : undefined,
     location: joinLocation(opportunity.city, opportunity.country) || "Location unknown",
     city: opportunity.city ?? undefined,
     country: opportunity.country ?? undefined,
+    date: opportunity.date ?? undefined,
     description: opportunity.suggested_message,
     tags: [],
     matchScore: opportunity.score,
     matchReasons: [opportunity.reason],
     sourceUrls: opportunity.source_url ? [opportunity.source_url] : [],
     contact: opportunity.contact,
+    genres: opportunity.genres ?? [],
+    venueCapacity: opportunity.venueCapacity ?? null,
+    recentEvents: opportunity.recentEvents ?? [],
+    relatedArtist: opportunity.relatedArtist ?? null,
   };
 }
 

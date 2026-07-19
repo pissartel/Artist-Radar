@@ -1,10 +1,16 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { Opportunity, SimilarArtist } from "@/types";
 import { TYPE_LABELS } from "./BookingOpportunityCard";
 import MatchReasonsList from "./MatchReasonsList";
 import SimilarArtistCard from "./SimilarArtistCard";
 import MatchScoreBadge from "@/components/common/MatchScoreBadge";
-import { formatOpportunityDate, getUrlHostname } from "@/lib/opportunity";
+import {
+  formatOpportunityDate,
+  getUrlHostname,
+  getCardFamily,
+  getOrganizationTypeLabel,
+} from "@/lib/opportunity";
 import { cardClassName as buildCardClassName } from "@/components/ui/Card";
 import { productFeatures } from "@/lib/productFeatures";
 
@@ -20,6 +26,68 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
     <h3 className="text-[10px] font-semibold text-foreground-muted uppercase tracking-widest mb-3">
       {children}
     </h3>
+  );
+}
+
+function FactRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex justify-between gap-3 text-sm">
+      <span className="text-foreground-muted">{label}</span>
+      <span className="text-foreground-secondary text-right">{value}</span>
+    </div>
+  );
+}
+
+// Type-adapted facts block (issue #130): venues and organizations show
+// structured facts a concert/festival card doesn't need, and vice versa.
+function OpportunityDetailFacts({ opportunity }: { opportunity: Opportunity }) {
+  const family = getCardFamily(opportunity);
+  const rows: ReactNode[] = [];
+
+  if (family === "venue") {
+    if (opportunity.venueCapacity != null) {
+      rows.push(<FactRow key="capacity" label="Estimated capacity" value={`~${opportunity.venueCapacity.toLocaleString()}`} />);
+    }
+    if (opportunity.genres.length > 0) {
+      rows.push(<FactRow key="genres" label="Genres hosted" value={opportunity.genres.join(", ")} />);
+    }
+    rows.push(
+      <FactRow key="contact" label="Contact availability" value={opportunity.contact ? "Available" : "Not found"} />,
+    );
+    if (opportunity.recentEvents.length > 0) {
+      rows.push(<FactRow key="recent" label="Recent relevant events" value={opportunity.recentEvents.join(", ")} />);
+    }
+  } else if (family === "organization") {
+    rows.push(<FactRow key="org-type" label="Organization type" value={getOrganizationTypeLabel(opportunity)} />);
+    if (opportunity.genres.length > 0) {
+      rows.push(<FactRow key="genres" label="Relevant genres" value={opportunity.genres.join(", ")} />);
+    }
+    rows.push(
+      <FactRow
+        key="contact"
+        label="Contact or submission"
+        value={opportunity.contact ? "Available" : "Not found"}
+      />,
+    );
+  } else {
+    if (opportunity.venue) {
+      rows.push(<FactRow key="venue" label="Venue" value={opportunity.venue} />);
+    }
+    if (opportunity.relatedArtist) {
+      rows.push(<FactRow key="related" label="Related similar artist" value={opportunity.relatedArtist.name} />);
+    }
+    if (opportunity.genres.length > 0) {
+      rows.push(<FactRow key="genres" label="Relevant genres" value={opportunity.genres.join(", ")} />);
+    }
+  }
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className={cardClassName}>
+      <SectionTitle>Details</SectionTitle>
+      <div className="flex flex-col gap-2">{rows}</div>
+    </div>
   );
 }
 
@@ -71,6 +139,8 @@ export default function OpportunityDetail({
       </div>
 
       <div className="mt-6 flex flex-col gap-4">
+        <OpportunityDetailFacts opportunity={opportunity} />
+
         <div className={cardClassName}>
           <SectionTitle>Description</SectionTitle>
           <p className="text-sm text-foreground-secondary leading-relaxed">{opportunity.description}</p>

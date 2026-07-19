@@ -281,6 +281,12 @@ export const OpportunityDateRangeSchema = z.object({
   end: z.string().trim().min(1)
 });
 
+export const OpportunityRelatedArtistSchema = z.object({
+  name: z.string().trim().min(1),
+  popularityComparison: z.string().trim().min(1),
+  matchedGenres: z.array(z.string().trim().min(1)).default([])
+});
+
 export const OpportunitySchema = z.object({
   name: z.string().trim().min(1),
   // Raw scraped title, kept for traceability. Falls back to `name` for
@@ -299,6 +305,15 @@ export const OpportunitySchema = z.object({
   suggested_message: z.string().trim().min(1),
   date: z.string().trim().min(1).nullable().optional(),
   dateRange: OpportunityDateRangeSchema.nullable().optional(),
+  // Genres associated with the target (venue/festival/organization programming, or
+  // event genre fit). Never guessed: empty means "unknown", per AGENTS.md.
+  genres: z.array(z.string().trim().min(1)).default([]),
+  // Known venue capacity, when a source reports it. Never guessed.
+  venueCapacity: z.number().int().positive().nullable().optional(),
+  // Past events/programming attributed to this target, when known.
+  recentEvents: z.array(z.string().trim().min(1)).default([]),
+  // Present only when this opportunity was surfaced from a similar artist's live history.
+  relatedArtist: OpportunityRelatedArtistSchema.nullable().optional(),
   // Internal-only metadata; must not be surfaced directly on frontend cards.
   internalReview: OpportunityInternalReviewSchema.optional()
 });
@@ -486,6 +501,7 @@ export type SimilarArtist = z.infer<typeof SimilarArtistSchema>;
 export type Opportunity = z.infer<typeof OpportunitySchema>;
 export type OpportunityInternalReview = z.infer<typeof OpportunityInternalReviewSchema>;
 export type OpportunityDateRange = z.infer<typeof OpportunityDateRangeSchema>;
+export type OpportunityRelatedArtist = z.infer<typeof OpportunityRelatedArtistSchema>;
 export type OpportunitySearchResult = z.infer<typeof OpportunitySearchResultSchema>;
 export type OpportunityEntityType = z.infer<typeof OpportunityEntityTypeSchema>;
 export type UnifiedOpportunity = z.infer<typeof UnifiedOpportunitySchema>;

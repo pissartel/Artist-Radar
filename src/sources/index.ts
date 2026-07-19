@@ -47,3 +47,10 @@ export { buildOrganizationAnswer } from "./rag/organizationAnswer.js";
 export type { OrganizationAnswer, OrganizationCitation } from "./rag/organizationAnswer.js";
 export { runOrganizationRagIngestion } from "./rag/organizationRagIngestionService.js";
 export type { OrganizationRagIngestionOptions, OrganizationRagIngestionSummary } from "./rag/organizationRagIngestionService.js";
+export {
+  classifyConcertOpportunityQuality,
+  filterConcertOpportunitiesForStandardResults,
+  mergeDuplicateConcertOpportunities,
+  validateConcertOpportunities
+} from "./concertOpportunityValidation.js";
+export type { ConcertQualityClassification, MergeConcertOpportunitiesResult } from "./concertOpportunityValidation.js";

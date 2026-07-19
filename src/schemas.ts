@@ -321,6 +321,14 @@ export const ORGANIZATION_OPPORTUNITY_TYPES = [
   "ASSOCIATION"
 ] as const;
 
+// Quality gate for CONCERT/FESTIVAL opportunities (issue #128): COMPLETE has
+// every required field backed by source evidence, PARTIAL is missing fields
+// covered by a documented exception (incomplete festival lineup, open call
+// without a headliner), INVALID must be rejected or excluded from standard
+// results (past event, no date, no venue/location, unsupported extraction,
+// generic editorial page).
+export const EventQualityStatusSchema = z.enum(["COMPLETE", "PARTIAL", "INVALID"]);
+
 const EVENT_ONLY_FIELDS = [
   "eventDate",
   "doorsTime",
@@ -328,7 +336,10 @@ const EVENT_ONLY_FIELDS = [
   "headliners",
   "lineup",
   "ticketUrl",
-  "applicationDeadline"
+  "applicationDeadline",
+  "qualityStatus",
+  "qualityIssues",
+  "mergedSourceUrls"
 ] as const;
 
 const ORGANIZATION_ONLY_FIELDS = [
@@ -384,6 +395,14 @@ export const UnifiedOpportunitySchema = z
     lineup: z.array(z.string().trim().min(1)).optional(),
     ticketUrl: OptionalUrlSchema,
     applicationDeadline: z.string().trim().min(1).nullable().optional(),
+    // Populated by validateConcertOpportunityQuality (issue #128). Absent
+    // until an opportunity has gone through quality validation.
+    qualityStatus: EventQualityStatusSchema.optional(),
+    // Human-readable reasons behind qualityStatus, e.g. "missing_venue".
+    qualityIssues: z.array(z.string().trim().min(1)).optional(),
+    // Source URLs of duplicate listings merged into this record, beyond the
+    // canonical sourceUrl, kept for evidence traceability.
+    mergedSourceUrls: z.array(z.string().trim().url()).optional(),
 
     // Organization-specific fields: only meaningful for VENUE, LABEL,
     // BOOKER, PROMOTER, MANAGER and ASSOCIATION.
@@ -451,3 +470,4 @@ export type OpportunityDateRange = z.infer<typeof OpportunityDateRangeSchema>;
 export type OpportunitySearchResult = z.infer<typeof OpportunitySearchResultSchema>;
 export type OpportunityEntityType = z.infer<typeof OpportunityEntityTypeSchema>;
 export type UnifiedOpportunity = z.infer<typeof UnifiedOpportunitySchema>;
+export type EventQualityStatus = z.infer<typeof EventQualityStatusSchema>;

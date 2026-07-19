@@ -96,7 +96,7 @@ export interface SimilarArtist {
 // | "creative_provider"
 // | "mixing_engineer"
 // | "video_director"
-export type OpportunityType = "venue" | "concert" | "opening_slot" | "festival";
+export type OpportunityType = "venue" | "concert" | "opening_slot" | "festival" | "organization";
 
 // Reliable booking category inferred by the backend mapper from opportunity
 // type, source metadata, and title. Used by frontend filters (booking tabs,
@@ -106,8 +106,15 @@ export type OpportunityCategory =
   | "venue"
   | "festival"
   | "opening_slot"
+  | "organization"
   | "contact"
   | "unknown";
+
+export interface OpportunityRelatedArtist {
+  name: string;
+  popularityComparison: string;
+  matchedGenres: string[];
+}
 
 // Generic entity covering booking opportunities today and future artist
 // growth opportunities (labels, playlists, creative providers, ...).
@@ -116,6 +123,9 @@ export interface Opportunity {
   type: OpportunityType;
   category: OpportunityCategory;
   title: string;
+  // Human-readable source category (e.g. "booking_agency", "open_call"),
+  // kept for organization cards where `type` is collapsed to "organization".
+  organizationType?: string;
   location: string;
   city?: string;
   country?: string;
@@ -129,6 +139,15 @@ export interface Opportunity {
   contact?: string | null;
   relatedSimilarArtistIds?: string[];
   imageUrl?: string;
+  // Genres associated with the venue/festival/organization, or the event's
+  // genre fit. Empty when unknown — never guessed.
+  genres: string[];
+  // Known venue capacity, when a source reports it.
+  venueCapacity?: number | null;
+  // Past events/programming attributed to this target, when known.
+  recentEvents: string[];
+  // Present only when this opportunity was surfaced from a similar artist's live history.
+  relatedArtist?: OpportunityRelatedArtist | null;
 }
 
 export interface BookingSource {

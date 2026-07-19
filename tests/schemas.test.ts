@@ -72,6 +72,52 @@ describe("schemas", () => {
     expect(opportunity.contact).toBeNull();
   });
 
+  it("defaults new by-type display fields (genres, recentEvents) to empty and keeps capacity/relatedArtist unknown", () => {
+    const opportunity = OpportunitySchema.parse({
+      name: "Venue",
+      type: "venue",
+      city: "Lyon",
+      country: "France",
+      source_url: null,
+      contact: null,
+      reason: "Relevant local venue.",
+      score: 75,
+      suggested_message: "Hello, I would like to introduce my project."
+    });
+
+    expect(opportunity.genres).toEqual([]);
+    expect(opportunity.venueCapacity).toBeUndefined();
+    expect(opportunity.recentEvents).toEqual([]);
+    expect(opportunity.relatedArtist).toBeUndefined();
+  });
+
+  it("accepts populated by-type display fields for a venue opportunity", () => {
+    const opportunity = OpportunitySchema.parse({
+      name: "Le Petit Club",
+      type: "venue",
+      city: "Paris",
+      country: "France",
+      source_url: null,
+      contact: "booking@example.test",
+      reason: "Strong genre match.",
+      score: 82,
+      suggested_message: "Reach out about an upcoming pop punk night.",
+      genres: ["pop punk", "punk rock"],
+      venueCapacity: 250,
+      recentEvents: ["Neon Riot live", "Local Scene Night"],
+      relatedArtist: {
+        name: "Neon Riot",
+        popularityComparison: "similar_size",
+        matchedGenres: ["pop punk"]
+      }
+    });
+
+    expect(opportunity.genres).toEqual(["pop punk", "punk rock"]);
+    expect(opportunity.venueCapacity).toBe(250);
+    expect(opportunity.recentEvents).toEqual(["Neon Riot live", "Local Scene Night"]);
+    expect(opportunity.relatedArtist?.name).toBe("Neon Riot");
+  });
+
   it("rejects invalid input links and out-of-range limits", () => {
     expect(() =>
       ArtistInputSchema.parse({

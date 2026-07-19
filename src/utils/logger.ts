@@ -1,4 +1,4 @@
-type DebugScope = "spotify" | "lastfm" | "musicbrainz" | "wikidata" | "firecrawl" | "web-search" | "artist-verification" | "artist-consolidation" | "similar-artists" | "seeds" | "profile" | "youtube" | "events" | "pipeline" | "booking" | "genre" | "sources";
+type DebugScope = "spotify" | "lastfm" | "musicbrainz" | "wikidata" | "firecrawl" | "web-search" | "artist-verification" | "artist-consolidation" | "similar-artists" | "seeds" | "profile" | "youtube" | "events" | "pipeline" | "booking" | "genre" | "sources" | "enrichment";
 
 const DEBUG_FLAG_BY_SCOPE: Record<DebugScope, string> = {
   spotify: "DEBUG_SPOTIFY",
@@ -17,7 +17,8 @@ const DEBUG_FLAG_BY_SCOPE: Record<DebugScope, string> = {
   pipeline: "DEBUG_PIPELINE",
   booking: "DEBUG_BOOKING",
   genre: "DEBUG_GENRE",
-  sources: "DEBUG_SOURCES"
+  sources: "DEBUG_SOURCES",
+  enrichment: "DEBUG_ENRICHMENT"
 };
 
 export function isDebugEnabled(scope: DebugScope): boolean {

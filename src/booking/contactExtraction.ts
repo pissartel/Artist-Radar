@@ -103,7 +103,7 @@ function findLabelBeforeEmail(email: string, text: string): string {
   return text.slice(Math.max(0, index - 28), index);
 }
 
-function findNearbyText(value: string, text: string): string {
+export function findNearbyText(value: string, text: string): string {
   const index = text.toLowerCase().indexOf(value.toLowerCase());
   if (index < 0) {
     return text;

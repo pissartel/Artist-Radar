@@ -333,6 +333,7 @@ const EVENT_ONLY_FIELDS = [
   "eventDate",
   "doorsTime",
   "venueName",
+  "venueCapacity",
   "headliners",
   "lineup",
   "ticketUrl",
@@ -391,6 +392,9 @@ export const UnifiedOpportunitySchema = z
     eventDate: z.string().trim().min(1).nullable().optional(),
     doorsTime: z.string().trim().min(1).nullable().optional(),
     venueName: z.string().trim().min(1).nullable().optional(),
+    // Known capacity of the venue hosting the event, when a source reports it.
+    // Never guessed: absent/null means "unknown", per AGENTS.md.
+    venueCapacity: z.number().int().positive().nullable().optional(),
     headliners: z.array(z.string().trim().min(1)).optional(),
     lineup: z.array(z.string().trim().min(1)).optional(),
     ticketUrl: OptionalUrlSchema,

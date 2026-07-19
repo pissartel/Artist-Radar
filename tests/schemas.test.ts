@@ -327,6 +327,28 @@ describe("schemas", () => {
     expect(() => EventQualityStatusSchema.parse("REVIEW")).toThrow();
   });
 
+  it("accepts a concert with a known venue capacity", () => {
+    const concert = UnifiedOpportunitySchema.parse({
+      id: "concert-4",
+      type: "CONCERT",
+      name: "Fake Band Live",
+      venueCapacity: 300
+    });
+
+    expect(concert.venueCapacity).toBe(300);
+  });
+
+  it("rejects venue capacity on organization opportunity types", () => {
+    expect(() =>
+      UnifiedOpportunitySchema.parse({
+        id: "label-4",
+        type: "LABEL",
+        name: "Fake Records",
+        venueCapacity: 300
+      })
+    ).toThrow();
+  });
+
   it("rejects quality validation fields on organization opportunity types", () => {
     expect(() =>
       UnifiedOpportunitySchema.parse({

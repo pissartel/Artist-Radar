@@ -54,3 +54,15 @@ export {
   validateConcertOpportunities
 } from "./concertOpportunityValidation.js";
 export type { ConcertQualityClassification, MergeConcertOpportunitiesResult } from "./concertOpportunityValidation.js";
+export {
+  computeLiveOpportunityRelevance,
+  scoreLiveOpportunities,
+  sortScoredLiveOpportunities
+} from "./liveOpportunityRelevance.js";
+export type {
+  LiveOpportunityRelevanceContext,
+  LiveOpportunityRelevanceResult,
+  LiveOpportunityScoreComponents,
+  LiveOpportunitySortKey,
+  ScoredLiveOpportunity
+} from "./liveOpportunityRelevance.js";

@@ -1,6 +1,7 @@
 import { matchBookingGenres } from "./genreMatching.js";
 import type { BookingSearchInput, BookingTarget, DateConfidence, OpportunityKind } from "./types.js";
 import type { SimilarArtist } from "../schemas.js";
+import { toDateOnlyString } from "../utils/dateOnly.js";
 
 export interface BookingRelevanceEnv {
   BOOKING_RECENT_EVENT_MONTHS?: string;
@@ -223,19 +224,6 @@ interface EventDateClassification {
   ageMonths: number | null;
   rejectReason: "old_event" | "missing_date" | "past_event" | null;
   evidence: string;
-}
-
-// Compares YYYY-MM-DD date-only strings (never full Date/timezone math) so an
-// event dated "today" in the source's own local date is never misclassified
-// as past/future due to timezone offsets.
-function toDateOnlyString(value: Date | string): string | null {
-  if (typeof value === "string") {
-    const isoPrefix = value.match(/^(\d{4}-\d{2}-\d{2})/);
-    if (isoPrefix) return isoPrefix[1];
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
-  }
-  return value.toISOString().slice(0, 10);
 }
 
 export function classifyEventDate(eventDate: string | null, recentMonths: number, now: Date = new Date()): EventDateClassification {

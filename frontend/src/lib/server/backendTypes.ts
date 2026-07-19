@@ -66,8 +66,15 @@ export interface BackendSimilarArtist {
   imageConfidence?: number | null;
 }
 
+export interface BackendOpportunityRelatedArtist {
+  name: string;
+  popularityComparison: string;
+  matchedGenres: string[];
+}
+
 export interface BackendOpportunity {
   name: string;
+  displayTitle?: string;
   type: string;
   city: string | null;
   country: string | null;
@@ -76,6 +83,12 @@ export interface BackendOpportunity {
   reason: string;
   score: number;
   suggested_message: string;
+  date?: string | null;
+  dateRange?: { start: string; end: string } | null;
+  genres?: string[];
+  venueCapacity?: number | null;
+  recentEvents?: string[];
+  relatedArtist?: BackendOpportunityRelatedArtist | null;
 }
 
 export interface BackendBookingSourceMetadata {

@@ -248,6 +248,113 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     expect(response.bookingOpportunities.every((opportunity) => Boolean(opportunity.category))).toBe(true);
   });
 
+  it("maps organization-style booking targets (association, promoter, ...) to the organization type and category", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Loud & Proud Collective",
+          type: "association",
+          city: "Lyon",
+          country: "France",
+          source_url: null,
+          contact: "hello@loudandproud.test",
+          reason: "Books local pop punk shows.",
+          score: 65,
+          suggested_message: "Reach out about a local show.",
+        },
+        {
+          name: "Riot Booking Agency",
+          type: "booking_agency",
+          city: "Lyon",
+          country: "France",
+          source_url: null,
+          contact: null,
+          reason: "Represents comparable artists.",
+          score: 60,
+          suggested_message: "Reach out directly.",
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const [association, agency] = response.bookingOpportunities;
+
+    expect(association?.type).toBe("organization");
+    expect(association?.category).toBe("organization");
+    expect(association?.organizationType).toBe("association");
+    expect(agency?.type).toBe("organization");
+    expect(agency?.organizationType).toBe("booking_agency");
+  });
+
+  it("prefers the backend's normalized displayTitle over the raw name, and passes through genres/capacity/recent events/related artist", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "music.box PACA - Mina Warren en replay - France TV",
+          displayTitle: "music.box PACA - Mina Warren",
+          type: "venue",
+          city: "Paris",
+          country: "France",
+          source_url: null,
+          contact: "booking@example.test",
+          reason: "Strong genre match.",
+          score: 82,
+          suggested_message: "Reach out.",
+          date: "2026-09-01",
+          genres: ["pop punk", "punk rock"],
+          venueCapacity: 250,
+          recentEvents: ["Neon Riot live"],
+          relatedArtist: {
+            name: "Neon Riot",
+            popularityComparison: "similar_size",
+            matchedGenres: ["pop punk"],
+          },
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const opportunity = response.bookingOpportunities[0];
+
+    expect(opportunity?.title).toBe("music.box PACA - Mina Warren");
+    expect(opportunity?.date).toBe("2026-09-01");
+    expect(opportunity?.genres).toEqual(["pop punk", "punk rock"]);
+    expect(opportunity?.venueCapacity).toBe(250);
+    expect(opportunity?.recentEvents).toEqual(["Neon Riot live"]);
+    expect(opportunity?.relatedArtist).toEqual({
+      name: "Neon Riot",
+      popularityComparison: "similar_size",
+      matchedGenres: ["pop punk"],
+    });
+  });
+
+  it("falls back to the raw name and empty by-type fields when the backend doesn't provide them", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Le Petit Club",
+          type: "venue",
+          city: "Paris",
+          country: "France",
+          source_url: null,
+          contact: null,
+          reason: "Strong genre match.",
+          score: 82,
+          suggested_message: "Reach out.",
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const opportunity = response.bookingOpportunities[0];
+
+    expect(opportunity?.title).toBe("Le Petit Club");
+    expect(opportunity?.genres).toEqual([]);
+    expect(opportunity?.venueCapacity).toBeNull();
+    expect(opportunity?.recentEvents).toEqual([]);
+    expect(opportunity?.relatedArtist).toBeNull();
+  });
+
   it("passes the generic imageUrl through for the main artist and similar artists, not spotify.imageUrl", () => {
     const result = buildResult({
       artistProfile: {

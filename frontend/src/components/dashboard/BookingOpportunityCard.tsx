@@ -1,9 +1,12 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import type { Opportunity } from "@/types";
 import {
   getDisplayTitle,
-  getOpportunitySubtitle,
   getShortRelevanceReason,
+  formatOpportunityDate,
+  getCardFamily,
+  getOrganizationTypeLabel,
 } from "@/lib/opportunity";
 import MatchScoreBadge from "@/components/common/MatchScoreBadge";
 import Card from "@/components/ui/Card";
@@ -14,17 +17,89 @@ export const TYPE_LABELS: Record<string, string> = {
   festival: "Festival",
   concert: "Concert",
   opening_slot: "Opening Slot",
+  organization: "Organization",
 };
 
 // venue -> info, concert/festival -> warning ("event" category per
-// design-system.md §2), opening_slot -> success, matching the badge
-// examples in design-system.md §13.
+// design-system.md §2), opening_slot -> success, organization -> accent,
+// matching the badge examples in design-system.md §13.
 const TYPE_COLORS: Record<string, string> = {
   venue: "text-info-text bg-info-tint border-info-tint",
   festival: "text-warning-text bg-warning-tint border-warning-tint",
   concert: "text-warning-text bg-warning-tint border-warning-tint",
   opening_slot: "text-success-text bg-success-tint border-success-tint",
+  organization: "text-accent-text bg-accent-tint border-accent-tint",
 };
+
+function FactPill({ children }: { children: ReactNode }) {
+  return (
+    <span className="text-[10px] text-foreground-secondary bg-white/5 border border-border px-1.5 py-0.5 rounded-md whitespace-nowrap">
+      {children}
+    </span>
+  );
+}
+
+// Concert/festival/opening-slot layout: date and location come first since
+// those are what artists scan for first (per booking domain rules).
+function EventCardMeta({ opportunity }: { opportunity: Opportunity }) {
+  const date = formatOpportunityDate(opportunity.date);
+  const headline = [date, opportunity.venue, opportunity.city ?? opportunity.location]
+    .filter((part): part is string => Boolean(part))
+    .join(" · ");
+
+  return (
+    <div className="mb-1.5">
+      <p className="text-xs font-medium text-foreground-secondary">{headline || opportunity.location}</p>
+      {opportunity.relatedArtist && (
+        <p className="text-[11px] text-foreground-muted mt-0.5 truncate">
+          Related to similar artist: {opportunity.relatedArtist.name}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Venue layout: capacity, genres hosted, and contact availability are what
+// tell an artist whether it's worth reaching out.
+function VenueCardMeta({ opportunity }: { opportunity: Opportunity }) {
+  return (
+    <div className="mb-1.5">
+      <p className="text-xs text-foreground-muted">{opportunity.city ?? opportunity.location}</p>
+      <div className="flex flex-wrap gap-1.5 mt-1.5">
+        {opportunity.venueCapacity != null && (
+          <FactPill>~{opportunity.venueCapacity.toLocaleString()} capacity</FactPill>
+        )}
+        {opportunity.genres.slice(0, 3).map((genre) => (
+          <FactPill key={genre}>{genre}</FactPill>
+        ))}
+        <FactPill>{opportunity.contact ? "Contact available" : "No contact found"}</FactPill>
+      </div>
+      {opportunity.recentEvents.length > 0 && (
+        <p className="text-[11px] text-foreground-muted mt-1.5 truncate">
+          Recent: {opportunity.recentEvents.slice(0, 2).join(", ")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Organization layout (labels, bookers, promoters, associations, ...):
+// leads with what kind of organization it is and how to reach it.
+function OrganizationCardMeta({ opportunity }: { opportunity: Opportunity }) {
+  return (
+    <div className="mb-1.5">
+      <p className="text-xs text-foreground-muted">
+        {getOrganizationTypeLabel(opportunity)} · {opportunity.city ?? opportunity.location}
+      </p>
+      <div className="flex flex-wrap gap-1.5 mt-1.5">
+        {opportunity.genres.slice(0, 3).map((genre) => (
+          <FactPill key={genre}>{genre}</FactPill>
+        ))}
+        <FactPill>{opportunity.contact ? "Contact/submission available" : "No contact found"}</FactPill>
+      </div>
+    </div>
+  );
+}
 
 interface BookingOpportunityCardProps {
   opportunity: Opportunity;
@@ -36,8 +111,8 @@ export default function BookingOpportunityCard({
   const typeBadgeClass =
     TYPE_COLORS[opportunity.type] ?? "text-foreground-muted bg-surface-elevated border-border";
   const title = getDisplayTitle(opportunity);
-  const subtitle = getOpportunitySubtitle(opportunity);
   const relevanceReason = getShortRelevanceReason(opportunity);
+  const family = getCardFamily(opportunity);
 
   return (
     <Card variant="interactive" className="flex gap-4">
@@ -74,7 +149,9 @@ export default function BookingOpportunityCard({
           )}
         </div>
 
-        <p className="text-xs text-foreground-muted mb-1.5">{subtitle}</p>
+        {family === "venue" && <VenueCardMeta opportunity={opportunity} />}
+        {family === "organization" && <OrganizationCardMeta opportunity={opportunity} />}
+        {family === "event" && <EventCardMeta opportunity={opportunity} />}
 
         <div className="flex items-center gap-2 mb-2">
           <span

@@ -1,7 +1,9 @@
 import { warnLog } from "../../utils/logger.js";
 import { extractEventDate } from "../dateParsing.js";
 import { normalizeSceneAgendaEvent, type RawSceneAgendaEvent } from "../normalization/normalizeSceneAgendaEvent.js";
+import { extractPageMetadata } from "../pageMetadata.js";
 import { filterBookingTargetsForRelevance } from "../relevance.js";
+import { isGenericCtaTitle } from "../titleNormalization.js";
 import type { BookingSearchInput } from "../types.js";
 import type { BookingSourceProvider } from "./BookingSourceProvider.js";
 import { getSceneAgendaProviderStatus, type SceneAgendaProviderEnv, type SceneAgendaSourceStatus } from "./SceneAgendaProvider.js";
@@ -25,6 +27,22 @@ interface NativeFetchSceneSource {
 type FetchLike = typeof fetch;
 
 const NATIVE_FETCH_TIMEOUT_MS = 10_000;
+// Bounded, best-effort per-entry detail-page fetch to recover a real title,
+// description, poster image and announced performers when the listing page
+// only exposes a generic CTA link (e.g. "Voir la page de l'évènement" on
+// Razibus). Capped to keep search latency predictable; failures never block
+// the opportunity (see enrichEntryWithPageMetadata).
+const DETAIL_ENRICHMENT_BUDGET = 8;
+const DETAIL_FETCH_TIMEOUT_MS = 6_000;
+
+interface PageEnrichment {
+  title: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  performers: string[];
+}
+
+const EMPTY_ENRICHMENT: PageEnrichment = { title: null, description: null, imageUrl: null, performers: [] };
 
 const NATIVE_SCENE_SOURCES: NativeFetchSceneSource[] = [
   {
@@ -98,6 +116,7 @@ export function buildNativeFetchSceneAgendaProvider(options: NativeFetchSceneAge
       const warnings: string[] = [];
       const fetchedUrls: string[] = [];
       const rawEvents: RawSceneAgendaEvent[] = [];
+      let detailFetchBudget = DETAIL_ENRICHMENT_BUDGET;
 
       for (const source of enabledSources) {
         const url = (env[source.envUrlKey as keyof NativeFetchSceneAgendaEnv] as string | undefined) ?? source.defaultUrl;
@@ -117,7 +136,12 @@ export function buildNativeFetchSceneAgendaProvider(options: NativeFetchSceneAge
           }
           const entries = parseResponseEntries(text);
           for (const entry of entries) {
-            rawEvents.push(buildSceneEvent(input, source, entry));
+            let enrichment: PageEnrichment = EMPTY_ENRICHMENT;
+            if (detailFetchBudget > 0 && entry.url) {
+              detailFetchBudget -= 1;
+              enrichment = await enrichEntryWithPageMetadata(entry.url, fetchImpl);
+            }
+            rawEvents.push(buildSceneEvent(input, source, entry, enrichment));
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
@@ -273,25 +297,51 @@ function parseHtmlEntries(html: string): ParsedEntry[] {
   return entries;
 }
 
+/** Best-effort, bounded fetch of an entry's own page to recover a real title/description/image/lineup. Never throws. */
+async function enrichEntryWithPageMetadata(url: string, fetchImpl: FetchLike): Promise<PageEnrichment> {
+  try {
+    const response = await fetchWithTimeout(url, fetchImpl, DETAIL_FETCH_TIMEOUT_MS);
+    if (!response.ok) return EMPTY_ENRICHMENT;
+    const html = await response.text();
+    if (BLOCKED_PATTERN.test(html.slice(0, 2000))) return EMPTY_ENRICHMENT;
+    return extractPageMetadata(html);
+  } catch {
+    return EMPTY_ENRICHMENT;
+  }
+}
+
 function buildSceneEvent(
   input: BookingSearchInput,
   source: NativeFetchSceneSource,
-  entry: ParsedEntry
+  entry: ParsedEntry,
+  enrichment: PageEnrichment = EMPTY_ENRICHMENT
 ): RawSceneAgendaEvent {
-  const text = [entry.title, entry.description, entry.url].filter(Boolean).join(" ");
+  const title = pickBetterTitle(entry.title, enrichment.title, source.label);
+  const description = entry.description ?? enrichment.description;
+  const text = [title, description, entry.url].filter(Boolean).join(" ");
   return {
-    title: entry.title ?? `${source.label} event`,
+    title,
     sourceUrl: entry.url ?? null,
     providerName: source.key,
     city: input.city || null,
     country: input.artistProfile?.country ?? "France",
-    description: entry.description,
+    description,
     eventDate: parseEntryDate(entry.pubDate) ?? extractEventDate(text),
-    lineupArtists: [],
+    lineupArtists: enrichment.performers,
     venueName: null,
     genresDetected: detectGenresFromText(text),
-    confidenceScore: 0.6
+    confidenceScore: 0.6,
+    imageUrl: enrichment.imageUrl
   };
+}
+
+/** Prefers a non-generic entry title, falling back to the detail page's own title, then a generic label. Both are checked for CTA-style text (see titleNormalization.ts) so a generic page <title> never wins over a usable listing title. */
+function pickBetterTitle(entryTitle: string | null, pageTitle: string | null, sourceLabel: string): string {
+  const entryIsUsable = Boolean(entryTitle) && !isGenericCtaTitle(entryTitle!);
+  if (entryIsUsable) return entryTitle!;
+  const pageIsUsable = Boolean(pageTitle) && !isGenericCtaTitle(pageTitle!);
+  if (pageIsUsable) return pageTitle!;
+  return entryTitle ?? pageTitle ?? `${sourceLabel} event`;
 }
 
 function parseEntryDate(pubDate: string | null): string | null {
@@ -315,9 +365,13 @@ function detectGenresFromText(text: string): string[] {
   );
 }
 
-async function fetchWithTimeout(url: string, fetchImpl: FetchLike): Promise<Response> {
+async function fetchWithTimeout(
+  url: string,
+  fetchImpl: FetchLike,
+  timeoutMs: number = NATIVE_FETCH_TIMEOUT_MS
+): Promise<Response> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), NATIVE_FETCH_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetchImpl(url, {
       signal: controller.signal,

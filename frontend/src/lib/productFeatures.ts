@@ -25,7 +25,6 @@ export const productFeatures = {
   // Product surfaces that exist in the codebase but aren't finished —
   // hidden regardless of debug mode until they have real functionality.
   settings: false,
-  bookmarks: false,
 
   // Opportunity categories beyond the current live/booking MVP scope. Not
   // implemented yet; listed here so the roadmap stays visible in code

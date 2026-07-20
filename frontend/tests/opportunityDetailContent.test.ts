@@ -6,42 +6,59 @@ function readSource(relativePath: string): string {
   return readFileSync(path.resolve(__dirname, "..", relativePath), "utf-8");
 }
 
-describe("OpportunityDetail content (issue #130 review feedback)", () => {
+describe("OpportunityDetail content (issue #132 review feedback)", () => {
   const source = readSource("src/components/dashboard/OpportunityDetail.tsx");
 
-  it("no longer renders a 'Why this matches' section", () => {
-    expect(source).not.toMatch(/Why this matches/i);
+  it("no longer renders two separate 'Details' cards", () => {
+    expect(source).not.toMatch(/<SectionTitle>Details<\/SectionTitle>/);
+    expect(source).not.toMatch(/<SectionTitle>Event details<\/SectionTitle>/);
   });
 
-  it("no longer renders a duplicated prominent 'Open source' action", () => {
-    expect(source).not.toMatch(/Open source/i);
+  it("renders a single consolidated Event information section", () => {
+    expect(source).toMatch(/Event information/);
   });
 
-  it("renders structured Good fit / Things to consider sections instead", () => {
-    expect(source).toMatch(/Good fit/);
+  it("uses icon actions with tooltips in the header, not text toggle buttons", () => {
+    expect(source).toMatch(/OpportunityActions opportunity={opportunity} variant="compact"/);
+  });
+
+  it("never renders the header thumbnail and the full poster from the same source at once", () => {
+    expect(source).toMatch(/showPoster \? undefined : opportunity\.imageUrl/);
+  });
+
+  it("renders a dedicated Line-up section", () => {
+    expect(source).toMatch(/Line-up/);
+  });
+
+  it("renders a dedicated Contact information section with a verification label", () => {
+    expect(source).toMatch(/Contact information/);
+    expect(source).toMatch(/Verified/);
+    expect(source).toMatch(/Unverified/);
+  });
+
+  it("renders concise, actionable match-analysis sections", () => {
+    expect(source).toMatch(/Why it matches/);
     expect(source).toMatch(/Things to consider/);
+    expect(source).toMatch(/Missing or unverified information/);
+    expect(source).toMatch(/Recommended action/);
   });
 
-  it("renders a dedicated Source evidence section, not a generic Sources heading", () => {
+  it("renders a dedicated Source evidence section listing every source, not only the first", () => {
     expect(source).toMatch(/Source evidence/);
-    expect(source).not.toMatch(/<SectionTitle>Sources<\/SectionTitle>/);
+    expect(source).toMatch(/getSourceEvidence\(opportunity\)/);
   });
 
-  it("renders the source attribution as a clickable link, not plain text (issue #153 review feedback)", () => {
-    expect(source).toMatch(/href=\{url\}/);
+  it("renders the source attribution as a clickable link, not plain text", () => {
+    expect(source).toMatch(/href=\{item\.url\}/);
     expect(source).toMatch(/target="_blank"/);
   });
 
-  it("renders a third, neutral match-factor section for unknown/unverified information", () => {
-    expect(source).toMatch(/Unknown \/ not verified/);
-  });
-
-  it("renders the announced lineup when known", () => {
-    expect(source).toMatch(/label="Lineup"/);
+  it("shows what kind of opportunity this is (support slot, open call, venue contact, or general event)", () => {
+    expect(source).toMatch(/OpportunitySignalBanner/);
   });
 });
 
-describe("OpportunityActions content (issue #130 review feedback)", () => {
+describe("OpportunityActions content (issue #130/#132 review feedback)", () => {
   const source = readSource("src/components/dashboard/OpportunityActions.tsx");
 
   it("uses clear interested/contacted wording, never the vague 'markpage'", () => {
@@ -58,5 +75,9 @@ describe("OpportunityActions content (issue #130 review feedback)", () => {
 
   it("marking as contacted is a deliberate user action, not automatic on link open", () => {
     expect(source).toMatch(/onClick=\{toggleContacted\}/);
+  });
+
+  it("no longer renders large Interested/Contacted text toggle buttons at the page bottom", () => {
+    expect(source).not.toMatch(/TextToggleButton/);
   });
 });

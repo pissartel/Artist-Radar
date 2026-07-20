@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   getAdditionalMetadata,
   getGroupedContacts,
+  getLineupEntries,
+  getOpportunitySignal,
   getRecommendedAction,
+  getSourceEvidence,
+  getVenueTypeLabel,
   hasLiveEventInfo,
   isLiveEventOpportunity,
 } from "@/lib/opportunity";
@@ -108,5 +112,105 @@ describe("getAdditionalMetadata", () => {
 
   it("returns an empty list when there is nothing extra to show", () => {
     expect(getAdditionalMetadata(buildOpportunity())).toEqual([]);
+  });
+});
+
+describe("getLineupEntries", () => {
+  it("prefers structured lineupEntries over the flat lineup/headliner strings", () => {
+    const opportunity = buildOpportunity({
+      lineup: ["Should be ignored"],
+      lineupEntries: [{ name: "Artist A", position: "support" }],
+    });
+    expect(getLineupEntries(opportunity)).toEqual([{ name: "Artist A", position: "support" }]);
+  });
+
+  it("marks headliner names as headliner and leaves other names without a guessed position", () => {
+    const opportunity = buildOpportunity({
+      lineup: ["Headline Act", "Support Act"],
+      headliner: ["Headline Act"],
+    });
+    expect(getLineupEntries(opportunity)).toEqual([
+      { name: "Headline Act", position: "headliner" },
+      { name: "Support Act" },
+    ]);
+  });
+
+  it("returns an empty list when there is no lineup information", () => {
+    expect(getLineupEntries(buildOpportunity({ lineup: [] }))).toEqual([]);
+  });
+});
+
+describe("getVenueTypeLabel", () => {
+  it("returns a human-readable label for a known venue type", () => {
+    expect(getVenueTypeLabel(buildOpportunity({ venueType: "cultural_centre" }))).toBe("Cultural Centre");
+  });
+
+  it("falls back to the raw value for an unknown venue type", () => {
+    expect(getVenueTypeLabel(buildOpportunity({ venueType: "warehouse" }))).toBe("warehouse");
+  });
+
+  it("returns null when no venue type is known", () => {
+    expect(getVenueTypeLabel(buildOpportunity())).toBeNull();
+  });
+});
+
+describe("getSourceEvidence", () => {
+  it("prefers structured sourceEvidence over the flat sourceUrls", () => {
+    const opportunity = buildOpportunity({
+      sourceUrls: ["https://ignored.test"],
+      sourceEvidence: [{ url: "https://venue.example/event", title: "Venue listing", retrievedInfo: "Date and lineup" }],
+    });
+    expect(getSourceEvidence(opportunity)).toEqual([
+      {
+        url: "https://venue.example/event",
+        title: "Venue listing",
+        website: "venue.example",
+        retrievedInfo: "Date and lineup",
+      },
+    ]);
+  });
+
+  it("falls back to sourceUrls, listing every url with its hostname", () => {
+    const opportunity = buildOpportunity({
+      sourceUrls: ["https://a.example/1", "https://b.example/2"],
+    });
+    expect(getSourceEvidence(opportunity)).toEqual([
+      { url: "https://a.example/1", title: null, website: "a.example", retrievedInfo: null },
+      { url: "https://b.example/2", title: null, website: "b.example", retrievedInfo: null },
+    ]);
+  });
+
+  it("returns an empty list when there are no sources", () => {
+    expect(getSourceEvidence(buildOpportunity())).toEqual([]);
+  });
+});
+
+describe("getOpportunitySignal", () => {
+  it("flags an open call organization", () => {
+    const opportunity = buildOpportunity({ type: "organization", organizationType: "open_call" });
+    expect(getOpportunitySignal(opportunity).kind).toBe("open_call");
+  });
+
+  it("flags a venue as a contact-for-future-booking opportunity", () => {
+    const opportunity = buildOpportunity({ type: "venue" });
+    expect(getOpportunitySignal(opportunity).kind).toBe("venue_contact");
+  });
+
+  it("flags a live event with a support-slot signal", () => {
+    const opportunity = buildOpportunity({
+      type: "concert",
+      matchBreakdown: {
+        overallScore: 80,
+        positiveFactors: [{ code: "support_slot_signal", label: "Support slot announced", impact: "positive" }],
+        negativeFactors: [],
+        neutralFactors: [],
+      },
+    });
+    expect(getOpportunitySignal(opportunity).kind).toBe("support_slot_available");
+  });
+
+  it("falls back to a general event when there is no confirmed opportunity signal", () => {
+    const opportunity = buildOpportunity({ type: "concert" });
+    expect(getOpportunitySignal(opportunity).kind).toBe("general_event");
   });
 });

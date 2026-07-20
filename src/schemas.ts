@@ -1,6 +1,19 @@
 import { z } from "zod";
 
 export const ModeSchema = z.enum(["booking", "promo"]);
+// Stable, ordered stages a pipeline run passes through. Keep this list in
+// sync with the frontend status polling contract (issue #134) — do not
+// rename values without coordinating a frontend change.
+export const PipelineStageSchema = z.enum([
+  "VALIDATING_ARTIST",
+  "FETCHING_ARTIST_DATA",
+  "FINDING_SIMILAR_ARTISTS",
+  "SEARCHING_OPPORTUNITIES",
+  "SCORING_RESULTS",
+  "PREPARING_OVERVIEW",
+  "COMPLETED"
+]);
+export const PipelineExecutionStatusSchema = z.enum(["running", "completed", "failed"]);
 export const EstimatedArtistLevelSchema = z.enum(["unknown", "emerging", "developing", "established"]);
 export const ArtistTierSchema = z.enum(["small", "medium", "large", "unknown"]);
 export const BookingCategorySchema = z.enum([
@@ -295,6 +308,8 @@ export const OpportunitySearchResultSchema = z.object({
 });
 
 export type Mode = z.infer<typeof ModeSchema>;
+export type PipelineStage = z.infer<typeof PipelineStageSchema>;
+export type PipelineExecutionStatus = z.infer<typeof PipelineExecutionStatusSchema>;
 export type EstimatedArtistLevel = z.infer<typeof EstimatedArtistLevelSchema>;
 export type LineupStatus = z.infer<typeof LineupStatusSchema>;
 export type ArtistTier = z.infer<typeof ArtistTierSchema>;

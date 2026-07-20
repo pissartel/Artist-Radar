@@ -1,4 +1,9 @@
 export { runOpportunitySearch } from "./pipeline.js";
+export {
+  PIPELINE_STAGE_ORDER,
+  getPipelineExecutionState
+} from "./pipelineExecutionState.js";
+export type { PipelineExecutionError, PipelineExecutionState } from "./pipelineExecutionState.js";
 export { collectArtistProfile, estimateArtistLevel, extractSocialLinks } from "./modules/profileCollector.js";
 export { estimateArtistSize } from "./modules/sizeEstimator.js";
 export {
@@ -119,6 +124,8 @@ export type {
   Mode,
   Opportunity,
   OpportunitySearchResult,
+  PipelineExecutionStatus,
+  PipelineStage,
   Popularity,
   PlatformStats,
   SimilarArtist,
@@ -185,6 +192,8 @@ export {
   ModeSchema,
   OpportunitySchema,
   OpportunitySearchResultSchema,
+  PipelineExecutionStatusSchema,
+  PipelineStageSchema,
   PopularitySchema,
   PlatformStatsSchema,
   SimilarArtistSchema,

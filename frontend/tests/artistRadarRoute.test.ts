@@ -141,4 +141,48 @@ describe("POST /api/artist-radar", () => {
     expect(payload.artist.name).toBe("Tuesday Fall");
     expect(runOpportunitySearch).toHaveBeenCalledOnce();
   });
+
+  it("passes a provided executionId through to the pipeline so its status can be polled", async () => {
+    runOpportunitySearch.mockResolvedValueOnce({
+      artistProfile: {
+        artistName: "Tuesday Fall",
+        city: "Bordeaux",
+        country: "France",
+        genres: ["pop punk"],
+        socialLinks: {},
+        platformStats: {},
+      },
+      similarArtists: {},
+      opportunities: [],
+    });
+    const { POST } = await import("@/app/api/artist-radar/route");
+
+    const response = await POST(jsonRequest({ ...VALID_BODY, executionId: "client-exec-1" }));
+
+    expect(response.status).toBe(200);
+    expect(runOpportunitySearch).toHaveBeenCalledWith(
+      expect.anything(),
+      { executionId: "client-exec-1" },
+    );
+  });
+
+  it("omits execution tracking options when no executionId is provided", async () => {
+    runOpportunitySearch.mockResolvedValueOnce({
+      artistProfile: {
+        artistName: "Tuesday Fall",
+        city: "Bordeaux",
+        country: "France",
+        genres: ["pop punk"],
+        socialLinks: {},
+        platformStats: {},
+      },
+      similarArtists: {},
+      opportunities: [],
+    });
+    const { POST } = await import("@/app/api/artist-radar/route");
+
+    await POST(jsonRequest(VALID_BODY));
+
+    expect(runOpportunitySearch).toHaveBeenCalledWith(expect.anything(), undefined);
+  });
 });

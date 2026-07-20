@@ -8,7 +8,10 @@ interface RawRequestBody {
   location?: unknown;
   enableBooking?: unknown;
   spotifyUrl?: unknown;
+  executionId?: unknown;
 }
+
+const MAX_EXECUTION_ID_LENGTH = 200;
 
 // Structured, safe error shape returned to the client. Never includes stack
 // traces, key names/values, raw provider responses, or prompts — those stay
@@ -25,7 +28,7 @@ function errorResponse(status: number, code: ErrorCode, message: string): Respon
 }
 
 function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | null {
-  const { artistName, genre, location, enableBooking, spotifyUrl } = body;
+  const { artistName, genre, location, enableBooking, spotifyUrl, executionId } = body;
 
   if (
     typeof artistName !== "string" || !artistName.trim() ||
@@ -43,12 +46,20 @@ function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | nul
     return null;
   }
 
+  if (
+    executionId !== undefined &&
+    (typeof executionId !== "string" || !executionId.trim() || executionId.length > MAX_EXECUTION_ID_LENGTH)
+  ) {
+    return null;
+  }
+
   return {
     artistName: artistName.trim(),
     genre: genre.trim(),
     location: location.trim(),
     enableBooking,
     ...(spotifyUrl?.trim() ? { spotifyUrl: spotifyUrl.trim() } : {}),
+    ...(executionId?.trim() ? { executionId: executionId.trim() } : {}),
   };
 }
 
@@ -125,7 +136,10 @@ export async function POST(request: Request): Promise<Response> {
       spotifyUrl: isValidHttpUrl(artistRadarRequest.spotifyUrl) ? artistRadarRequest.spotifyUrl : undefined,
     });
 
-    const result = await runOpportunitySearch(input);
+    const result = await runOpportunitySearch(
+      input,
+      artistRadarRequest.executionId ? { executionId: artistRadarRequest.executionId } : undefined
+    );
     const response = mapPipelineResultToArtistRadarResponse(result, artistRadarRequest);
 
     return Response.json(response, { status: 200 });

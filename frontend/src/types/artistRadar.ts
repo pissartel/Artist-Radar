@@ -10,6 +10,9 @@ export interface ArtistRadarRequest {
   enableBooking?: boolean;
   // Optional Spotify artist URL used to enrich the main artist with Spotify metadata.
   spotifyUrl?: string;
+  // Optional client-generated id used to poll GET /api/artist-radar/status/[executionId]
+  // for real-time pipeline stage progress while this request is in flight.
+  executionId?: string;
 }
 
 // Normalized response returned by POST /api/artist-radar.

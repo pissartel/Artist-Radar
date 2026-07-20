@@ -1,4 +1,4 @@
-import type { Opportunity, OpportunityCategory } from "@/types";
+import type { MatchFactor, Opportunity, OpportunityCategory } from "@/types";
 
 export type OpportunitySortOption =
   | "best_match"
@@ -105,6 +105,25 @@ export function getOpportunitySource(opportunity: Opportunity): string | null {
   return getUrlHostname(url);
 }
 
+export interface OpportunityContactAction {
+  href: string;
+  label: string;
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^[+]?[\d\s().-]{6,}$/;
+
+// Only returns an action when the contact string is itself directly usable
+// (an email, URL, or phone number) — never fabricates a link from free text.
+export function getContactAction(opportunity: Opportunity): OpportunityContactAction | null {
+  const contact = opportunity.contact?.trim();
+  if (!contact) return null;
+  if (EMAIL_PATTERN.test(contact)) return { href: `mailto:${contact}`, label: "Contact" };
+  if (/^https?:\/\//i.test(contact)) return { href: contact, label: "Contact" };
+  if (PHONE_PATTERN.test(contact)) return { href: `tel:${contact.replace(/[^\d+]/g, "")}`, label: "Contact" };
+  return null;
+}
+
 export type OpportunityStatus = "verified" | "needs_review";
 
 export function getOpportunityTitle(opportunity: Opportunity): string {
@@ -142,7 +161,21 @@ function truncateTitle(title: string, maxLength = MAX_DISPLAY_TITLE_LENGTH): str
   return `${title.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
+// Prefer the structured match breakdown over the legacy `matchReasons` prose
+// (issue #130 review feedback: the card must never surface raw scoring text).
+export function getPositiveMatchFactors(opportunity: Opportunity): MatchFactor[] {
+  return opportunity.matchBreakdown?.positiveFactors ?? [];
+}
+
+export function getNegativeMatchFactors(opportunity: Opportunity): MatchFactor[] {
+  return opportunity.matchBreakdown?.negativeFactors ?? [];
+}
+
 export function getShortRelevanceReason(opportunity: Opportunity): string | null {
+  const [topPositive] = getPositiveMatchFactors(opportunity);
+  if (topPositive) return topPositive.label;
+  const [topNegative] = getNegativeMatchFactors(opportunity);
+  if (topNegative) return topNegative.label;
   const [reason] = opportunity.matchReasons;
   return reason || null;
 }

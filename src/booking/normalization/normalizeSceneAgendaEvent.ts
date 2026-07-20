@@ -14,6 +14,7 @@ export interface RawSceneAgendaEvent {
   venueName?: string | null;
   genresDetected?: string[];
   confidenceScore?: number;
+  imageUrl?: string | null;
 }
 
 export function normalizeSceneAgendaEvent(
@@ -42,6 +43,9 @@ export function normalizeSceneAgendaEvent(
     genres: uniqueStrings([...(event.genresDetected ?? []), ...genreMatch.matchedGenres]),
     confidence: event.confidenceScore ?? 0.74,
     eventDate: event.eventDate ?? null,
+    venueName: event.venueName ?? null,
+    lineup: uniqueStrings(event.lineupArtists ?? []),
+    imageUrl: event.imageUrl ?? null,
     contacts: []
   };
   const normalized = normalizeBookingSource(raw);

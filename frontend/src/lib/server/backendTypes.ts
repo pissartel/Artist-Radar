@@ -72,6 +72,34 @@ export interface BackendOpportunityRelatedArtist {
   matchedGenres: string[];
 }
 
+export type BackendMatchFactorCode =
+  | "genre_match"
+  | "location_match"
+  | "date_lead_time"
+  | "capacity_fit"
+  | "similar_artist_signal"
+  | "support_slot_signal"
+  | "contact_available"
+  | "lineup_availability"
+  | "source_confidence"
+  | "data_completeness";
+
+export type BackendMatchFactorImpact = "positive" | "negative" | "neutral";
+
+export interface BackendMatchFactor {
+  code: BackendMatchFactorCode;
+  label: string;
+  detail?: string;
+  impact: BackendMatchFactorImpact;
+  scoreContribution?: number;
+}
+
+export interface BackendOpportunityMatchBreakdown {
+  overallScore: number;
+  positiveFactors: BackendMatchFactor[];
+  negativeFactors: BackendMatchFactor[];
+}
+
 export interface BackendOpportunity {
   name: string;
   displayTitle?: string;
@@ -89,6 +117,8 @@ export interface BackendOpportunity {
   venueCapacity?: number | null;
   recentEvents?: string[];
   relatedArtist?: BackendOpportunityRelatedArtist | null;
+  imageUrl?: string | null;
+  matchBreakdown?: BackendOpportunityMatchBreakdown;
 }
 
 export interface BackendBookingSourceMetadata {

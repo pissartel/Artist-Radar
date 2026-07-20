@@ -116,6 +116,37 @@ export interface OpportunityRelatedArtist {
   matchedGenres: string[];
 }
 
+// Structured match factors from the backend (issue #130 review feedback).
+// The frontend must render these directly and never parse `matchReasons`
+// prose to derive "why this matches" copy.
+export type MatchFactorCode =
+  | "genre_match"
+  | "location_match"
+  | "date_lead_time"
+  | "capacity_fit"
+  | "similar_artist_signal"
+  | "support_slot_signal"
+  | "contact_available"
+  | "lineup_availability"
+  | "source_confidence"
+  | "data_completeness";
+
+export type MatchFactorImpact = "positive" | "negative" | "neutral";
+
+export interface MatchFactor {
+  code: MatchFactorCode;
+  label: string;
+  detail?: string;
+  impact: MatchFactorImpact;
+  scoreContribution?: number;
+}
+
+export interface OpportunityMatchBreakdown {
+  overallScore: number;
+  positiveFactors: MatchFactor[];
+  negativeFactors: MatchFactor[];
+}
+
 // Generic entity covering booking opportunities today and future artist
 // growth opportunities (labels, playlists, creative providers, ...).
 export interface Opportunity {
@@ -135,6 +166,9 @@ export interface Opportunity {
   tags: string[];
   matchScore: number;
   matchReasons: string[];
+  // Structured positive/negative factors backing matchScore. Prefer this over
+  // matchReasons for any user-facing "why this matches" UI.
+  matchBreakdown?: OpportunityMatchBreakdown;
   sourceUrls?: string[];
   contact?: string | null;
   relatedSimilarArtistIds?: string[];

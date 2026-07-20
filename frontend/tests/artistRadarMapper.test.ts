@@ -452,6 +452,107 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     expect(response.similarArtists[0]?.imageUrl).toBeUndefined();
   });
 
+  it("passes the opportunity imageUrl through when the backend provides one", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Soirée Punk",
+          displayTitle: "Punk concert in Rennes",
+          type: "event",
+          city: "Rennes",
+          country: "France",
+          source_url: "https://razibus.net/event.html",
+          contact: null,
+          reason: "Strong genre match.",
+          score: 73,
+          suggested_message: "Reach out.",
+          imageUrl: "https://razibus.net/img/poster-35768.jpg",
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+
+    expect(response.bookingOpportunities[0]?.imageUrl).toBe("https://razibus.net/img/poster-35768.jpg");
+  });
+
+  it("leaves imageUrl undefined rather than inventing one when the backend has no image", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Le Petit Club",
+          type: "venue",
+          city: "Paris",
+          country: "France",
+          source_url: null,
+          contact: null,
+          reason: "Strong genre match.",
+          score: 82,
+          suggested_message: "Reach out.",
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+
+    expect(response.bookingOpportunities[0]?.imageUrl).toBeUndefined();
+  });
+
+  it("passes the structured matchBreakdown through instead of only the reason string", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Soirée Punk",
+          type: "event",
+          city: "Rennes",
+          country: "France",
+          source_url: null,
+          contact: null,
+          reason: "Strong genre match.",
+          score: 73,
+          suggested_message: "Reach out.",
+          matchBreakdown: {
+            overallScore: 73,
+            positiveFactors: [{ code: "genre_match", label: "Genre matches the artist", impact: "positive" }],
+            negativeFactors: [{ code: "contact_available", label: "No public booking contact was found", impact: "negative" }],
+          },
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const opportunity = response.bookingOpportunities[0];
+
+    expect(opportunity?.matchBreakdown?.positiveFactors).toEqual([
+      { code: "genre_match", label: "Genre matches the artist", impact: "positive" },
+    ]);
+    expect(opportunity?.matchBreakdown?.negativeFactors).toEqual([
+      { code: "contact_available", label: "No public booking contact was found", impact: "negative" },
+    ]);
+  });
+
+  it("never displays the same location twice when city and country are identical", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Soirée Punk",
+          type: "event",
+          city: "France",
+          country: "France",
+          source_url: null,
+          contact: null,
+          reason: "Strong genre match.",
+          score: 73,
+          suggested_message: "Reach out.",
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+
+    expect(response.bookingOpportunities[0]?.location).toBe("France");
+  });
+
   it("falls back to request artist name and genre when the backend profile is missing them", () => {
     const result = buildResult({
       artistProfile: {

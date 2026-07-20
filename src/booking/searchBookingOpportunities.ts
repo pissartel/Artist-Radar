@@ -2,6 +2,8 @@ import { pickBestContact } from "./contactExtraction.js";
 import { filterBookingTargetsForRelevance, sourcePriorityBonus, type BookingRelevanceEnv } from "./relevance.js";
 import { recommendBookingAction, scoreBookingCompatibility } from "./scoring.js";
 import { normalizeOpportunityTitle } from "./titleNormalization.js";
+import { scoreDateProximity } from "./dateProximity.js";
+import { buildMatchFactors } from "./matchFactors.js";
 import type {
   BookingOpportunity,
   BookingRejectedByReason,
@@ -51,9 +53,10 @@ export async function searchBookingOpportunities(
   };
   logBookingRelevanceSummary(relevance.summary, rejectedByReason);
   const targets = relevance.targets;
+  const now = options.now ?? new Date();
   const opportunities = targets
     .filter((target) => target.opportunityKind !== "historical_signal")
-    .map((target) => buildOpportunity(input, target))
+    .map((target) => buildOpportunity(input, target, now))
     .sort((left, right) => right.score - left.score)
     .slice(0, input.limit);
 
@@ -97,19 +100,23 @@ async function runProviderSafely(
   }
 }
 
-function buildOpportunity(input: BookingSearchInput, target: BookingTarget): BookingOpportunity {
+function buildOpportunity(input: BookingSearchInput, target: BookingTarget, now: Date): BookingOpportunity {
   const bookingScore = scoreBookingCompatibility(input, target);
   const suggestedAction = recommendBookingAction(input, target, bookingScore);
   const bestContact = pickBestContact(target.contacts);
   const priorityBonus = sourcePriorityBonus(target);
-  const score = clampScore(bookingScore.total + priorityBonus);
+  const dateProximity = scoreDateProximity(target.eventDate ?? null, now);
+  const score = clampScore(bookingScore.total + priorityBonus + dateProximity.scoreAdjustment);
+  const matchBreakdown = buildMatchFactors(input, target, bookingScore, dateProximity, score);
   const reason = buildOpportunityReason(target, bookingScore.reason, priorityBonus);
   const titleResult = normalizeOpportunityTitle({
     rawTitle: target.name,
     category: target.category,
     city: target.city,
     eventDate: target.eventDate ?? null,
-    derivedFromSimilarArtist: target.derivedFromSimilarArtist ?? null
+    derivedFromSimilarArtist: target.derivedFromSimilarArtist ?? null,
+    venueName: target.venueName ?? null,
+    genres: target.genres
   });
 
   return {
@@ -126,11 +133,12 @@ function buildOpportunity(input: BookingSearchInput, target: BookingTarget): Boo
     sourceProvider: target.sourceProvider ?? null,
     contact: bestContact?.value ?? null,
     contactType: bestContact?.type ?? "unknown",
+    imageUrl: target.imageUrl ?? null,
     score,
     confidence: bookingScore.confidence,
     reason,
     warnings: bookingScore.warnings,
-    fitSummary: buildFitSummary(target, suggestedAction, bookingScore.warnings),
+    fitSummary: buildFitSummary(suggestedAction),
     evidence: target.evidence,
     suggestedAction,
     eventDate: target.eventDate ?? null,
@@ -146,6 +154,7 @@ function buildOpportunity(input: BookingSearchInput, target: BookingTarget): Boo
       recommendedAction: suggestedAction
     },
     bookingScore,
+    matchBreakdown,
     internalReview: buildInternalReview(target, bestContact, titleResult.wasRewritten)
   };
 }
@@ -190,18 +199,21 @@ function buildOpportunityReason(target: BookingTarget, baseReason: string, prior
   return [...similarArtistReasons, baseReason, priorityText].filter(Boolean).join(" ");
 }
 
-function buildFitSummary(target: BookingTarget, action: string, warnings: string[]): string {
-  const warningSuffix = warnings.length > 0 ? " Review warnings before outreach." : "";
+// Factual, artist-facing summary of what to do with this opportunity. Never
+// repeats the display title (already shown as the heading) and never exposes
+// internal classification/warning language (issue #130 review feedback) —
+// warnings are instead surfaced as structured negative match factors.
+function buildFitSummary(action: string): string {
   if (action === "support_slot") {
-    return `${target.name} looks more realistic as a support-slot lead than a confirmed headline opportunity.${warningSuffix}`;
+    return "This looks like a stronger fit for a support-slot pitch than a headline booking.";
   }
   if (action === "application") {
-    return `${target.name} should be handled as an application or open-call opportunity.${warningSuffix}`;
+    return "This opportunity is handled through an application or open-call process.";
   }
   if (action === "booking_contact") {
-    return `${target.name} has a public booking/contact signal and should be reviewed manually.${warningSuffix}`;
+    return "A public booking contact is available for direct outreach.";
   }
-  return `${target.name} needs more verification before outreach.${warningSuffix}`;
+  return "This opportunity needs manual verification before outreach.";
 }
 
 function dedupeTargets(targets: BookingTarget[]): { targets: BookingTarget[]; duplicateCount: number } {

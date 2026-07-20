@@ -52,8 +52,12 @@ function slugify(value: string): string {
   return slug || "unknown";
 }
 
+// A city is never literally the same string as its own country (e.g. a
+// source that only knows the country reports it as both). When that
+// happens, show the country alone rather than "France, France".
 function joinLocation(city?: string | null, country?: string | null): string {
-  return [city, country].filter((part): part is string => Boolean(part)).join(", ");
+  const dedupedCity = city && country && city.trim().toLowerCase() === country.trim().toLowerCase() ? null : city;
+  return [dedupedCity, country].filter((part): part is string => Boolean(part)).join(", ");
 }
 
 function mapArtistProfile(profile: BackendArtistProfile, request: ArtistRadarRequest): ArtistProfile {
@@ -193,12 +197,14 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
     tags: [],
     matchScore: opportunity.score,
     matchReasons: [opportunity.reason],
+    matchBreakdown: opportunity.matchBreakdown,
     sourceUrls: opportunity.source_url ? [opportunity.source_url] : [],
     contact: opportunity.contact,
     genres: opportunity.genres ?? [],
     venueCapacity: opportunity.venueCapacity ?? null,
     recentEvents: opportunity.recentEvents ?? [],
     relatedArtist: opportunity.relatedArtist ?? null,
+    imageUrl: opportunity.imageUrl ?? undefined,
   };
 }
 

@@ -4,6 +4,7 @@ import { recommendBookingAction, scoreBookingCompatibility } from "./scoring.js"
 import { normalizeOpportunityTitle } from "./titleNormalization.js";
 import { scoreDateProximity } from "./dateProximity.js";
 import { buildMatchFactors } from "./matchFactors.js";
+import { analyzeSupportSlotPotential } from "./supportSlotPotential.js";
 import type {
   BookingOpportunity,
   BookingRejectedByReason,
@@ -108,6 +109,7 @@ function buildOpportunity(input: BookingSearchInput, target: BookingTarget, now:
   const dateProximity = scoreDateProximity(target.eventDate ?? null, now);
   const score = clampScore(bookingScore.total + priorityBonus + dateProximity.scoreAdjustment);
   const matchBreakdown = buildMatchFactors(input, target, bookingScore, dateProximity, score);
+  const supportSlotPotential = analyzeSupportSlotPotential(target, input);
   const reason = buildOpportunityReason(target, bookingScore.reason, priorityBonus);
   const titleResult = normalizeOpportunityTitle({
     rawTitle: target.name,
@@ -156,6 +158,7 @@ function buildOpportunity(input: BookingSearchInput, target: BookingTarget, now:
     },
     bookingScore,
     matchBreakdown,
+    supportSlotPotential,
     internalReview: buildInternalReview(target, bestContact, titleResult.wasRewritten)
   };
 }

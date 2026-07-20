@@ -310,6 +310,14 @@ export const MatchFactorSchema = z.object({
   scoreContribution: z.number().optional()
 });
 
+export const SupportSlotStatusSchema = z.enum(["likely", "possible", "unlikely", "unknown"]);
+
+export const SupportSlotPotentialSchema = z.object({
+  status: SupportSlotStatusSchema,
+  confidenceScore: z.number().int().min(0).max(100),
+  reasons: z.array(z.string().trim().min(1)).default([])
+});
+
 export const OpportunityMatchBreakdownSchema = z.object({
   overallScore: z.number().int().min(0).max(100),
   positiveFactors: z.array(MatchFactorSchema).default([]),
@@ -357,6 +365,9 @@ export const OpportunitySchema = z.object({
   // Structured positive/negative match factors (issue #130 review feedback).
   // Frontend must render this instead of parsing `reason`/`suggested_message`.
   matchBreakdown: OpportunityMatchBreakdownSchema.optional(),
+  // Structured support-slot-potential analysis (issue #158). Null when this
+  // analysis doesn't apply to the opportunity type (e.g. festivals).
+  supportSlotPotential: SupportSlotPotentialSchema.nullable().optional(),
   // Internal-only metadata; must not be surfaced directly on frontend cards.
   internalReview: OpportunityInternalReviewSchema.optional()
 });
@@ -549,6 +560,8 @@ export type MatchFactorCode = z.infer<typeof MatchFactorCodeSchema>;
 export type MatchFactorImpact = z.infer<typeof MatchFactorImpactSchema>;
 export type MatchFactor = z.infer<typeof MatchFactorSchema>;
 export type OpportunityMatchBreakdown = z.infer<typeof OpportunityMatchBreakdownSchema>;
+export type SupportSlotStatus = z.infer<typeof SupportSlotStatusSchema>;
+export type SupportSlotPotential = z.infer<typeof SupportSlotPotentialSchema>;
 export type OpportunitySearchResult = z.infer<typeof OpportunitySearchResultSchema>;
 export type OpportunityEntityType = z.infer<typeof OpportunityEntityTypeSchema>;
 export type UnifiedOpportunity = z.infer<typeof UnifiedOpportunitySchema>;

@@ -199,6 +199,7 @@ function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpportunit
     imageUrl: opportunity.imageUrl ?? undefined,
     ticketUrl: opportunity.ticketUrl ?? undefined,
     matchBreakdown: opportunity.matchBreakdown,
+    supportSlotPotential: opportunity.supportSlotPotential,
     relatedArtist: opportunity.derivedFromSimilarArtist
       ? {
           name: opportunity.derivedFromSimilarArtist.name,

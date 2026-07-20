@@ -1,13 +1,17 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import type { Opportunity, SimilarArtist } from "@/types";
+import type { MatchFactor, Opportunity, SimilarArtist } from "@/types";
 import { TYPE_LABELS } from "./BookingOpportunityCard";
-import MatchReasonsList from "./MatchReasonsList";
 import SimilarArtistCard from "./SimilarArtistCard";
+import OpportunityActions from "./OpportunityActions";
 import MatchScoreBadge from "@/components/common/MatchScoreBadge";
+import OpportunityImage from "@/components/common/OpportunityImage";
 import {
   formatOpportunityDate,
-  getUrlHostname,
+  getDisplayTitle,
+  getOpportunitySource,
+  getPositiveMatchFactors,
+  getNegativeMatchFactors,
   getCardFamily,
   getOrganizationTypeLabel,
 } from "@/lib/opportunity";
@@ -91,12 +95,42 @@ function OpportunityDetailFacts({ opportunity }: { opportunity: Opportunity }) {
   );
 }
 
+// Structured, backend-computed positive/negative factors (issue #130 review
+// feedback), replacing the old free-text match-reasons paragraph.
+function MatchFactorSection({ title, factors, tone }: { title: string; factors: MatchFactor[]; tone: "success" | "warning" }) {
+  if (factors.length === 0) return null;
+  const toneClass = tone === "success" ? "text-success-text" : "text-warning-text";
+  const icon = tone === "success" ? "✓" : "!";
+
+  return (
+    <div className={cardClassName}>
+      <SectionTitle>{title}</SectionTitle>
+      <ul className="flex flex-col gap-2">
+        {factors.map((factor) => (
+          <li key={factor.code} className="flex items-start gap-2 text-sm">
+            <span className={`${toneClass} flex-shrink-0`} aria-hidden="true">{icon}</span>
+            <span className="text-foreground-secondary">
+              {factor.label}
+              {factor.detail && factor.detail !== factor.label && (
+                <span className="block text-xs text-foreground-muted mt-0.5">{factor.detail}</span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function OpportunityDetail({
   opportunity,
   relatedArtists,
 }: OpportunityDetailProps) {
   const formattedDate = formatOpportunityDate(opportunity.date);
-  const primarySourceUrl = opportunity.sourceUrls?.[0];
+  const title = getDisplayTitle(opportunity);
+  const source = getOpportunitySource(opportunity);
+  const positiveFactors = getPositiveMatchFactors(opportunity);
+  const negativeFactors = getNegativeMatchFactors(opportunity);
 
   return (
     <div className="max-w-3xl">
@@ -109,23 +143,16 @@ export default function OpportunityDetail({
 
       <div className="mt-4 flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-12 h-12 rounded-xl bg-accent-tint border border-accent-tint flex items-center justify-center flex-shrink-0">
-            <span className="text-accent-text text-lg font-semibold">
-              {opportunity.title.charAt(0)}
-            </span>
-          </div>
+          <OpportunityImage src={opportunity.imageUrl} alt={title} variant="thumbnail" className="w-12 h-12" />
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold text-foreground">{opportunity.title}</h1>
+              <h1 className="text-xl font-bold text-foreground">{title}</h1>
               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md border text-accent-text bg-accent-tint border-accent-tint whitespace-nowrap">
                 {TYPE_LABELS[opportunity.type] ?? opportunity.type}
               </span>
             </div>
             <p className="text-sm text-foreground-muted mt-1">
               {opportunity.location}
-              {opportunity.city && opportunity.country && (
-                <span> · {opportunity.city}, {opportunity.country}</span>
-              )}
               {formattedDate && <span> · {formattedDate}</span>}
             </p>
           </div>
@@ -135,54 +162,42 @@ export default function OpportunityDetail({
           size="md"
           label="match"
           className="flex-shrink-0"
+          positiveFactors={positiveFactors}
+          negativeFactors={negativeFactors}
         />
       </div>
+
+      {opportunity.imageUrl && (
+        <div className="mt-4">
+          <OpportunityImage src={opportunity.imageUrl} alt={title} variant="hero" />
+        </div>
+      )}
 
       <div className="mt-6 flex flex-col gap-4">
         <OpportunityDetailFacts opportunity={opportunity} />
 
-        <div className={cardClassName}>
-          <SectionTitle>Description</SectionTitle>
-          <p className="text-sm text-foreground-secondary leading-relaxed">{opportunity.description}</p>
-
-          {opportunity.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {opportunity.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="text-[10px] text-foreground-secondary bg-white/5 border border-border px-1.5 py-0.5 rounded-md"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className={cardClassName}>
-          <SectionTitle>Why this matches</SectionTitle>
-          <MatchReasonsList reasons={opportunity.matchReasons} />
-        </div>
-
-        {opportunity.sourceUrls && opportunity.sourceUrls.length > 0 && (
+        {opportunity.description.trim() && (
           <div className={cardClassName}>
-            <SectionTitle>Sources</SectionTitle>
-            <ul className="flex flex-col gap-1.5">
-              {opportunity.sourceUrls.map((url) => (
-                <li key={url}>
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-accent-text hover:text-foreground transition-colors break-all"
+            <SectionTitle>Description</SectionTitle>
+            <p className="text-sm text-foreground-secondary leading-relaxed">{opportunity.description}</p>
+
+            {opportunity.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {opportunity.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="text-[10px] text-foreground-secondary bg-white/5 border border-border px-1.5 py-0.5 rounded-md"
                   >
-                    {getUrlHostname(url) ?? url}
-                  </a>
-                </li>
-              ))}
-            </ul>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
+
+        <MatchFactorSection title="Good fit" factors={positiveFactors} tone="success" />
+        <MatchFactorSection title="Things to consider" factors={negativeFactors} tone="warning" />
 
         {relatedArtists.length > 0 && (
           <div className={cardClassName}>
@@ -195,31 +210,12 @@ export default function OpportunityDetail({
           </div>
         )}
 
-        {opportunity.contact && (
-          <div className={cardClassName}>
-            <SectionTitle>Contact</SectionTitle>
-            <p className="text-sm text-foreground-secondary">{opportunity.contact}</p>
+        <div className={cardClassName}>
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <OpportunityActions opportunity={opportunity} variant="full" />
           </div>
-        )}
-
-        {/* Saving, outreach-draft generation, and contact tracking are
-            planned but not implemented yet (product backlog) — only the
-            "Open source" link is a real action today. */}
-        {primarySourceUrl && (
-          <div className={cardClassName}>
-            <SectionTitle>Actions</SectionTitle>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href={primarySourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150"
-              >
-                Open source
-              </a>
-            </div>
-          </div>
-        )}
+          {source && <p className="text-xs text-foreground-muted">Source: {source}</p>}
+        </div>
 
         {productFeatures.rawJson && (
           <details className={cardClassName}>

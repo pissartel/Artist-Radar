@@ -1,4 +1,5 @@
 import type { ArtistProfile, ArtistTier, SimilarArtist } from "../schemas.js";
+import type { OpportunityMatchBreakdown } from "./matchFactors.js";
 
 export type BookingTargetCategory =
   | "venue"
@@ -67,6 +68,12 @@ export interface BookingTarget {
   estimatedCapacity?: number | null;
   estimatedArtistTier?: ArtistTier | null;
   pastProgramming?: string[];
+  /** Venue name, when a source reports it. Never guessed. */
+  venueName?: string | null;
+  /** Full announced lineup (headliner + support), when a source lists it. Never guessed. */
+  lineup?: string[];
+  /** Poster/event image URL, extracted from source page metadata. Never guessed. */
+  imageUrl?: string | null;
   eventDate?: string | null;
   eventDateRange?: { start: string; end: string } | null;
   isFutureEvent?: boolean | null;
@@ -113,6 +120,9 @@ export interface RawBookingSource {
   eventDate?: string | null;
   derivedFromSimilarArtist?: DerivedFromSimilarArtist | null;
   deadline?: string | null;
+  venueName?: string | null;
+  lineup?: string[];
+  imageUrl?: string | null;
 }
 
 export interface DerivedFromSimilarArtist {
@@ -126,6 +136,7 @@ export interface BookingScore {
   total: number;
   confidence: number;
   genreFit: number;
+  genreLevel: string;
   sizeFit: number;
   pastProgrammingFit: number;
   supportSlotPotential: number;
@@ -156,6 +167,7 @@ export interface BookingOpportunity {
   sourceProvider: string | null;
   contact: string | null;
   contactType: ContactCandidateType;
+  imageUrl: string | null;
   score: number;
   confidence: number;
   reason: string;
@@ -173,6 +185,7 @@ export interface BookingOpportunity {
   derivedFromSimilarArtist?: DerivedFromSimilarArtist | null;
   target: BookingTarget;
   bookingScore: BookingScore;
+  matchBreakdown: OpportunityMatchBreakdown;
   internalReview: OpportunityInternalReview;
 }
 

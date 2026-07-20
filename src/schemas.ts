@@ -287,6 +287,35 @@ export const OpportunityRelatedArtistSchema = z.object({
   matchedGenres: z.array(z.string().trim().min(1)).default([])
 });
 
+export const MatchFactorCodeSchema = z.enum([
+  "genre_match",
+  "location_match",
+  "date_lead_time",
+  "capacity_fit",
+  "similar_artist_signal",
+  "support_slot_signal",
+  "contact_available",
+  "lineup_availability",
+  "source_confidence",
+  "data_completeness"
+]);
+
+export const MatchFactorImpactSchema = z.enum(["positive", "negative", "neutral"]);
+
+export const MatchFactorSchema = z.object({
+  code: MatchFactorCodeSchema,
+  label: z.string().trim().min(1),
+  detail: z.string().trim().min(1).optional(),
+  impact: MatchFactorImpactSchema,
+  scoreContribution: z.number().optional()
+});
+
+export const OpportunityMatchBreakdownSchema = z.object({
+  overallScore: z.number().int().min(0).max(100),
+  positiveFactors: z.array(MatchFactorSchema).default([]),
+  negativeFactors: z.array(MatchFactorSchema).default([])
+});
+
 export const OpportunitySchema = z.object({
   name: z.string().trim().min(1),
   // Raw scraped title, kept for traceability. Falls back to `name` for
@@ -314,6 +343,11 @@ export const OpportunitySchema = z.object({
   recentEvents: z.array(z.string().trim().min(1)).default([]),
   // Present only when this opportunity was surfaced from a similar artist's live history.
   relatedArtist: OpportunityRelatedArtistSchema.nullable().optional(),
+  // Poster/event image URL, extracted from source page metadata. Never guessed.
+  imageUrl: z.string().trim().url().nullable().optional(),
+  // Structured positive/negative match factors (issue #130 review feedback).
+  // Frontend must render this instead of parsing `reason`/`suggested_message`.
+  matchBreakdown: OpportunityMatchBreakdownSchema.optional(),
   // Internal-only metadata; must not be surfaced directly on frontend cards.
   internalReview: OpportunityInternalReviewSchema.optional()
 });
@@ -502,6 +536,10 @@ export type Opportunity = z.infer<typeof OpportunitySchema>;
 export type OpportunityInternalReview = z.infer<typeof OpportunityInternalReviewSchema>;
 export type OpportunityDateRange = z.infer<typeof OpportunityDateRangeSchema>;
 export type OpportunityRelatedArtist = z.infer<typeof OpportunityRelatedArtistSchema>;
+export type MatchFactorCode = z.infer<typeof MatchFactorCodeSchema>;
+export type MatchFactorImpact = z.infer<typeof MatchFactorImpactSchema>;
+export type MatchFactor = z.infer<typeof MatchFactorSchema>;
+export type OpportunityMatchBreakdown = z.infer<typeof OpportunityMatchBreakdownSchema>;
 export type OpportunitySearchResult = z.infer<typeof OpportunitySearchResultSchema>;
 export type OpportunityEntityType = z.infer<typeof OpportunityEntityTypeSchema>;
 export type UnifiedOpportunity = z.infer<typeof UnifiedOpportunitySchema>;

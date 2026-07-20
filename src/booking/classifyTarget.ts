@@ -1,4 +1,5 @@
 import { extractPublicContactSignals } from "./contactExtraction.js";
+import { normalizeLocationParts } from "../utils/location.js";
 import type { BookingTarget, BookingTargetCategory, RawBookingSource } from "./types.js";
 
 export function classifyBookingTarget(rawSource: RawBookingSource): BookingTarget {
@@ -6,12 +7,13 @@ export function classifyBookingTarget(rawSource: RawBookingSource): BookingTarge
   const category = rawSource.category ?? classifyCategory(text);
   const sourceUrl = rawSource.sourceUrl ?? rawSource.url ?? null;
   const contacts = rawSource.contacts ?? extractPublicContactSignals(text, rawSource.links ?? []);
+  const location = normalizeLocationParts(rawSource.city, rawSource.country);
 
   return {
     name: rawSource.name || rawSource.title || "Unknown booking target",
     category,
-    city: rawSource.city ?? null,
-    country: rawSource.country ?? null,
+    city: location.city,
+    country: location.country,
     description: rawSource.text ?? rawSource.snippet ?? null,
     sourceUrl,
     sourceType: rawSource.sourceType ?? "search_result",
@@ -19,6 +21,9 @@ export function classifyBookingTarget(rawSource: RawBookingSource): BookingTarge
     genres: rawSource.genres ?? [],
     estimatedCapacity: rawSource.estimatedCapacity ?? null,
     estimatedArtistTier: null,
+    venueName: rawSource.venueName ?? null,
+    lineup: rawSource.lineup ?? [],
+    imageUrl: rawSource.imageUrl ?? null,
     eventDate: rawSource.eventDate ?? null,
     isFutureEvent: null,
     isPastEvent: null,

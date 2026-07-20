@@ -4,13 +4,16 @@ import type { Opportunity } from "@/types";
 import {
   getDisplayTitle,
   getShortRelevanceReason,
+  getPositiveMatchFactors,
+  getNegativeMatchFactors,
   formatOpportunityDate,
   getCardFamily,
   getOrganizationTypeLabel,
 } from "@/lib/opportunity";
 import MatchScoreBadge from "@/components/common/MatchScoreBadge";
+import OpportunityImage from "@/components/common/OpportunityImage";
+import OpportunityActions from "@/components/dashboard/OpportunityActions";
 import Card from "@/components/ui/Card";
-import { productFeatures } from "@/lib/productFeatures";
 
 export const TYPE_LABELS: Record<string, string> = {
   venue: "Venue",
@@ -116,37 +119,12 @@ export default function BookingOpportunityCard({
 
   return (
     <Card variant="interactive" className="flex gap-4">
-      <div className="w-11 h-11 rounded-xl bg-accent-tint border border-accent-tint flex items-center justify-center flex-shrink-0">
-        <span className="text-accent-text text-base font-semibold">
-          {title.charAt(0)}
-        </span>
-      </div>
+      <OpportunityImage src={opportunity.imageUrl} alt={title} variant="thumbnail" />
 
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2 mb-1">
           <p className="text-sm font-semibold text-foreground truncate min-w-0">{title}</p>
-          {productFeatures.bookmarks && (
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button
-                type="button"
-                aria-label="Bookmark"
-                className="text-foreground-disabled hover:text-accent-text transition-colors focus-visible:outline-none focus-visible:shadow-focus"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-                </svg>
-              </button>
-            </div>
-          )}
+          <OpportunityActions opportunity={opportunity} variant="compact" className="flex-shrink-0" />
         </div>
 
         {family === "venue" && <VenueCardMeta opportunity={opportunity} />}
@@ -159,7 +137,11 @@ export default function BookingOpportunityCard({
           >
             {TYPE_LABELS[opportunity.type] ?? opportunity.type}
           </span>
-          <MatchScoreBadge score={opportunity.matchScore} />
+          <MatchScoreBadge
+            score={opportunity.matchScore}
+            positiveFactors={getPositiveMatchFactors(opportunity)}
+            negativeFactors={getNegativeMatchFactors(opportunity)}
+          />
         </div>
 
         {relevanceReason && (

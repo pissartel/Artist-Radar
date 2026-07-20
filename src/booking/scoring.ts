@@ -53,6 +53,7 @@ export function scoreBookingCompatibility(input: BookingSearchInput, target: Boo
     total,
     confidence,
     genreFit: genreMatch.score,
+    genreLevel: genreMatch.level,
     sizeFit,
     pastProgrammingFit,
     supportSlotPotential,

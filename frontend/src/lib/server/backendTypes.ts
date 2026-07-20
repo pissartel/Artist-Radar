@@ -29,6 +29,35 @@ export interface BackendArtistInput {
   genre: string;
 }
 
+export interface BackendRunOpportunitySearchOptions {
+  // When set, the backend records pipeline stage progress under this id so
+  // it can be read back via getPipelineExecutionState (see
+  // pipelineExecutionState.ts in the backend package, issue #134).
+  executionId?: string;
+}
+
+// Mirrors src/schemas.ts PipelineStageSchema.
+export type BackendPipelineStage =
+  | "VALIDATING_ARTIST"
+  | "FETCHING_ARTIST_DATA"
+  | "FINDING_SIMILAR_ARTISTS"
+  | "SEARCHING_OPPORTUNITIES"
+  | "SCORING_RESULTS"
+  | "PREPARING_OVERVIEW"
+  | "COMPLETED";
+
+export type BackendPipelineExecutionStatus = "running" | "completed" | "failed";
+
+export interface BackendPipelineExecutionState {
+  executionId: string;
+  stage: BackendPipelineStage;
+  status: BackendPipelineExecutionStatus;
+  percentage: number;
+  message: string;
+  error: { stage: BackendPipelineStage } | null;
+  updatedAt: string;
+}
+
 export interface BackendArtistProfile {
   artistName: string | null;
   city: string | null;

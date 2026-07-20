@@ -6,20 +6,32 @@ import { config as loadEnv } from "dotenv";
 // `prebuild` hook in package.json). Types come from backendTypes.ts rather
 // than the backend source — see the comment there for why.
 import * as pipelineRuntime from "../../../../dist/pipeline.js";
+import * as pipelineExecutionStateRuntime from "../../../../dist/pipelineExecutionState.js";
 import * as schemasRuntime from "../../../../dist/schemas.js";
 import * as loggerRuntime from "../../../../dist/utils/logger.js";
-import type { BackendArtistInput, BackendPipelineResult } from "./backendTypes";
+import type {
+  BackendArtistInput,
+  BackendPipelineExecutionState,
+  BackendPipelineResult,
+  BackendRunOpportunitySearchOptions,
+} from "./backendTypes";
 
 // The backend pipeline reads its API keys from the repo root .env, one level
 // above the Next.js app that `npm run dev` is started from.
 loadEnv({ path: path.resolve(process.cwd(), "..", ".env") });
 
-type RunOpportunitySearchFn = (input: BackendArtistInput) => Promise<BackendPipelineResult>;
+type RunOpportunitySearchFn = (
+  input: BackendArtistInput,
+  options?: BackendRunOpportunitySearchOptions
+) => Promise<BackendPipelineResult>;
 type ArtistInputParseFn = (raw: unknown) => BackendArtistInput;
 type WarnLogFn = (scope: string, message: string, data?: unknown) => void;
+type GetPipelineExecutionStateFn = (executionId: string) => BackendPipelineExecutionState | null;
 
 export const runOpportunitySearch = pipelineRuntime.runOpportunitySearch as RunOpportunitySearchFn;
 export const ArtistInputSchema = {
   parse: schemasRuntime.ArtistInputSchema.parse as ArtistInputParseFn,
 };
 export const warnLog = loggerRuntime.warnLog as WarnLogFn;
+export const getPipelineExecutionState =
+  pipelineExecutionStateRuntime.getPipelineExecutionState as GetPipelineExecutionStateFn;

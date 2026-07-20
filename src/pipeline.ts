@@ -1,5 +1,6 @@
 import { buildOpportunityPrompt } from "./prompts.js";
-import { ArtistInputSchema, OpportunitySearchResultSchema, type ArtistInput, type Opportunity } from "./schemas.js";
+import { ArtistInputSchema, OpportunitySearchResultSchema, type ArtistInput, type Opportunity, type PipelineStage } from "./schemas.js";
+import { completePipelineExecution, failPipelineExecution, startPipelineExecution, updatePipelineStage } from "./pipelineExecutionState.js";
 import { collectArtistProfile } from "./modules/profileCollector.js";
 import {
   findSimilarArtists,
@@ -31,6 +32,10 @@ export interface RunOpportunitySearchOptions {
   musicBrainzSearch?: (artistName: string) => Promise<MusicBrainzArtistMetadata | null>;
   seedCandidates?: SimilarArtistSeedRecord[];
   bookingSearchOptions?: SearchBookingOpportunitiesOptions;
+  // When provided, pipeline stage progress is recorded in the in-memory
+  // execution store (see pipelineExecutionState.ts) so a status endpoint can
+  // report it back to the caller while this call is still running.
+  executionId?: string;
 }
 
 export interface OpportunitySearchRunResult {
@@ -46,93 +51,129 @@ export async function runOpportunitySearch(
   rawInput: ArtistInput,
   options: RunOpportunitySearchOptions = {}
 ): Promise<OpportunitySearchRunResult> {
-  const input = ArtistInputSchema.parse(rawInput);
-  debugLog("pipeline", "runOpportunitySearch start", {
-    mode: input.mode,
-    artistName: input.artist,
-    target: input.target ?? null
-  });
-  const profile = await collectArtistProfile(input);
-  const similarArtists = await findSimilarArtists({
-    profile,
-    target: input.target,
-    genre: input.genre,
-    city: input.city,
-    links: input.links,
-    spotifyRelatedArtists: options.spotifyRelatedArtists,
-    spotifySearch: options.spotifySearch,
-    spotifyArtistById: options.spotifyArtistById,
-    spotifySearchByName: options.spotifySearchByName,
-    spotifySeveralArtistsByIds: options.spotifySeveralArtistsByIds,
-    lastfmSimilarArtists: options.lastfmSimilarArtists,
-    musicBrainzSearch: options.musicBrainzSearch,
-    seedCandidates: options.seedCandidates
-  });
-  const groupedSimilarArtists = groupSimilarArtistsByTier(similarArtists);
-  const { venueCandidates, eventCandidates } = await findVenueEventCandidates({
-    profile,
-    target: input.target,
-    genre: input.genre,
-    city: input.city
-  });
-  await gatherSearchContext(input);
+  const { executionId } = options;
+  let currentStage: PipelineStage = "VALIDATING_ARTIST";
+  if (executionId) {
+    startPipelineExecution(executionId);
+  }
+  const track = (stage: PipelineStage): void => {
+    currentStage = stage;
+    if (executionId) {
+      updatePipelineStage(executionId, stage);
+    }
+  };
 
-  if (input.mode === "booking") {
-    const bookingSearch = await searchBookingOpportunities({
-      artist: input.artist,
-      city: input.city,
-      genre: input.genre,
-      target: input.target,
-      links: input.links,
-      limit: input.limit,
-      artistProfile: profile,
-      similarArtists: flattenSimilarArtists(groupedSimilarArtists)
-    }, options.bookingSearchOptions);
-    debugLog("pipeline", "runOpportunitySearch booking provider summary", {
-      providerCount: bookingSearch.sourceMetadata.length,
-      targetsCount: bookingSearch.targets.length,
-      opportunitiesCount: bookingSearch.opportunities.length,
-      warningsCount: bookingSearch.warnings.length
+  try {
+    const input = ArtistInputSchema.parse(rawInput);
+    debugLog("pipeline", "runOpportunitySearch start", {
+      mode: input.mode,
+      artistName: input.artist,
+      target: input.target ?? null
     });
+    track("FETCHING_ARTIST_DATA");
+    const profile = await collectArtistProfile(input);
+    track("FINDING_SIMILAR_ARTISTS");
+    const similarArtists = await findSimilarArtists({
+      profile,
+      target: input.target,
+      genre: input.genre,
+      city: input.city,
+      links: input.links,
+      spotifyRelatedArtists: options.spotifyRelatedArtists,
+      spotifySearch: options.spotifySearch,
+      spotifyArtistById: options.spotifyArtistById,
+      spotifySearchByName: options.spotifySearchByName,
+      spotifySeveralArtistsByIds: options.spotifySeveralArtistsByIds,
+      lastfmSimilarArtists: options.lastfmSimilarArtists,
+      musicBrainzSearch: options.musicBrainzSearch,
+      seedCandidates: options.seedCandidates
+    });
+    const groupedSimilarArtists = groupSimilarArtistsByTier(similarArtists);
+    track("SEARCHING_OPPORTUNITIES");
+    const { venueCandidates, eventCandidates } = await findVenueEventCandidates({
+      profile,
+      target: input.target,
+      genre: input.genre,
+      city: input.city
+    });
+    await gatherSearchContext(input);
 
-    return {
+    if (input.mode === "booking") {
+      const bookingSearch = await searchBookingOpportunities({
+        artist: input.artist,
+        city: input.city,
+        genre: input.genre,
+        target: input.target,
+        links: input.links,
+        limit: input.limit,
+        artistProfile: profile,
+        similarArtists: flattenSimilarArtists(groupedSimilarArtists)
+      }, options.bookingSearchOptions);
+      debugLog("pipeline", "runOpportunitySearch booking provider summary", {
+        providerCount: bookingSearch.sourceMetadata.length,
+        targetsCount: bookingSearch.targets.length,
+        opportunitiesCount: bookingSearch.opportunities.length,
+        warningsCount: bookingSearch.warnings.length
+      });
+      track("SCORING_RESULTS");
+      track("PREPARING_OVERVIEW");
+
+      const bookingResult: OpportunitySearchRunResult = {
+        artistProfile: profile,
+        similarArtists: groupedSimilarArtists,
+        venueCandidates,
+        eventCandidates,
+        opportunities: bookingSearch.opportunities.map(mapBookingOpportunityToLegacyOpportunity),
+        bookingSearch
+      };
+      track("COMPLETED");
+      if (executionId) {
+        completePipelineExecution(executionId);
+      }
+      return bookingResult;
+    }
+
+    const generator = options.generator ?? new OpenAIOpportunityGenerator();
+    const prompt = buildOpportunityPrompt(input, profile);
+    const result = await generator.generate(prompt);
+    track("SCORING_RESULTS");
+    const validated = OpportunitySearchResultSchema.parse(normalizeOpportunityUrls(result));
+    debugLog("pipeline", "runOpportunitySearch summary", {
+      mode: input.mode,
+      artistName: input.artist,
+      similarArtistsCount: countSimilarArtists(groupedSimilarArtists),
+      similarArtistGroups: {
+        localPeers: groupedSimilarArtists.local_peer.length,
+        regionalPeers: groupedSimilarArtists.regional_peer.length,
+        supportTargets: groupedSimilarArtists.support_target.length,
+        references: groupedSimilarArtists.reference.length,
+        toVerify: groupedSimilarArtists.to_verify.length,
+        unknown: groupedSimilarArtists.unknown.length
+      },
+      venueCandidatesCount: venueCandidates.length,
+      eventCandidatesCount: eventCandidates.length,
+      opportunitiesCount: validated.opportunities.length
+    });
+    track("PREPARING_OVERVIEW");
+
+    const promoResult: OpportunitySearchRunResult = {
       artistProfile: profile,
       similarArtists: groupedSimilarArtists,
       venueCandidates,
       eventCandidates,
-      opportunities: bookingSearch.opportunities.map(mapBookingOpportunityToLegacyOpportunity),
-      bookingSearch
+      opportunities: validated.opportunities.slice(0, input.limit)
     };
+    track("COMPLETED");
+    if (executionId) {
+      completePipelineExecution(executionId);
+    }
+    return promoResult;
+  } catch (error) {
+    if (executionId) {
+      failPipelineExecution(executionId, currentStage, error);
+    }
+    throw error;
   }
-
-  const generator = options.generator ?? new OpenAIOpportunityGenerator();
-  const prompt = buildOpportunityPrompt(input, profile);
-  const result = await generator.generate(prompt);
-  const validated = OpportunitySearchResultSchema.parse(normalizeOpportunityUrls(result));
-  debugLog("pipeline", "runOpportunitySearch summary", {
-    mode: input.mode,
-    artistName: input.artist,
-    similarArtistsCount: countSimilarArtists(groupedSimilarArtists),
-    similarArtistGroups: {
-      localPeers: groupedSimilarArtists.local_peer.length,
-      regionalPeers: groupedSimilarArtists.regional_peer.length,
-      supportTargets: groupedSimilarArtists.support_target.length,
-      references: groupedSimilarArtists.reference.length,
-      toVerify: groupedSimilarArtists.to_verify.length,
-      unknown: groupedSimilarArtists.unknown.length
-    },
-    venueCandidatesCount: venueCandidates.length,
-    eventCandidatesCount: eventCandidates.length,
-    opportunitiesCount: validated.opportunities.length
-  });
-
-  return {
-    artistProfile: profile,
-    similarArtists: groupedSimilarArtists,
-    venueCandidates,
-    eventCandidates,
-    opportunities: validated.opportunities.slice(0, input.limit)
-  };
 }
 
 function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpportunity): Opportunity {

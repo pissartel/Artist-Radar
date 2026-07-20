@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runOpportunitySearch } from "../src/pipeline.js";
+import { getPipelineExecutionState } from "../src/pipelineExecutionState.js";
+import { buildMockBookingSourceProvider } from "../src/booking/providers/MockBookingSourceProvider.js";
 import type { ArtistInput, OpportunitySearchResult } from "../src/schemas.js";
 import type { OpportunityGenerator } from "../src/services/openaiService.js";
 
@@ -407,6 +409,72 @@ describe("runOpportunitySearch", () => {
     } as unknown as OpportunitySearchResult);
 
     await expect(runOpportunitySearch(promoInput, { generator, seedCandidates: [] })).rejects.toThrow();
+  });
+
+  it("records real-time stage progress and completes at 100% when an executionId is provided (promo mode)", async () => {
+    const executionId = `promo-${crypto.randomUUID()}`;
+    let stageDuringGeneration: string | undefined;
+    const generator: OpportunityGenerator = {
+      async generate() {
+        stageDuringGeneration = getPipelineExecutionState(executionId)?.stage;
+        return validResult;
+      }
+    };
+
+    const result = await runOpportunitySearch(promoInput, { generator, seedCandidates: [], executionId });
+
+    expect(result.opportunities).toHaveLength(1);
+    // The generator call sits inside SEARCHING_OPPORTUNITIES, so the state
+    // must already reflect that stage while the call is in flight — not a
+    // stage faked ahead of actual execution.
+    expect(stageDuringGeneration).toBe("SEARCHING_OPPORTUNITIES");
+
+    const finalState = getPipelineExecutionState(executionId);
+    expect(finalState?.stage).toBe("COMPLETED");
+    expect(finalState?.status).toBe("completed");
+    expect(finalState?.percentage).toBe(100);
+  });
+
+  it("records real-time stage progress and completes at 100% when an executionId is provided (booking mode)", async () => {
+    const executionId = `booking-${crypto.randomUUID()}`;
+
+    const result = await runOpportunitySearch(input, {
+      generator: generatorReturning(validResult),
+      seedCandidates: [],
+      executionId,
+      bookingSearchOptions: { providers: [buildMockBookingSourceProvider()] }
+    });
+
+    expect(result.bookingSearch).toBeDefined();
+    const finalState = getPipelineExecutionState(executionId);
+    expect(finalState?.stage).toBe("COMPLETED");
+    expect(finalState?.status).toBe("completed");
+    expect(finalState?.percentage).toBe(100);
+  });
+
+  it("exposes a recoverable failed stage when the pipeline throws, without leaving the state stuck mid-run", async () => {
+    const executionId = `fail-${crypto.randomUUID()}`;
+    const generator: OpportunityGenerator = {
+      async generate() {
+        return validResult;
+      }
+    };
+
+    await expect(
+      runOpportunitySearch({ ...input, mode: "promo", artist: "" }, { generator, seedCandidates: [], executionId })
+    ).rejects.toThrow();
+
+    const state = getPipelineExecutionState(executionId);
+    expect(state?.status).toBe("failed");
+    expect(state?.stage).toBe("VALIDATING_ARTIST");
+    expect(state?.error).toEqual({ stage: "VALIDATING_ARTIST" });
+  });
+
+  it("does not track any execution state when no executionId is provided", async () => {
+    await runOpportunitySearch(promoInput, { generator: generatorReturning(validResult), seedCandidates: [] });
+    // No executionId means nothing to look up; this just documents that the
+    // feature is fully opt-in and adds no overhead for untracked calls.
+    expect(getPipelineExecutionState("")).toBeNull();
   });
 
   it("validates raw input before calling the generator", async () => {

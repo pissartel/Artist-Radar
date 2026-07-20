@@ -171,6 +171,51 @@ function LineupSection({
   );
 }
 
+const SUPPORT_SLOT_STATUS_LABELS: Record<NonNullable<Opportunity["supportSlotPotential"]>["status"], string> = {
+  likely: "Support slot likely open",
+  possible: "Support slot possibly open",
+  unlikely: "Support slot unlikely",
+  unknown: "Support slot potential unknown",
+};
+
+const SUPPORT_SLOT_STATUS_TONE_CLASSES: Record<NonNullable<Opportunity["supportSlotPotential"]>["status"], string> = {
+  likely: "text-success-text bg-success-tint border-success-tint",
+  possible: "text-success-text bg-success-tint border-success-tint",
+  unlikely: "text-warning-text bg-warning-tint border-warning-tint",
+  unknown: "text-foreground-muted bg-surface-elevated border-border",
+};
+
+// Structured support-slot-potential analysis (issue #158). Renders the
+// backend's status/confidence/reasons directly; never restates it as a
+// confirmed fact that a slot is available.
+function SupportSlotPotentialSection({ opportunity }: { opportunity: Opportunity }) {
+  const analysis = opportunity.supportSlotPotential;
+  if (!analysis) return null;
+
+  return (
+    <div className={cardClassName}>
+      <SectionTitle>Support slot potential</SectionTitle>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span
+          className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md border whitespace-nowrap ${SUPPORT_SLOT_STATUS_TONE_CLASSES[analysis.status]}`}
+        >
+          {SUPPORT_SLOT_STATUS_LABELS[analysis.status]}
+        </span>
+        <span className="text-xs text-foreground-muted">{analysis.confidenceScore}/100 confidence</span>
+      </div>
+      {analysis.reasons.length > 0 && (
+        <ul className="flex flex-col gap-1.5 mt-3">
+          {analysis.reasons.map((reason) => (
+            <li key={reason} className="text-sm text-foreground-secondary">
+              {reason}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // Contacts grouped by purpose, each labeled with its trust source and
 // verification state — never an invented or inferred contact (issue #132
 // review feedback). External Contact/Get tickets links live here too, next
@@ -428,6 +473,9 @@ export default function OpportunityDetail({
 
         {/* 4. Line-up. */}
         <LineupSection opportunity={opportunity} relatedArtists={relatedArtists} />
+
+        {/* 4b. Support slot potential (concert opportunities only). */}
+        <SupportSlotPotentialSection opportunity={opportunity} />
 
         {/* 5. Contact information. */}
         <ContactSection opportunity={opportunity} />

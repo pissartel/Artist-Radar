@@ -198,6 +198,7 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
     matchScore: opportunity.score,
     matchReasons: [opportunity.reason],
     matchBreakdown: opportunity.matchBreakdown,
+    supportSlotPotential: opportunity.supportSlotPotential ?? null,
     sourceUrls: opportunity.source_url ? [opportunity.source_url] : [],
     contact: opportunity.contact,
     ticketUrl: opportunity.ticketUrl ?? null,

@@ -101,6 +101,14 @@ export interface BackendOpportunityMatchBreakdown {
   neutralFactors: BackendMatchFactor[];
 }
 
+export type BackendSupportSlotStatus = "likely" | "possible" | "unlikely" | "unknown";
+
+export interface BackendSupportSlotPotential {
+  status: BackendSupportSlotStatus;
+  confidenceScore: number;
+  reasons: string[];
+}
+
 export interface BackendOpportunity {
   name: string;
   displayTitle?: string;
@@ -122,6 +130,7 @@ export interface BackendOpportunity {
   imageUrl?: string | null;
   ticketUrl?: string | null;
   matchBreakdown?: BackendOpportunityMatchBreakdown;
+  supportSlotPotential?: BackendSupportSlotPotential | null;
 }
 
 export interface BackendBookingSourceMetadata {

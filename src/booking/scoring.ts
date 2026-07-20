@@ -1,5 +1,6 @@
 import { matchBookingGenres } from "./genreMatching.js";
 import { pickBestContact } from "./contactExtraction.js";
+import { analyzeSupportSlotPotential, type SupportSlotStatus } from "./supportSlotPotential.js";
 import type { BookingScore, BookingSearchInput, BookingSuggestedAction, BookingTarget } from "./types.js";
 
 const SUPPORT_SLOT_PATTERN = /\b(guest|support tba|support à venir|support a venir|première partie à venir|premiere partie a venir|line-?up soon|lineup soon)\b/i;
@@ -18,7 +19,7 @@ export function scoreBookingCompatibility(input: BookingSearchInput, target: Boo
   const text = buildTargetEvidenceText(target);
   const genreMatch = matchBookingGenres([input.genre, ...(input.artistProfile?.genres ?? [])], target.genres, text);
   const sizeFit = scoreSizeFit(input, target);
-  const supportSlotPotential = scoreSupportSlotPotential(target, text);
+  const supportSlotPotential = scoreSupportSlotPotential(input, target, text);
   const locationFit = scoreLocationFit(input, target);
   const contactability = scoreContactability(target);
   const sourceConfidence = Math.round((target.confidence ?? 0.5) * 100);
@@ -115,12 +116,25 @@ function scoreSizeFit(input: BookingSearchInput, target: BookingTarget): number 
   return capacity <= 500 ? 70 : 50;
 }
 
-function scoreSupportSlotPotential(target: BookingTarget, text: string): number {
+const SUPPORT_SLOT_STATUS_SCORE: Record<SupportSlotStatus, number> = {
+  likely: 80,
+  possible: 55,
+  unlikely: 20,
+  unknown: 40
+};
+
+function scoreSupportSlotPotential(input: BookingSearchInput, target: BookingTarget, text: string): number {
+  if (target.category === "event") {
+    const analysis = analyzeSupportSlotPotential(target, input);
+    return analysis ? SUPPORT_SLOT_STATUS_SCORE[analysis.status] : 60;
+  }
+  if (target.category === "festival") {
+    // Festivals use separate opportunity logic (issue #158); a generic
+    // support-slot text match on a festival page does not imply an open slot.
+    return 25;
+  }
   if (SUPPORT_SLOT_PATTERN.test(text)) {
     return 80;
-  }
-  if (target.category === "event") {
-    return 60;
   }
   if (target.category === "venue" || target.category === "bar" || target.category === "promoter" || target.category === "live_producer") {
     return 45;

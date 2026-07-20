@@ -1,5 +1,6 @@
 import type { ArtistProfile, ArtistTier, SimilarArtist } from "../schemas.js";
 import type { OpportunityMatchBreakdown } from "./matchFactors.js";
+import type { SupportSlotPotentialResult } from "./supportSlotPotential.js";
 
 export type BookingTargetCategory =
   | "venue"
@@ -191,6 +192,9 @@ export interface BookingOpportunity {
   bookingScore: BookingScore;
   matchBreakdown: OpportunityMatchBreakdown;
   internalReview: OpportunityInternalReview;
+  // Structured support-slot-potential analysis (issue #158), null for
+  // opportunity types this analysis doesn't apply to (e.g. festivals).
+  supportSlotPotential: SupportSlotPotentialResult | null;
 }
 
 export interface BookingRejectedByReason {

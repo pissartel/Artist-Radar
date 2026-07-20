@@ -22,13 +22,13 @@ describe("OpportunityDetail content (issue #130 review feedback)", () => {
     expect(source).toMatch(/Things to consider/);
   });
 
-  it("renders a discreet source attribution instead of a separate Sources section", () => {
-    expect(source).toMatch(/Source:/);
+  it("renders a dedicated Source evidence section, not a generic Sources heading", () => {
+    expect(source).toMatch(/Source evidence/);
     expect(source).not.toMatch(/<SectionTitle>Sources<\/SectionTitle>/);
   });
 
   it("renders the source attribution as a clickable link, not plain text (issue #153 review feedback)", () => {
-    expect(source).toMatch(/href=\{sourceUrl\}/);
+    expect(source).toMatch(/href=\{url\}/);
     expect(source).toMatch(/target="_blank"/);
   });
 

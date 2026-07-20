@@ -150,6 +150,24 @@ export interface OpportunityMatchBreakdown {
   neutralFactors: MatchFactor[];
 }
 
+// Purpose a contact serves, so the detail panel can group contacts instead
+// of listing them as one undifferentiated block. "general" is the honest
+// default for contacts whose purpose isn't known — never guessed.
+export type ContactPurpose =
+  | "booking"
+  | "management"
+  | "press"
+  | "submissions"
+  | "partnerships"
+  | "general";
+
+export interface OpportunityContact {
+  purpose: ContactPurpose;
+  label: string;
+  value: string;
+  url?: string;
+}
+
 // Generic entity covering booking opportunities today and future artist
 // growth opportunities (labels, playlists, creative providers, ...).
 export interface Opportunity {
@@ -164,7 +182,10 @@ export interface Opportunity {
   city?: string;
   country?: string;
   venue?: string;
+  address?: string;
   date?: string;
+  time?: string;
+  deadline?: string;
   description: string;
   tags: string[];
   matchScore: number;
@@ -172,10 +193,21 @@ export interface Opportunity {
   // Structured positive/negative factors backing matchScore. Prefer this over
   // matchReasons for any user-facing "why this matches" UI.
   matchBreakdown?: OpportunityMatchBreakdown;
+  recommendedAction?: string;
+  // Headline act(s) for a live event (concert/festival/opening_slot). The
+  // full bill (headliner + support) is carried by `lineup` below.
+  headliner?: string[];
+  // Roster of artists represented by an organization-type opportunity
+  // (label, booker, management, association).
+  roster?: string[];
   sourceUrls?: string[];
+  // Legacy single free-text contact, kept for backward compatibility.
+  // Prefer `contacts` (grouped by purpose) when available.
   contact?: string | null;
   // Ticket/booking purchase URL, when a source reports it. Never guessed.
   ticketUrl?: string | null;
+  contacts?: OpportunityContact[];
+  metadata?: { label: string; value: string }[];
   relatedSimilarArtistIds?: string[];
   imageUrl?: string;
   // Genres associated with the venue/festival/organization, or the event's

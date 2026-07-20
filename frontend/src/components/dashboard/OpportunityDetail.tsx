@@ -8,14 +8,18 @@ import MatchScoreBadge from "@/components/common/MatchScoreBadge";
 import OpportunityImage from "@/components/common/OpportunityImage";
 import {
   formatOpportunityDate,
+  getAdditionalMetadata,
+  getCardFamily,
   getDisplayTitle,
-  getOpportunitySource,
-  getOpportunitySourceUrl,
-  getPositiveMatchFactors,
+  getGroupedContacts,
   getNegativeMatchFactors,
   getNeutralMatchFactors,
-  getCardFamily,
   getOrganizationTypeLabel,
+  getPositiveMatchFactors,
+  getRecommendedAction,
+  getUrlHostname,
+  hasLiveEventInfo,
+  isLiveEventOpportunity,
 } from "@/lib/opportunity";
 import { cardClassName as buildCardClassName } from "@/components/ui/Card";
 import { productFeatures } from "@/lib/productFeatures";
@@ -40,6 +44,32 @@ function FactRow({ label, value }: { label: string; value: ReactNode }) {
     <div className="flex justify-between gap-3 text-sm">
       <span className="text-foreground-muted">{label}</span>
       <span className="text-foreground-secondary text-right">{value}</span>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
+  return (
+    <div className="flex items-baseline gap-2 text-sm">
+      <span className="text-foreground-muted w-20 flex-shrink-0">{label}</span>
+      <span className="text-foreground-secondary">{value}</span>
+    </div>
+  );
+}
+
+function TagList({ items }: { items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {items.map((item) => (
+        <span
+          key={item}
+          className="text-[11px] text-foreground-secondary bg-white/5 border border-border px-1.5 py-0.5 rounded-md"
+        >
+          {item}
+        </span>
+      ))}
     </div>
   );
 }
@@ -141,11 +171,37 @@ export default function OpportunityDetail({
 }: OpportunityDetailProps) {
   const formattedDate = formatOpportunityDate(opportunity.date);
   const title = getDisplayTitle(opportunity);
-  const source = getOpportunitySource(opportunity);
-  const sourceUrl = getOpportunitySourceUrl(opportunity);
   const positiveFactors = getPositiveMatchFactors(opportunity);
   const negativeFactors = getNegativeMatchFactors(opportunity);
   const neutralFactors = getNeutralMatchFactors(opportunity);
+  const primarySourceUrl = opportunity.sourceUrls?.[0];
+  const recommendedAction = getRecommendedAction(opportunity);
+  const contactGroups = getGroupedContacts(opportunity);
+  const metadataItems = getAdditionalMetadata(opportunity);
+
+  // For live events (concert/festival/opening_slot) the prominent event
+  // block below already covers date/time/venue/address/city/headliner, so
+  // the generic sections only need to add what it doesn't: deadline and any
+  // support acts beyond the headliner.
+  const showEventBlock = isLiveEventOpportunity(opportunity) && hasLiveEventInfo(opportunity);
+
+  const dateRows = showEventBlock
+    ? [{ label: "Deadline", value: opportunity.deadline }]
+    : [
+        { label: "Date", value: formattedDate },
+        { label: "Deadline", value: opportunity.deadline },
+      ];
+  const hasDateSection = dateRows.some((row) => Boolean(row.value));
+
+  const hasVenueSection =
+    !showEventBlock &&
+    Boolean(opportunity.venue || opportunity.address || (opportunity.city && opportunity.country));
+
+  // The full announced lineup (headliner + support) is already surfaced by
+  // the Details block above via `opportunity.lineup`; this section only adds
+  // what that block doesn't: a standalone headliner callout and org rosters.
+  const showHeadlinerInLineupSection = !showEventBlock && (opportunity.headliner?.length ?? 0) > 0;
+  const hasLineupSection = showHeadlinerInLineupSection || (opportunity.roster?.length ?? 0) > 0;
 
   return (
     <div className="max-w-3xl">
@@ -156,6 +212,8 @@ export default function OpportunityDetail({
         ← Back to Opportunities
       </Link>
 
+      {/* 1. Name, type, relevance score. Date and location sit in the
+          subtitle right below, so both stay visible without scrolling. */}
       <div className="mt-4 flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
           <OpportunityImage src={opportunity.imageUrl} alt={title} variant="thumbnail" className="w-12 h-12" />
@@ -168,6 +226,9 @@ export default function OpportunityDetail({
             </div>
             <p className="text-sm text-foreground-muted mt-1">
               {opportunity.location}
+              {opportunity.city && opportunity.country && (
+                <span> · {opportunity.city}, {opportunity.country}</span>
+              )}
               {formattedDate && <span> · {formattedDate}</span>}
             </p>
           </div>
@@ -190,31 +251,125 @@ export default function OpportunityDetail({
       )}
 
       <div className="mt-6 flex flex-col gap-4">
-        <OpportunityDetailFacts opportunity={opportunity} />
-
-        {opportunity.description.trim() && (
-          <div className={cardClassName}>
-            <SectionTitle>Description</SectionTitle>
-            <p className="text-sm text-foreground-secondary leading-relaxed">{opportunity.description}</p>
-
-            {opportunity.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-3">
-                {opportunity.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="text-[10px] text-foreground-secondary bg-white/5 border border-border px-1.5 py-0.5 rounded-md"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
+        {/* 2. Prominent event details for live opportunities. */}
+        {showEventBlock && (
+          <div className={buildCardClassName("stat", "border-border-accent bg-accent-tint")}>
+            <SectionTitle>Event details</SectionTitle>
+            <div className="flex flex-col gap-1.5">
+              <InfoRow label="Date" value={formattedDate} />
+              <InfoRow label="Time" value={opportunity.time} />
+              <InfoRow label="Venue" value={opportunity.venue} />
+              <InfoRow label="Address" value={opportunity.address} />
+              <InfoRow label="City" value={opportunity.city} />
+              <InfoRow label="Headliner" value={opportunity.headliner?.join(", ")} />
+            </div>
+            {primarySourceUrl && (
+              <a
+                href={primarySourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block mt-3 text-xs text-accent-text hover:text-foreground transition-colors"
+              >
+                {getUrlHostname(primarySourceUrl) ?? primarySourceUrl} ↗
+              </a>
             )}
           </div>
         )}
 
+        {/* 3. Type-adapted facts (venue/organization/event). */}
+        <OpportunityDetailFacts opportunity={opportunity} />
+
+        {/* 4. Date and deadline. */}
+        {hasDateSection && (
+          <div className={cardClassName}>
+            <SectionTitle>Date &amp; deadline</SectionTitle>
+            <div className="flex flex-col gap-1.5">
+              {dateRows.map((row) => (
+                <InfoRow key={row.label} label={row.label} value={row.value} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 5. Venue and location. */}
+        {hasVenueSection && (
+          <div className={cardClassName}>
+            <SectionTitle>Venue &amp; location</SectionTitle>
+            <div className="flex flex-col gap-1.5">
+              <InfoRow label="Venue" value={opportunity.venue} />
+              <InfoRow label="Address" value={opportunity.address} />
+              <InfoRow label="City" value={opportunity.city} />
+              <InfoRow label="Country" value={opportunity.country} />
+            </div>
+          </div>
+        )}
+
+        {/* 6. Headliner callout / organization roster. */}
+        {hasLineupSection && (
+          <div className={cardClassName}>
+            <SectionTitle>{(opportunity.roster?.length ?? 0) > 0 ? "Roster" : "Lineup"}</SectionTitle>
+            <div className="flex flex-col gap-2">
+              {showHeadlinerInLineupSection && (
+                <p className="text-sm text-foreground-secondary">
+                  <span className="text-foreground-muted">Headliner: </span>
+                  {opportunity.headliner!.join(", ")}
+                </p>
+              )}
+              <TagList items={opportunity.roster ?? []} />
+            </div>
+          </div>
+        )}
+
+        {/* 7. Relevance score breakdown. */}
         <MatchFactorSection title="Good fit" factors={positiveFactors} tone="success" />
         <MatchFactorSection title="Things to consider" factors={negativeFactors} tone="warning" />
         <MatchFactorSection title="Unknown / not verified" factors={neutralFactors} tone="neutral" />
+
+        {/* 8. Recommended action. */}
+        {recommendedAction && (
+          <div className={cardClassName}>
+            <SectionTitle>Recommended action</SectionTitle>
+            <p className="text-sm text-foreground-secondary leading-relaxed">{recommendedAction}</p>
+          </div>
+        )}
+
+        {/* 9. Contacts, grouped by purpose — kept separate from the source
+            evidence links below. */}
+        {contactGroups.length > 0 && (
+          <div className={cardClassName}>
+            <SectionTitle>Contacts</SectionTitle>
+            <div className="flex flex-col gap-3">
+              {contactGroups.map((group) => (
+                <div key={group.purpose}>
+                  <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-1">
+                    {group.label}
+                  </p>
+                  <ul className="flex flex-col gap-1">
+                    {group.contacts.map((contact) => (
+                      <li
+                        key={`${contact.purpose}-${contact.value}`}
+                        className="text-sm text-foreground-secondary"
+                      >
+                        {contact.url ? (
+                          <a
+                            href={contact.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-accent-text hover:text-foreground transition-colors"
+                          >
+                            {contact.value}
+                          </a>
+                        ) : (
+                          contact.value
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {relatedArtists.length > 0 && (
           <div className={cardClassName}>
@@ -227,23 +382,41 @@ export default function OpportunityDetail({
           </div>
         )}
 
-        <div className={cardClassName}>
-          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-            <OpportunityActions opportunity={opportunity} variant="full" />
+        {/* 10. Source evidence — the original listing(s), not a contact channel. */}
+        {opportunity.sourceUrls && opportunity.sourceUrls.length > 0 && (
+          <div className={cardClassName}>
+            <SectionTitle>Source evidence</SectionTitle>
+            <ul className="flex flex-col gap-1.5">
+              {opportunity.sourceUrls.map((url) => (
+                <li key={url}>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-accent-text hover:text-foreground transition-colors break-all"
+                  >
+                    {getUrlHostname(url) ?? url} ↗
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
-          {source && sourceUrl && (
-            <p className="text-xs text-foreground-muted">
-              Source:{" "}
-              <a
-                href={sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-accent-text hover:text-foreground underline"
-              >
-                {source}
-              </a>
-            </p>
-          )}
+        )}
+
+        {/* 11. Additional metadata. */}
+        {metadataItems.length > 0 && (
+          <div className={cardClassName}>
+            <SectionTitle>Additional metadata</SectionTitle>
+            <div className="flex flex-col gap-1.5">
+              {metadataItems.map((item) => (
+                <InfoRow key={item.label} label={item.label} value={item.value} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className={cardClassName}>
+          <OpportunityActions opportunity={opportunity} variant="full" />
         </div>
 
         {productFeatures.rawJson && (

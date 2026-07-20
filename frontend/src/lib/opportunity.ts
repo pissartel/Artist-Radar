@@ -1,4 +1,10 @@
-import type { MatchFactor, Opportunity, OpportunityCategory } from "@/types";
+import type {
+  ContactPurpose,
+  MatchFactor,
+  Opportunity,
+  OpportunityCategory,
+  OpportunityContact,
+} from "@/types";
 
 export type OpportunitySortOption =
   | "best_match"
@@ -218,6 +224,103 @@ export function getOpportunityById(
   id: string,
 ): Opportunity | undefined {
   return opportunities.find((opportunity) => opportunity.id === id);
+}
+
+// Opportunity types that represent a single scheduled event with its own
+// date/venue, as opposed to an organization (venue, label, booker, ...).
+const LIVE_EVENT_TYPES = new Set(["concert", "festival", "opening_slot"]);
+
+export function isLiveEventOpportunity(opportunity: Opportunity): boolean {
+  return LIVE_EVENT_TYPES.has(opportunity.type);
+}
+
+// True when there is enough live-event-specific data to justify the
+// prominent event info block; avoids rendering a near-empty callout.
+export function hasLiveEventInfo(opportunity: Opportunity): boolean {
+  return (
+    isLiveEventOpportunity(opportunity) &&
+    Boolean(
+      opportunity.date ||
+        opportunity.time ||
+        opportunity.venue ||
+        opportunity.address ||
+        opportunity.city ||
+        opportunity.headliner?.length,
+    )
+  );
+}
+
+export function getRecommendedAction(opportunity: Opportunity): string | null {
+  const action = opportunity.recommendedAction ?? opportunity.description;
+  return action && action.trim().length > 0 ? action : null;
+}
+
+export const CONTACT_PURPOSE_LABELS: Record<ContactPurpose, string> = {
+  booking: "Booking",
+  management: "Management",
+  press: "Press",
+  submissions: "Submissions",
+  partnerships: "Partnerships",
+  general: "General",
+};
+
+const CONTACT_PURPOSE_ORDER: ContactPurpose[] = [
+  "booking",
+  "management",
+  "press",
+  "submissions",
+  "partnerships",
+  "general",
+];
+
+export interface ContactGroup {
+  purpose: ContactPurpose;
+  label: string;
+  contacts: OpportunityContact[];
+}
+
+// Groups contacts by purpose so the detail panel never shows an
+// undifferentiated contact list. Falls back to the legacy single `contact`
+// string as an unclassified "General" entry when no structured contacts
+// were provided, rather than guessing its purpose.
+export function getGroupedContacts(opportunity: Opportunity): ContactGroup[] {
+  const contacts =
+    opportunity.contacts && opportunity.contacts.length > 0
+      ? opportunity.contacts
+      : opportunity.contact
+        ? [{ purpose: "general" as const, label: "Contact", value: opportunity.contact }]
+        : [];
+
+  const byPurpose = new Map<ContactPurpose, OpportunityContact[]>();
+  for (const contact of contacts) {
+    const group = byPurpose.get(contact.purpose) ?? [];
+    group.push(contact);
+    byPurpose.set(contact.purpose, group);
+  }
+
+  return CONTACT_PURPOSE_ORDER.filter((purpose) => byPurpose.has(purpose)).map((purpose) => ({
+    purpose,
+    label: CONTACT_PURPOSE_LABELS[purpose],
+    contacts: byPurpose.get(purpose)!,
+  }));
+}
+
+export interface MetadataItem {
+  label: string;
+  value: string;
+}
+
+// Low-priority leftover facts (tags, custom metadata) shown last, only when
+// present, so they never create an empty "Additional metadata" section.
+export function getAdditionalMetadata(opportunity: Opportunity): MetadataItem[] {
+  const items: MetadataItem[] = [];
+  if (opportunity.tags.length > 0) {
+    items.push({ label: "Tags", value: opportunity.tags.join(", ") });
+  }
+  if (opportunity.metadata) {
+    items.push(...opportunity.metadata);
+  }
+  return items;
 }
 
 function locationRank(opportunity: Opportunity, artistCity?: string, artistCountry?: string): number {

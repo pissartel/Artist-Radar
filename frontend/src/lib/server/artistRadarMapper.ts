@@ -200,9 +200,11 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
     matchBreakdown: opportunity.matchBreakdown,
     sourceUrls: opportunity.source_url ? [opportunity.source_url] : [],
     contact: opportunity.contact,
+    ticketUrl: opportunity.ticketUrl ?? null,
     genres: opportunity.genres ?? [],
     venueCapacity: opportunity.venueCapacity ?? null,
     recentEvents: opportunity.recentEvents ?? [],
+    lineup: opportunity.lineup ?? [],
     relatedArtist: opportunity.relatedArtist ?? null,
     imageUrl: opportunity.imageUrl ?? undefined,
   };

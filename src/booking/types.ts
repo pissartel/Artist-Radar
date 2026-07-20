@@ -74,6 +74,8 @@ export interface BookingTarget {
   lineup?: string[];
   /** Poster/event image URL, extracted from source page metadata. Never guessed. */
   imageUrl?: string | null;
+  /** Ticket/booking purchase URL, when a source reports it (e.g. schema.org Offer). Never guessed. */
+  ticketUrl?: string | null;
   eventDate?: string | null;
   eventDateRange?: { start: string; end: string } | null;
   isFutureEvent?: boolean | null;
@@ -123,6 +125,7 @@ export interface RawBookingSource {
   venueName?: string | null;
   lineup?: string[];
   imageUrl?: string | null;
+  ticketUrl?: string | null;
 }
 
 export interface DerivedFromSimilarArtist {
@@ -168,6 +171,7 @@ export interface BookingOpportunity {
   contact: string | null;
   contactType: ContactCandidateType;
   imageUrl: string | null;
+  ticketUrl: string | null;
   score: number;
   confidence: number;
   reason: string;

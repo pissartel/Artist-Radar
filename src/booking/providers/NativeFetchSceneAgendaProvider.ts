@@ -40,9 +40,10 @@ interface PageEnrichment {
   description: string | null;
   imageUrl: string | null;
   performers: string[];
+  ticketUrl: string | null;
 }
 
-const EMPTY_ENRICHMENT: PageEnrichment = { title: null, description: null, imageUrl: null, performers: [] };
+const EMPTY_ENRICHMENT: PageEnrichment = { title: null, description: null, imageUrl: null, performers: [], ticketUrl: null };
 
 const NATIVE_SCENE_SOURCES: NativeFetchSceneSource[] = [
   {
@@ -331,7 +332,8 @@ function buildSceneEvent(
     venueName: null,
     genresDetected: detectGenresFromText(text),
     confidenceScore: 0.6,
-    imageUrl: enrichment.imageUrl
+    imageUrl: enrichment.imageUrl,
+    ticketUrl: enrichment.ticketUrl
   };
 }
 

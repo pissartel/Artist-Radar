@@ -26,6 +26,19 @@ describe("OpportunityDetail content (issue #130 review feedback)", () => {
     expect(source).toMatch(/Source:/);
     expect(source).not.toMatch(/<SectionTitle>Sources<\/SectionTitle>/);
   });
+
+  it("renders the source attribution as a clickable link, not plain text (issue #153 review feedback)", () => {
+    expect(source).toMatch(/href=\{sourceUrl\}/);
+    expect(source).toMatch(/target="_blank"/);
+  });
+
+  it("renders a third, neutral match-factor section for unknown/unverified information", () => {
+    expect(source).toMatch(/Unknown \/ not verified/);
+  });
+
+  it("renders the announced lineup when known", () => {
+    expect(source).toMatch(/label="Lineup"/);
+  });
 });
 
 describe("OpportunityActions content (issue #130 review feedback)", () => {

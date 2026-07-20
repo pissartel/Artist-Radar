@@ -10,8 +10,10 @@ import {
   formatOpportunityDate,
   getDisplayTitle,
   getOpportunitySource,
+  getOpportunitySourceUrl,
   getPositiveMatchFactors,
   getNegativeMatchFactors,
+  getNeutralMatchFactors,
   getCardFamily,
   getOrganizationTypeLabel,
 } from "@/lib/opportunity";
@@ -77,6 +79,9 @@ function OpportunityDetailFacts({ opportunity }: { opportunity: Opportunity }) {
     if (opportunity.venue) {
       rows.push(<FactRow key="venue" label="Venue" value={opportunity.venue} />);
     }
+    if (opportunity.lineup.length > 0) {
+      rows.push(<FactRow key="lineup" label="Lineup" value={opportunity.lineup.join(", ")} />);
+    }
     if (opportunity.relatedArtist) {
       rows.push(<FactRow key="related" label="Related similar artist" value={opportunity.relatedArtist.name} />);
     }
@@ -97,10 +102,18 @@ function OpportunityDetailFacts({ opportunity }: { opportunity: Opportunity }) {
 
 // Structured, backend-computed positive/negative factors (issue #130 review
 // feedback), replacing the old free-text match-reasons paragraph.
-function MatchFactorSection({ title, factors, tone }: { title: string; factors: MatchFactor[]; tone: "success" | "warning" }) {
+function MatchFactorSection({
+  title,
+  factors,
+  tone,
+}: {
+  title: string;
+  factors: MatchFactor[];
+  tone: "success" | "warning" | "neutral";
+}) {
   if (factors.length === 0) return null;
-  const toneClass = tone === "success" ? "text-success-text" : "text-warning-text";
-  const icon = tone === "success" ? "✓" : "!";
+  const toneClass = tone === "success" ? "text-success-text" : tone === "warning" ? "text-warning-text" : "text-foreground-muted";
+  const icon = tone === "success" ? "✓" : tone === "warning" ? "!" : "?";
 
   return (
     <div className={cardClassName}>
@@ -129,8 +142,10 @@ export default function OpportunityDetail({
   const formattedDate = formatOpportunityDate(opportunity.date);
   const title = getDisplayTitle(opportunity);
   const source = getOpportunitySource(opportunity);
+  const sourceUrl = getOpportunitySourceUrl(opportunity);
   const positiveFactors = getPositiveMatchFactors(opportunity);
   const negativeFactors = getNegativeMatchFactors(opportunity);
+  const neutralFactors = getNeutralMatchFactors(opportunity);
 
   return (
     <div className="max-w-3xl">
@@ -164,6 +179,7 @@ export default function OpportunityDetail({
           className="flex-shrink-0"
           positiveFactors={positiveFactors}
           negativeFactors={negativeFactors}
+          neutralFactors={neutralFactors}
         />
       </div>
 
@@ -198,6 +214,7 @@ export default function OpportunityDetail({
 
         <MatchFactorSection title="Good fit" factors={positiveFactors} tone="success" />
         <MatchFactorSection title="Things to consider" factors={negativeFactors} tone="warning" />
+        <MatchFactorSection title="Unknown / not verified" factors={neutralFactors} tone="neutral" />
 
         {relatedArtists.length > 0 && (
           <div className={cardClassName}>
@@ -214,7 +231,19 @@ export default function OpportunityDetail({
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
             <OpportunityActions opportunity={opportunity} variant="full" />
           </div>
-          {source && <p className="text-xs text-foreground-muted">Source: {source}</p>}
+          {source && sourceUrl && (
+            <p className="text-xs text-foreground-muted">
+              Source:{" "}
+              <a
+                href={sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent-text hover:text-foreground underline"
+              >
+                {source}
+              </a>
+            </p>
+          )}
         </div>
 
         {productFeatures.rawJson && (

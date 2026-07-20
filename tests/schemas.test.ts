@@ -88,6 +88,8 @@ describe("schemas", () => {
     expect(opportunity.genres).toEqual([]);
     expect(opportunity.venueCapacity).toBeUndefined();
     expect(opportunity.recentEvents).toEqual([]);
+    expect(opportunity.lineup).toEqual([]);
+    expect(opportunity.ticketUrl).toBeUndefined();
     expect(opportunity.relatedArtist).toBeUndefined();
   });
 
@@ -116,6 +118,65 @@ describe("schemas", () => {
     expect(opportunity.venueCapacity).toBe(250);
     expect(opportunity.recentEvents).toEqual(["Neon Riot live", "Local Scene Night"]);
     expect(opportunity.relatedArtist?.name).toBe("Neon Riot");
+  });
+
+  it("accepts a concert opportunity's lineup and ticket URL when the source reports them (issue #153 review feedback)", () => {
+    const opportunity = OpportunitySchema.parse({
+      name: "Soirée Punk",
+      type: "event",
+      city: "Rennes",
+      country: "France",
+      source_url: "https://razibus.net/example.html",
+      contact: null,
+      reason: "Strong genre match.",
+      score: 82,
+      suggested_message: "Reach out.",
+      lineup: ["Band A", "Band B"],
+      ticketUrl: "https://razibus.net/tickets/example"
+    });
+
+    expect(opportunity.lineup).toEqual(["Band A", "Band B"]);
+    expect(opportunity.ticketUrl).toBe("https://razibus.net/tickets/example");
+  });
+
+  it("rejects a non-URL ticketUrl rather than silently dropping it", () => {
+    expect(() =>
+      OpportunitySchema.parse({
+        name: "Soirée Punk",
+        type: "event",
+        city: "Rennes",
+        country: "France",
+        source_url: null,
+        contact: null,
+        reason: "Strong genre match.",
+        score: 82,
+        suggested_message: "Reach out.",
+        ticketUrl: "not-a-url"
+      })
+    ).toThrow();
+  });
+
+  it("splits matchBreakdown factors into positive/negative/neutral buckets", () => {
+    const opportunity = OpportunitySchema.parse({
+      name: "Soirée Punk",
+      type: "event",
+      city: "Rennes",
+      country: "France",
+      source_url: null,
+      contact: null,
+      reason: "Strong genre match.",
+      score: 73,
+      suggested_message: "Reach out.",
+      matchBreakdown: {
+        overallScore: 73,
+        positiveFactors: [{ code: "genre_match", label: "Genre matches the artist", impact: "positive" }],
+        negativeFactors: [],
+        neutralFactors: [{ code: "capacity_fit", label: "Venue capacity is unknown", impact: "neutral" }]
+      }
+    });
+
+    expect(opportunity.matchBreakdown?.neutralFactors).toHaveLength(1);
+    expect(opportunity.matchBreakdown?.neutralFactors?.[0]?.impact).toBe("neutral");
   });
 
   it("rejects invalid input links and out-of-range limits", () => {

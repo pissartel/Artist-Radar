@@ -166,6 +166,33 @@ export interface OpportunityContact {
   label: string;
   value: string;
   url?: string;
+  // Whether this contact has been confirmed against the source (e.g. listed
+  // directly on the venue's own site) rather than merely scraped/guessed.
+  verified?: boolean;
+  // Where this contact was found (e.g. "Venue website", "Public listing"),
+  // shown next to the contact so its trustworthiness is never ambiguous.
+  source?: string;
+}
+
+// Role identifiable from the source listing itself — never guessed when the
+// source doesn't state it (see `getLineupEntries`).
+export type LineupPosition = "headliner" | "support" | "opener" | "other";
+
+export interface LineupEntry {
+  name: string;
+  position?: LineupPosition;
+  // Artist's own site/social link, when the source reports one. Never guessed.
+  externalUrl?: string;
+}
+
+// One piece of evidence backing an opportunity. `sourceUrls` (below) remains
+// the minimal fallback; this is the richer shape the detail page prefers
+// when the backend provides it.
+export interface OpportunitySourceEvidence {
+  url: string;
+  title?: string;
+  // What was retrieved from this source (e.g. "Event date and lineup").
+  retrievedInfo?: string;
 }
 
 // Generic entity covering booking opportunities today and future artist
@@ -183,6 +210,10 @@ export interface Opportunity {
   country?: string;
   venue?: string;
   address?: string;
+  // Kind of venue when known (e.g. "venue", "bar", "association", "festival",
+  // "cultural_centre"), distinct from the opportunity's own `type`.
+  venueType?: string;
+  venueWebsite?: string;
   date?: string;
   time?: string;
   deadline?: string;
@@ -200,7 +231,13 @@ export interface Opportunity {
   // Roster of artists represented by an organization-type opportunity
   // (label, booker, management, association).
   roster?: string[];
+  // Structured line-up (name, position, external link) the detail page
+  // prefers over the flat `lineup`/`headliner` strings when available.
+  lineupEntries?: LineupEntry[];
   sourceUrls?: string[];
+  // Richer per-source evidence the detail page prefers over `sourceUrls`
+  // when the backend provides it.
+  sourceEvidence?: OpportunitySourceEvidence[];
   // Legacy single free-text contact, kept for backward compatibility.
   // Prefer `contacts` (grouped by purpose) when available.
   contact?: string | null;

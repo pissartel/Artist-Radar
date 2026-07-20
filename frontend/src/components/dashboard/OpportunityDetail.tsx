@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
 import type { MatchFactor, Opportunity, SimilarArtist } from "@/types";
 import { TYPE_LABELS } from "./BookingOpportunityCard";
 import SimilarArtistCard from "./SimilarArtistCard";
@@ -10,16 +9,22 @@ import {
   formatOpportunityDate,
   getAdditionalMetadata,
   getCardFamily,
+  getContactAction,
   getDisplayTitle,
   getGroupedContacts,
+  getLineupEntries,
   getNegativeMatchFactors,
   getNeutralMatchFactors,
+  getOpportunitySignal,
+  getOpportunitySourceUrl,
   getOrganizationTypeLabel,
   getPositiveMatchFactors,
   getRecommendedAction,
-  getUrlHostname,
-  hasLiveEventInfo,
-  isLiveEventOpportunity,
+  getSourceEvidence,
+  getTicketAction,
+  getVenueTypeLabel,
+  LINEUP_POSITION_LABELS,
+  type OpportunitySignalKind,
 } from "@/lib/opportunity";
 import { cardClassName as buildCardClassName } from "@/components/ui/Card";
 import { productFeatures } from "@/lib/productFeatures";
@@ -39,99 +44,219 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-function FactRow({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex justify-between gap-3 text-sm">
-      <span className="text-foreground-muted">{label}</span>
-      <span className="text-foreground-secondary text-right">{value}</span>
-    </div>
-  );
-}
-
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null;
   return (
     <div className="flex items-baseline gap-2 text-sm">
-      <span className="text-foreground-muted w-20 flex-shrink-0">{label}</span>
+      <span className="text-foreground-muted w-24 flex-shrink-0">{label}</span>
       <span className="text-foreground-secondary">{value}</span>
     </div>
   );
 }
 
-function TagList({ items }: { items: string[] }) {
-  if (items.length === 0) return null;
+// Single source of truth for the event/venue/organization facts block (issue
+// #132 review feedback: the page used to show this same information split
+// across two separate "Details" cards plus a third "Event details" card).
+function buildEventInfoRows(opportunity: Opportunity): { label: string; value?: string | null }[] {
+  const family = getCardFamily(opportunity);
+  const location = [opportunity.city, opportunity.country].filter(Boolean).join(", ") || opportunity.location;
+  const venueTypeLabel = getVenueTypeLabel(opportunity);
+
+  let rows: { label: string; value?: string | null }[];
+
+  if (family === "venue") {
+    rows = [
+      { label: "Location", value: location },
+      { label: "Venue", value: opportunity.venue },
+      { label: "Venue type", value: venueTypeLabel },
+      { label: "Website", value: opportunity.venueWebsite },
+      {
+        label: "Capacity",
+        value: opportunity.venueCapacity != null ? `~${opportunity.venueCapacity.toLocaleString()}` : null,
+      },
+    ];
+  } else if (family === "organization") {
+    rows = [
+      { label: "Type", value: getOrganizationTypeLabel(opportunity) },
+      { label: "Location", value: location },
+    ];
+  } else {
+    rows = [
+      { label: "Date", value: formatOpportunityDate(opportunity.date) },
+      { label: "Time", value: opportunity.time },
+      { label: "Deadline", value: opportunity.deadline },
+      { label: "Location", value: location },
+      { label: "Venue", value: opportunity.venue },
+      { label: "Venue type", value: venueTypeLabel },
+      { label: "Website", value: opportunity.venueWebsite },
+      { label: "Address", value: opportunity.address },
+    ];
+  }
+
+  return [...rows, ...getAdditionalMetadata(opportunity)];
+}
+
+const SIGNAL_TONE_CLASSES: Record<OpportunitySignalKind, string> = {
+  support_slot_available: "text-success-text bg-success-tint border-success-tint",
+  open_call: "text-accent-text bg-accent-tint border-accent-tint",
+  venue_contact: "text-info-text bg-info-tint border-info-tint",
+  general_event: "text-foreground-muted bg-surface-elevated border-border",
+};
+
+// Makes the kind of opportunity legible at a glance (issue #132 review
+// feedback), instead of making the artist infer it from scattered fields.
+function OpportunitySignalBanner({ opportunity }: { opportunity: Opportunity }) {
+  const signal = getOpportunitySignal(opportunity);
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {items.map((item) => (
-        <span
-          key={item}
-          className="text-[11px] text-foreground-secondary bg-white/5 border border-border px-1.5 py-0.5 rounded-md"
-        >
-          {item}
-        </span>
-      ))}
+    <div className={`rounded-xl border px-4 py-3 ${SIGNAL_TONE_CLASSES[signal.kind]}`}>
+      <p className="text-sm font-semibold">{signal.label}</p>
+      <p className="text-xs mt-0.5 opacity-90">{signal.description}</p>
     </div>
   );
 }
 
-// Type-adapted facts block (issue #130): venues and organizations show
-// structured facts a concert/festival card doesn't need, and vice versa.
-function OpportunityDetailFacts({ opportunity }: { opportunity: Opportunity }) {
-  const family = getCardFamily(opportunity);
-  const rows: ReactNode[] = [];
+function LineupSection({
+  opportunity,
+  relatedArtists,
+}: {
+  opportunity: Opportunity;
+  relatedArtists: SimilarArtist[];
+}) {
+  const entries = getLineupEntries(opportunity);
+  if (entries.length === 0) return null;
 
-  if (family === "venue") {
-    if (opportunity.venueCapacity != null) {
-      rows.push(<FactRow key="capacity" label="Estimated capacity" value={`~${opportunity.venueCapacity.toLocaleString()}`} />);
-    }
-    if (opportunity.genres.length > 0) {
-      rows.push(<FactRow key="genres" label="Genres hosted" value={opportunity.genres.join(", ")} />);
-    }
-    rows.push(
-      <FactRow key="contact" label="Contact availability" value={opportunity.contact ? "Available" : "Not found"} />,
-    );
-    if (opportunity.recentEvents.length > 0) {
-      rows.push(<FactRow key="recent" label="Recent relevant events" value={opportunity.recentEvents.join(", ")} />);
-    }
-  } else if (family === "organization") {
-    rows.push(<FactRow key="org-type" label="Organization type" value={getOrganizationTypeLabel(opportunity)} />);
-    if (opportunity.genres.length > 0) {
-      rows.push(<FactRow key="genres" label="Relevant genres" value={opportunity.genres.join(", ")} />);
-    }
-    rows.push(
-      <FactRow
-        key="contact"
-        label="Contact or submission"
-        value={opportunity.contact ? "Available" : "Not found"}
-      />,
-    );
-  } else {
-    if (opportunity.venue) {
-      rows.push(<FactRow key="venue" label="Venue" value={opportunity.venue} />);
-    }
-    if (opportunity.lineup.length > 0) {
-      rows.push(<FactRow key="lineup" label="Lineup" value={opportunity.lineup.join(", ")} />);
-    }
-    if (opportunity.relatedArtist) {
-      rows.push(<FactRow key="related" label="Related similar artist" value={opportunity.relatedArtist.name} />);
-    }
-    if (opportunity.genres.length > 0) {
-      rows.push(<FactRow key="genres" label="Relevant genres" value={opportunity.genres.join(", ")} />);
-    }
-  }
-
-  if (rows.length === 0) return null;
+  const relatedByName = new Map(relatedArtists.map((artist) => [artist.name.trim().toLowerCase(), artist]));
 
   return (
     <div className={cardClassName}>
-      <SectionTitle>Details</SectionTitle>
-      <div className="flex flex-col gap-2">{rows}</div>
+      <SectionTitle>Line-up</SectionTitle>
+      <ul className="flex flex-col gap-2.5">
+        {entries.map((entry) => {
+          const matchedArtist = relatedByName.get(entry.name.trim().toLowerCase());
+          return (
+            <li key={entry.name} className="flex items-center justify-between gap-2 text-sm">
+              <span className="text-foreground-secondary min-w-0 truncate">
+                {entry.name}
+                {entry.position && (
+                  <span className="ml-2 text-[10px] font-medium text-foreground-muted uppercase tracking-wide">
+                    {LINEUP_POSITION_LABELS[entry.position]}
+                  </span>
+                )}
+              </span>
+              <span className="flex items-center gap-2 flex-shrink-0">
+                {matchedArtist && (
+                  <Link
+                    href={`/similar-artists/${matchedArtist.id}`}
+                    className="text-xs text-accent-text hover:text-foreground transition-colors"
+                  >
+                    View profile
+                  </Link>
+                )}
+                {entry.externalUrl && (
+                  <a
+                    href={entry.externalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-accent-text hover:text-foreground transition-colors"
+                  >
+                    Artist link ↗
+                  </a>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
 
-// Structured, backend-computed positive/negative factors (issue #130 review
-// feedback), replacing the old free-text match-reasons paragraph.
+// Contacts grouped by purpose, each labeled with its trust source and
+// verification state — never an invented or inferred contact (issue #132
+// review feedback). External Contact/Get tickets links live here too, next
+// to the rest of the contact/booking information instead of at the page
+// bottom.
+function ContactSection({ opportunity }: { opportunity: Opportunity }) {
+  const groups = getGroupedContacts(opportunity);
+  const contactAction = getContactAction(opportunity);
+  const ticketAction = getTicketAction(opportunity);
+
+  if (groups.length === 0 && !contactAction && !ticketAction) return null;
+
+  return (
+    <div className={cardClassName}>
+      <SectionTitle>Contact information</SectionTitle>
+      <div className="flex flex-col gap-3">
+        {groups.map((group) => (
+          <div key={group.purpose}>
+            <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-1">
+              {group.label}
+            </p>
+            <ul className="flex flex-col gap-1.5">
+              {group.contacts.map((contact) => (
+                <li key={`${contact.purpose}-${contact.value}`} className="text-sm">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {contact.url ? (
+                      <a
+                        href={contact.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-accent-text hover:text-foreground transition-colors"
+                      >
+                        {contact.value}
+                      </a>
+                    ) : (
+                      <span className="text-foreground-secondary">{contact.value}</span>
+                    )}
+                    <span
+                      className={`text-[9px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded-md border ${
+                        contact.verified
+                          ? "text-success-text bg-success-tint border-success-tint"
+                          : "text-foreground-muted bg-white/5 border-border"
+                      }`}
+                    >
+                      {contact.verified ? "Verified" : "Unverified"}
+                    </span>
+                  </div>
+                  {contact.source && (
+                    <p className="text-[11px] text-foreground-muted mt-0.5">via {contact.source}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+        {(contactAction || ticketAction) && (
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            {contactAction && (
+              <a
+                href={contactAction.href}
+                target={contactAction.href.startsWith("http") ? "_blank" : undefined}
+                rel={contactAction.href.startsWith("http") ? "noopener noreferrer" : undefined}
+                className="text-xs font-medium text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
+              >
+                {contactAction.label}
+              </a>
+            )}
+            {ticketAction && (
+              <a
+                href={ticketAction.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-medium text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
+              >
+                {ticketAction.label}
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Structured, backend-computed match-analysis factors, kept concise and
+// actionable per section (issue #132 review feedback).
 function MatchFactorSection({
   title,
   factors,
@@ -165,6 +290,40 @@ function MatchFactorSection({
   );
 }
 
+// Every source used to build this opportunity, each with what it contributed
+// and a direct link — not only the domain name (issue #132 review feedback).
+function SourceEvidenceSection({ opportunity }: { opportunity: Opportunity }) {
+  const evidence = getSourceEvidence(opportunity);
+  if (evidence.length === 0) return null;
+
+  return (
+    <div className={cardClassName}>
+      <SectionTitle>Source evidence</SectionTitle>
+      <ul className="flex flex-col gap-3">
+        {evidence.map((item) => (
+          <li key={item.url} className="text-sm">
+            <p className="font-medium text-foreground-secondary">{item.title ?? item.website ?? item.url}</p>
+            {item.title && item.website && (
+              <p className="text-xs text-foreground-muted">{item.website}</p>
+            )}
+            {item.retrievedInfo && (
+              <p className="text-xs text-foreground-muted mt-0.5">Retrieved: {item.retrievedInfo}</p>
+            )}
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block mt-1 text-xs text-accent-text hover:text-foreground transition-colors break-all"
+            >
+              View source ↗
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function OpportunityDetail({
   opportunity,
   relatedArtists,
@@ -174,34 +333,16 @@ export default function OpportunityDetail({
   const positiveFactors = getPositiveMatchFactors(opportunity);
   const negativeFactors = getNegativeMatchFactors(opportunity);
   const neutralFactors = getNeutralMatchFactors(opportunity);
-  const primarySourceUrl = opportunity.sourceUrls?.[0];
   const recommendedAction = getRecommendedAction(opportunity);
-  const contactGroups = getGroupedContacts(opportunity);
-  const metadataItems = getAdditionalMetadata(opportunity);
+  const eventInfoRows = buildEventInfoRows(opportunity).filter((row) => Boolean(row.value));
+  const originalEventUrl = getOpportunitySourceUrl(opportunity);
+  const family = getCardFamily(opportunity);
 
-  // For live events (concert/festival/opening_slot) the prominent event
-  // block below already covers date/time/venue/address/city/headliner, so
-  // the generic sections only need to add what it doesn't: deadline and any
-  // support acts beyond the headliner.
-  const showEventBlock = isLiveEventOpportunity(opportunity) && hasLiveEventInfo(opportunity);
-
-  const dateRows = showEventBlock
-    ? [{ label: "Deadline", value: opportunity.deadline }]
-    : [
-        { label: "Date", value: formattedDate },
-        { label: "Deadline", value: opportunity.deadline },
-      ];
-  const hasDateSection = dateRows.some((row) => Boolean(row.value));
-
-  const hasVenueSection =
-    !showEventBlock &&
-    Boolean(opportunity.venue || opportunity.address || (opportunity.city && opportunity.country));
-
-  // The full announced lineup (headliner + support) is already surfaced by
-  // the Details block above via `opportunity.lineup`; this section only adds
-  // what that block doesn't: a standalone headliner callout and org rosters.
-  const showHeadlinerInLineupSection = !showEventBlock && (opportunity.headliner?.length ?? 0) > 0;
-  const hasLineupSection = showHeadlinerInLineupSection || (opportunity.roster?.length ?? 0) > 0;
+  // A full poster is shown right below the header when an image is
+  // available; the header thumbnail then falls back to the letter avatar so
+  // the same picture is never shown twice on the page (issue #132 review
+  // feedback).
+  const showPoster = Boolean(opportunity.imageUrl);
 
   return (
     <div className="max-w-3xl">
@@ -212,11 +353,16 @@ export default function OpportunityDetail({
         ← Back to Opportunities
       </Link>
 
-      {/* 1. Name, type, relevance score. Date and location sit in the
-          subtitle right below, so both stay visible without scrolling. */}
+      {/* 1. Header: thumbnail, title, location, date, match score, and the
+          bookmark/contacted icon actions. */}
       <div className="mt-4 flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
-          <OpportunityImage src={opportunity.imageUrl} alt={title} variant="thumbnail" className="w-12 h-12" />
+          <OpportunityImage
+            src={showPoster ? undefined : opportunity.imageUrl}
+            alt={title}
+            variant="thumbnail"
+            className="w-12 h-12"
+          />
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold text-foreground">{title}</h1>
@@ -233,141 +379,69 @@ export default function OpportunityDetail({
             </p>
           </div>
         </div>
-        <MatchScoreBadge
-          score={opportunity.matchScore}
-          size="md"
-          label="match"
-          className="flex-shrink-0"
-          positiveFactors={positiveFactors}
-          negativeFactors={negativeFactors}
-          neutralFactors={neutralFactors}
-        />
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <OpportunityActions opportunity={opportunity} variant="compact" />
+          <MatchScoreBadge
+            score={opportunity.matchScore}
+            size="md"
+            label="match"
+            positiveFactors={positiveFactors}
+            negativeFactors={negativeFactors}
+            neutralFactors={neutralFactors}
+          />
+        </div>
       </div>
 
-      {opportunity.imageUrl && (
+      {/* 2. Full event poster (never duplicated with the header thumbnail
+          above). */}
+      {showPoster && (
         <div className="mt-4">
           <OpportunityImage src={opportunity.imageUrl} alt={title} variant="hero" />
         </div>
       )}
 
       <div className="mt-6 flex flex-col gap-4">
-        {/* 2. Prominent event details for live opportunities. */}
-        {showEventBlock && (
-          <div className={buildCardClassName("stat", "border-border-accent bg-accent-tint")}>
-            <SectionTitle>Event details</SectionTitle>
+        <OpportunitySignalBanner opportunity={opportunity} />
+
+        {/* 3. Event information — a single consolidated section replacing
+            the previous duplicated "Details"/"Event details" cards. */}
+        {eventInfoRows.length > 0 && (
+          <div className={family === "event" ? buildCardClassName("stat", "border-border-accent bg-accent-tint") : cardClassName}>
+            <SectionTitle>Event information</SectionTitle>
             <div className="flex flex-col gap-1.5">
-              <InfoRow label="Date" value={formattedDate} />
-              <InfoRow label="Time" value={opportunity.time} />
-              <InfoRow label="Venue" value={opportunity.venue} />
-              <InfoRow label="Address" value={opportunity.address} />
-              <InfoRow label="City" value={opportunity.city} />
-              <InfoRow label="Headliner" value={opportunity.headliner?.join(", ")} />
+              {eventInfoRows.map((row) => (
+                <InfoRow key={row.label} label={row.label} value={row.value} />
+              ))}
             </div>
-            {primarySourceUrl && (
+            {originalEventUrl && (
               <a
-                href={primarySourceUrl}
+                href={originalEventUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-block mt-3 text-xs text-accent-text hover:text-foreground transition-colors"
               >
-                {getUrlHostname(primarySourceUrl) ?? primarySourceUrl} ↗
+                View original event page ↗
               </a>
             )}
           </div>
         )}
 
-        {/* 3. Type-adapted facts (venue/organization/event). */}
-        <OpportunityDetailFacts opportunity={opportunity} />
+        {/* 4. Line-up. */}
+        <LineupSection opportunity={opportunity} relatedArtists={relatedArtists} />
 
-        {/* 4. Date and deadline. */}
-        {hasDateSection && (
-          <div className={cardClassName}>
-            <SectionTitle>Date &amp; deadline</SectionTitle>
-            <div className="flex flex-col gap-1.5">
-              {dateRows.map((row) => (
-                <InfoRow key={row.label} label={row.label} value={row.value} />
-              ))}
-            </div>
-          </div>
-        )}
+        {/* 5. Contact information. */}
+        <ContactSection opportunity={opportunity} />
 
-        {/* 5. Venue and location. */}
-        {hasVenueSection && (
-          <div className={cardClassName}>
-            <SectionTitle>Venue &amp; location</SectionTitle>
-            <div className="flex flex-col gap-1.5">
-              <InfoRow label="Venue" value={opportunity.venue} />
-              <InfoRow label="Address" value={opportunity.address} />
-              <InfoRow label="City" value={opportunity.city} />
-              <InfoRow label="Country" value={opportunity.country} />
-            </div>
-          </div>
-        )}
-
-        {/* 6. Headliner callout / organization roster. */}
-        {hasLineupSection && (
-          <div className={cardClassName}>
-            <SectionTitle>{(opportunity.roster?.length ?? 0) > 0 ? "Roster" : "Lineup"}</SectionTitle>
-            <div className="flex flex-col gap-2">
-              {showHeadlinerInLineupSection && (
-                <p className="text-sm text-foreground-secondary">
-                  <span className="text-foreground-muted">Headliner: </span>
-                  {opportunity.headliner!.join(", ")}
-                </p>
-              )}
-              <TagList items={opportunity.roster ?? []} />
-            </div>
-          </div>
-        )}
-
-        {/* 7. Relevance score breakdown. */}
-        <MatchFactorSection title="Good fit" factors={positiveFactors} tone="success" />
+        {/* 6. Match analysis: why it matches, things to consider, missing or
+            unverified information, recommended action. */}
+        <MatchFactorSection title="Why it matches" factors={positiveFactors} tone="success" />
         <MatchFactorSection title="Things to consider" factors={negativeFactors} tone="warning" />
-        <MatchFactorSection title="Unknown / not verified" factors={neutralFactors} tone="neutral" />
+        <MatchFactorSection title="Missing or unverified information" factors={neutralFactors} tone="neutral" />
 
-        {/* 8. Recommended action. */}
         {recommendedAction && (
           <div className={cardClassName}>
             <SectionTitle>Recommended action</SectionTitle>
             <p className="text-sm text-foreground-secondary leading-relaxed">{recommendedAction}</p>
-          </div>
-        )}
-
-        {/* 9. Contacts, grouped by purpose — kept separate from the source
-            evidence links below. */}
-        {contactGroups.length > 0 && (
-          <div className={cardClassName}>
-            <SectionTitle>Contacts</SectionTitle>
-            <div className="flex flex-col gap-3">
-              {contactGroups.map((group) => (
-                <div key={group.purpose}>
-                  <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-1">
-                    {group.label}
-                  </p>
-                  <ul className="flex flex-col gap-1">
-                    {group.contacts.map((contact) => (
-                      <li
-                        key={`${contact.purpose}-${contact.value}`}
-                        className="text-sm text-foreground-secondary"
-                      >
-                        {contact.url ? (
-                          <a
-                            href={contact.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-accent-text hover:text-foreground transition-colors"
-                          >
-                            {contact.value}
-                          </a>
-                        ) : (
-                          contact.value
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
           </div>
         )}
 
@@ -382,42 +456,8 @@ export default function OpportunityDetail({
           </div>
         )}
 
-        {/* 10. Source evidence — the original listing(s), not a contact channel. */}
-        {opportunity.sourceUrls && opportunity.sourceUrls.length > 0 && (
-          <div className={cardClassName}>
-            <SectionTitle>Source evidence</SectionTitle>
-            <ul className="flex flex-col gap-1.5">
-              {opportunity.sourceUrls.map((url) => (
-                <li key={url}>
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-accent-text hover:text-foreground transition-colors break-all"
-                  >
-                    {getUrlHostname(url) ?? url} ↗
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* 11. Additional metadata. */}
-        {metadataItems.length > 0 && (
-          <div className={cardClassName}>
-            <SectionTitle>Additional metadata</SectionTitle>
-            <div className="flex flex-col gap-1.5">
-              {metadataItems.map((item) => (
-                <InfoRow key={item.label} label={item.label} value={item.value} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className={cardClassName}>
-          <OpportunityActions opportunity={opportunity} variant="full" />
-        </div>
+        {/* 7. Source evidence. */}
+        <SourceEvidenceSection opportunity={opportunity} />
 
         {productFeatures.rawJson && (
           <details className={cardClassName}>

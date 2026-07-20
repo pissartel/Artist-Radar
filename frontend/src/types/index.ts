@@ -145,6 +145,9 @@ export interface OpportunityMatchBreakdown {
   overallScore: number;
   positiveFactors: MatchFactor[];
   negativeFactors: MatchFactor[];
+  // Missing/unverified information (e.g. "capacity unknown"), distinct from
+  // confirmed negative signals like a genre mismatch.
+  neutralFactors: MatchFactor[];
 }
 
 // Generic entity covering booking opportunities today and future artist
@@ -171,6 +174,8 @@ export interface Opportunity {
   matchBreakdown?: OpportunityMatchBreakdown;
   sourceUrls?: string[];
   contact?: string | null;
+  // Ticket/booking purchase URL, when a source reports it. Never guessed.
+  ticketUrl?: string | null;
   relatedSimilarArtistIds?: string[];
   imageUrl?: string;
   // Genres associated with the venue/festival/organization, or the event's
@@ -180,6 +185,8 @@ export interface Opportunity {
   venueCapacity?: number | null;
   // Past events/programming attributed to this target, when known.
   recentEvents: string[];
+  // Full announced lineup (headliner + support), when a source lists it. Never guessed.
+  lineup: string[];
   // Present only when this opportunity was surfaced from a similar artist's live history.
   relatedArtist?: OpportunityRelatedArtist | null;
 }

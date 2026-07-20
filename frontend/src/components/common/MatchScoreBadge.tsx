@@ -11,6 +11,7 @@ interface MatchScoreBadgeProps {
   className?: string;
   positiveFactors?: MatchFactor[];
   negativeFactors?: MatchFactor[];
+  neutralFactors?: MatchFactor[];
 }
 
 const SIZE_CLASSES: Record<"sm" | "md", string> = {
@@ -29,12 +30,13 @@ export default function MatchScoreBadge({
   className = "",
   positiveFactors = [],
   negativeFactors = [],
+  neutralFactors = [],
 }: MatchScoreBadgeProps) {
   const [isOpen, setIsOpen] = useState(false);
   const panelId = useId();
   const colorClass = getMatchScoreBadgeClass(score);
   const badgeClassName = `font-semibold rounded-full border tabular-nums whitespace-nowrap ${SIZE_CLASSES[size]} ${colorClass}`;
-  const hasFactors = positiveFactors.length > 0 || negativeFactors.length > 0;
+  const hasFactors = positiveFactors.length > 0 || negativeFactors.length > 0 || neutralFactors.length > 0;
 
   if (!hasFactors) {
     return (
@@ -70,6 +72,7 @@ export default function MatchScoreBadge({
         >
           <MatchFactorGroup title="Good fit" factors={positiveFactors} tone="success" icon="✓" />
           <MatchFactorGroup title="Things to consider" factors={negativeFactors} tone="warning" icon="!" />
+          <MatchFactorGroup title="Unknown / not verified" factors={neutralFactors} tone="neutral" icon="?" />
         </div>
       )}
     </span>
@@ -84,11 +87,11 @@ function MatchFactorGroup({
 }: {
   title: string;
   factors: MatchFactor[];
-  tone: "success" | "warning";
+  tone: "success" | "warning" | "neutral";
   icon: string;
 }) {
   if (factors.length === 0) return null;
-  const toneClass = tone === "success" ? "text-success-text" : "text-warning-text";
+  const toneClass = tone === "success" ? "text-success-text" : tone === "warning" ? "text-warning-text" : "text-foreground-muted";
 
   return (
     <div className="mb-2 last:mb-0">

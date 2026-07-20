@@ -127,6 +127,7 @@ export interface BackendOpportunityMatchBreakdown {
   overallScore: number;
   positiveFactors: BackendMatchFactor[];
   negativeFactors: BackendMatchFactor[];
+  neutralFactors: BackendMatchFactor[];
 }
 
 export interface BackendOpportunity {
@@ -145,8 +146,10 @@ export interface BackendOpportunity {
   genres?: string[];
   venueCapacity?: number | null;
   recentEvents?: string[];
+  lineup?: string[];
   relatedArtist?: BackendOpportunityRelatedArtist | null;
   imageUrl?: string | null;
+  ticketUrl?: string | null;
   matchBreakdown?: BackendOpportunityMatchBreakdown;
 }
 

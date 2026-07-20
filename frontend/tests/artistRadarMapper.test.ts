@@ -476,6 +476,57 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     expect(response.bookingOpportunities[0]?.imageUrl).toBe("https://razibus.net/img/poster-35768.jpg");
   });
 
+  it("passes the concert lineup and ticket URL through when the backend already found them", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Soirée Punk",
+          displayTitle: "Soirée Punk - Ferme de Quincé",
+          type: "event",
+          city: "Rennes",
+          country: "France",
+          source_url: "https://razibus.net/event.html",
+          contact: null,
+          reason: "Strong genre match.",
+          score: 73,
+          suggested_message: "Reach out.",
+          lineup: ["Band A", "Band B"],
+          ticketUrl: "https://razibus.net/tickets/example",
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const opportunity = response.bookingOpportunities[0];
+
+    expect(opportunity?.lineup).toEqual(["Band A", "Band B"]);
+    expect(opportunity?.ticketUrl).toBe("https://razibus.net/tickets/example");
+  });
+
+  it("leaves lineup empty and ticketUrl null rather than inventing them when the backend found neither", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Le Petit Club",
+          type: "venue",
+          city: "Paris",
+          country: "France",
+          source_url: null,
+          contact: null,
+          reason: "Strong genre match.",
+          score: 82,
+          suggested_message: "Reach out.",
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const opportunity = response.bookingOpportunities[0];
+
+    expect(opportunity?.lineup).toEqual([]);
+    expect(opportunity?.ticketUrl).toBeNull();
+  });
+
   it("leaves imageUrl undefined rather than inventing one when the backend has no image", () => {
     const result = buildResult({
       opportunities: [
@@ -514,7 +565,8 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
           matchBreakdown: {
             overallScore: 73,
             positiveFactors: [{ code: "genre_match", label: "Genre matches the artist", impact: "positive" }],
-            negativeFactors: [{ code: "contact_available", label: "No public booking contact was found", impact: "negative" }],
+            negativeFactors: [],
+            neutralFactors: [{ code: "contact_available", label: "No public booking contact was found", impact: "neutral" }],
           },
         },
       ],
@@ -526,8 +578,8 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     expect(opportunity?.matchBreakdown?.positiveFactors).toEqual([
       { code: "genre_match", label: "Genre matches the artist", impact: "positive" },
     ]);
-    expect(opportunity?.matchBreakdown?.negativeFactors).toEqual([
-      { code: "contact_available", label: "No public booking contact was found", impact: "negative" },
+    expect(opportunity?.matchBreakdown?.neutralFactors).toEqual([
+      { code: "contact_available", label: "No public booking contact was found", impact: "neutral" },
     ]);
   });
 

@@ -134,6 +134,7 @@ function buildOpportunity(input: BookingSearchInput, target: BookingTarget, now:
     contact: bestContact?.value ?? null,
     contactType: bestContact?.type ?? "unknown",
     imageUrl: target.imageUrl ?? null,
+    ticketUrl: target.ticketUrl ?? null,
     score,
     confidence: bookingScore.confidence,
     reason,

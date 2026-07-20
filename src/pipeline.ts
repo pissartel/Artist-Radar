@@ -195,7 +195,9 @@ function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpportunit
     genres: opportunity.target.genres,
     venueCapacity: opportunity.target.estimatedCapacity ?? null,
     recentEvents: opportunity.target.pastProgramming ?? [],
+    lineup: opportunity.target.lineup ?? [],
     imageUrl: opportunity.imageUrl ?? undefined,
+    ticketUrl: opportunity.ticketUrl ?? undefined,
     matchBreakdown: opportunity.matchBreakdown,
     relatedArtist: opportunity.derivedFromSimilarArtist
       ? {

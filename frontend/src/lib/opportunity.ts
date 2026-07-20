@@ -105,6 +105,13 @@ export function getOpportunitySource(opportunity: Opportunity): string | null {
   return getUrlHostname(url);
 }
 
+// Raw source URL, kept separate from getOpportunitySource (which only
+// returns the hostname for display) so the source attribution can render as
+// an actual clickable link rather than plain text (issue #130 review feedback).
+export function getOpportunitySourceUrl(opportunity: Opportunity): string | null {
+  return opportunity.sourceUrls?.[0] ?? null;
+}
+
 export interface OpportunityContactAction {
   href: string;
   label: string;
@@ -122,6 +129,14 @@ export function getContactAction(opportunity: Opportunity): OpportunityContactAc
   if (/^https?:\/\//i.test(contact)) return { href: contact, label: "Contact" };
   if (PHONE_PATTERN.test(contact)) return { href: `tel:${contact.replace(/[^\d+]/g, "")}`, label: "Contact" };
   return null;
+}
+
+// Only returns an action when a ticket/booking URL was already found on the
+// source page — never fabricated (issue #130 review feedback).
+export function getTicketAction(opportunity: Opportunity): OpportunityContactAction | null {
+  const ticketUrl = opportunity.ticketUrl?.trim();
+  if (!ticketUrl) return null;
+  return { href: ticketUrl, label: "Get tickets" };
 }
 
 export type OpportunityStatus = "verified" | "needs_review";
@@ -169,6 +184,13 @@ export function getPositiveMatchFactors(opportunity: Opportunity): MatchFactor[]
 
 export function getNegativeMatchFactors(opportunity: Opportunity): MatchFactor[] {
   return opportunity.matchBreakdown?.negativeFactors ?? [];
+}
+
+// Missing/unverified information (e.g. "capacity unknown"), distinct from
+// getNegativeMatchFactors so the UI never presents unknown information as a
+// confirmed risk (issue #130 review feedback).
+export function getNeutralMatchFactors(opportunity: Opportunity): MatchFactor[] {
+  return opportunity.matchBreakdown?.neutralFactors ?? [];
 }
 
 export function getShortRelevanceReason(opportunity: Opportunity): string | null {

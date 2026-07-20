@@ -16,6 +16,10 @@ export type ArtistRadarDataState =
 export interface UseArtistRadarDataResult {
   state: ArtistRadarDataState;
   refetch: () => void;
+  // Id sent alongside the analysis request so the analyzing page can poll
+  // GET /api/artist-radar/status/[executionId] for real pipeline stage
+  // progress (issue #135). Null until the onboarding request has been read.
+  executionId: string | null;
 }
 
 function buildQueryKey(request: ArtistRadarRequest | null) {
@@ -44,7 +48,10 @@ export function useArtistRadarData(): UseArtistRadarDataResult {
   const [request, setRequest] = useState<ArtistRadarRequest | null | undefined>(undefined);
 
   useEffect(() => {
-    setRequest(readOnboardingRequest());
+    const onboardingRequest = readOnboardingRequest();
+    // Attach a fresh executionId so a real analysis run can be polled for
+    // progress; harmless for pages that don't poll it (see backendTypes.ts).
+    setRequest(onboardingRequest ? { ...onboardingRequest, executionId: crypto.randomUUID() } : onboardingRequest);
   }, []);
 
   const query: UseQueryResult<ArtistRadarResponse> = useQuery({
@@ -53,17 +60,23 @@ export function useArtistRadarData(): UseArtistRadarDataResult {
     enabled: Boolean(request),
   });
 
+  const executionId = request?.executionId ?? null;
+
   if (request === undefined) {
-    return { state: { status: "checking-onboarding" }, refetch: () => {} };
+    return { state: { status: "checking-onboarding" }, refetch: () => {}, executionId: null };
   }
   if (request === null) {
-    return { state: { status: "empty" }, refetch: () => {} };
+    return { state: { status: "empty" }, refetch: () => {}, executionId: null };
   }
   if (query.isPending) {
-    return { state: { status: "loading" }, refetch: () => query.refetch() };
+    return { state: { status: "loading" }, refetch: () => query.refetch(), executionId };
   }
   if (query.isError) {
-    return { state: { status: "error", message: toErrorMessage(query.error) }, refetch: () => query.refetch() };
+    return {
+      state: { status: "error", message: toErrorMessage(query.error) },
+      refetch: () => query.refetch(),
+      executionId,
+    };
   }
-  return { state: { status: "success", data: query.data }, refetch: () => query.refetch() };
+  return { state: { status: "success", data: query.data }, refetch: () => query.refetch(), executionId };
 }

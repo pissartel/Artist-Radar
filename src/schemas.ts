@@ -300,7 +300,12 @@ export const MatchFactorSchema = z.object({
 export const OpportunityMatchBreakdownSchema = z.object({
   overallScore: z.number().int().min(0).max(100),
   positiveFactors: z.array(MatchFactorSchema).default([]),
-  negativeFactors: z.array(MatchFactorSchema).default([])
+  negativeFactors: z.array(MatchFactorSchema).default([]),
+  // Factors representing missing/unverified information (e.g. "capacity
+  // unknown"), distinct from confirmed negative signals like a genre
+  // mismatch (issue #130 review feedback: unknown information must not be
+  // presented as an actual risk).
+  neutralFactors: z.array(MatchFactorSchema).default([])
 });
 
 export const OpportunitySchema = z.object({
@@ -330,8 +335,12 @@ export const OpportunitySchema = z.object({
   recentEvents: z.array(z.string().trim().min(1)).default([]),
   // Present only when this opportunity was surfaced from a similar artist's live history.
   relatedArtist: OpportunityRelatedArtistSchema.nullable().optional(),
+  // Full announced lineup (headliner + support), when a source lists it. Never guessed.
+  lineup: z.array(z.string().trim().min(1)).default([]),
   // Poster/event image URL, extracted from source page metadata. Never guessed.
   imageUrl: z.string().trim().url().nullable().optional(),
+  // Ticket/booking purchase URL, when a source reports it. Never guessed.
+  ticketUrl: OptionalUrlSchema,
   // Structured positive/negative match factors (issue #130 review feedback).
   // Frontend must render this instead of parsing `reason`/`suggested_message`.
   matchBreakdown: OpportunityMatchBreakdownSchema.optional(),

@@ -6,6 +6,7 @@ import {
   getShortRelevanceReason,
   getPositiveMatchFactors,
   getNegativeMatchFactors,
+  getNeutralMatchFactors,
   formatOpportunityDate,
   getCardFamily,
   getOrganizationTypeLabel,
@@ -53,6 +54,11 @@ function EventCardMeta({ opportunity }: { opportunity: Opportunity }) {
   return (
     <div className="mb-1.5">
       <p className="text-xs font-medium text-foreground-secondary">{headline || opportunity.location}</p>
+      {opportunity.lineup.length > 0 && (
+        <p className="text-[11px] text-foreground-muted mt-0.5 truncate">
+          Lineup: {opportunity.lineup.join(", ")}
+        </p>
+      )}
       {opportunity.relatedArtist && (
         <p className="text-[11px] text-foreground-muted mt-0.5 truncate">
           Related to similar artist: {opportunity.relatedArtist.name}
@@ -141,6 +147,7 @@ export default function BookingOpportunityCard({
             score={opportunity.matchScore}
             positiveFactors={getPositiveMatchFactors(opportunity)}
             negativeFactors={getNegativeMatchFactors(opportunity)}
+            neutralFactors={getNeutralMatchFactors(opportunity)}
           />
         </div>
 

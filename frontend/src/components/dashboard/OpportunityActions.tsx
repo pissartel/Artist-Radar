@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { getContactAction } from "@/lib/opportunity";
+import { getContactAction, getTicketAction } from "@/lib/opportunity";
 import { useOpportunityUserState } from "@/lib/useOpportunityUserState";
 import type { Opportunity } from "@/types";
 
@@ -18,6 +18,7 @@ interface OpportunityActionsProps {
 export default function OpportunityActions({ opportunity, variant = "full", className = "" }: OpportunityActionsProps) {
   const { interested, contacted, toggleInterested, toggleContacted } = useOpportunityUserState(opportunity);
   const contactAction = getContactAction(opportunity);
+  const ticketAction = getTicketAction(opportunity);
 
   if (variant === "compact") {
     return (
@@ -52,6 +53,16 @@ export default function OpportunityActions({ opportunity, variant = "full", clas
           className="text-xs font-medium text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
         >
           {contactAction.label}
+        </a>
+      )}
+      {ticketAction && (
+        <a
+          href={ticketAction.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs font-medium text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
+        >
+          {ticketAction.label}
         </a>
       )}
       <TextToggleButton

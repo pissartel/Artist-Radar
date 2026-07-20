@@ -34,6 +34,10 @@ export interface OpportunityMatchBreakdown {
   overallScore: number;
   positiveFactors: MatchFactor[];
   negativeFactors: MatchFactor[];
+  // Missing/unverified information (e.g. "capacity unknown"), kept separate
+  // from negativeFactors so unknown information is never presented as a
+  // confirmed risk (issue #130 review feedback).
+  neutralFactors: MatchFactor[];
 }
 
 const SUPPORT_SLOT_OPEN_PATTERN =
@@ -67,7 +71,8 @@ export function buildMatchFactors(
   return {
     overallScore,
     positiveFactors: factors.filter((factor) => factor.impact === "positive"),
-    negativeFactors: factors.filter((factor) => factor.impact === "negative")
+    negativeFactors: factors.filter((factor) => factor.impact === "negative"),
+    neutralFactors: factors.filter((factor) => factor.impact === "neutral")
   };
 }
 
@@ -104,7 +109,7 @@ function buildLocationFactor(input: BookingSearchInput, target: BookingTarget, s
       code: "location_match",
       label: "Location is unknown",
       detail: "This opportunity's location could not be determined.",
-      impact: "negative",
+      impact: "neutral",
       scoreContribution: score.locationFit
     };
   }
@@ -125,7 +130,7 @@ function buildCapacityFactor(target: BookingTarget, score: BookingScore): MatchF
     return {
       code: "capacity_fit",
       label: "Venue capacity is unknown",
-      impact: "negative"
+      impact: "neutral"
     };
   }
   if (score.sizeFit >= 70) {
@@ -161,7 +166,7 @@ function buildContactFactor(target: BookingTarget): MatchFactor {
   return {
     code: "contact_available",
     label: "No public booking contact was found",
-    impact: "negative"
+    impact: "neutral"
   };
 }
 
@@ -184,7 +189,7 @@ function buildDataCompletenessFactor(target: BookingTarget): MatchFactor | null 
     return {
       code: "data_completeness",
       label: "Date or venue information is incomplete",
-      impact: "negative"
+      impact: "neutral"
     };
   }
   return null;
@@ -227,7 +232,7 @@ function buildSupportSlotFactors(target: BookingTarget): { support: MatchFactor 
     support: {
       code: "support_slot_signal",
       label: "No clear support-slot signal was found",
-      impact: "negative"
+      impact: "neutral"
     },
     lineup: null
   };

@@ -62,9 +62,10 @@ describe("buildMatchFactors", () => {
     expect(breakdown.positiveFactors.some((f) => f.code === "genre_match")).toBe(true);
   });
 
-  it("surfaces a negative contact factor when no contact is found", () => {
+  it("surfaces a neutral (not negative) contact factor when no contact is found, since this is unknown information, not a confirmed risk", () => {
     const breakdown = buildMatchFactors(input, buildTarget({ contacts: [] }), buildScore(), noDateFactor, 73);
-    expect(breakdown.negativeFactors.some((f) => f.code === "contact_available")).toBe(true);
+    expect(breakdown.neutralFactors.some((f) => f.code === "contact_available")).toBe(true);
+    expect(breakdown.negativeFactors.some((f) => f.code === "contact_available")).toBe(false);
   });
 
   it("surfaces a positive contact factor when a contact exists", () => {
@@ -75,9 +76,34 @@ describe("buildMatchFactors", () => {
     expect(breakdown.positiveFactors.some((f) => f.code === "contact_available")).toBe(true);
   });
 
-  it("surfaces an unknown-capacity negative factor when capacity is null", () => {
+  it("surfaces an unknown-capacity neutral factor (not negative) when capacity is null", () => {
     const breakdown = buildMatchFactors(input, buildTarget({ estimatedCapacity: null }), buildScore(), noDateFactor, 73);
-    expect(breakdown.negativeFactors.some((f) => f.code === "capacity_fit")).toBe(true);
+    expect(breakdown.neutralFactors.some((f) => f.code === "capacity_fit")).toBe(true);
+    expect(breakdown.negativeFactors.some((f) => f.code === "capacity_fit")).toBe(false);
+  });
+
+  it("surfaces an unknown-location neutral factor (not negative) when neither city nor country is known", () => {
+    const breakdown = buildMatchFactors(
+      input,
+      buildTarget({ city: null, country: null }),
+      buildScore({ locationFit: 40 }),
+      noDateFactor,
+      73
+    );
+    expect(breakdown.neutralFactors.some((f) => f.code === "location_match")).toBe(true);
+    expect(breakdown.negativeFactors.some((f) => f.code === "location_match")).toBe(false);
+  });
+
+  it("still surfaces a negative location factor when the location is known but outside the target area", () => {
+    const breakdown = buildMatchFactors(input, buildTarget(), buildScore({ locationFit: 40 }), noDateFactor, 73);
+    expect(breakdown.negativeFactors.some((f) => f.code === "location_match")).toBe(true);
+  });
+
+  it("surfaces a neutral (not negative) support-slot factor when no signal either way is found", () => {
+    const target = buildTarget({ description: null, lineup: [] });
+    const breakdown = buildMatchFactors(input, target, buildScore(), noDateFactor, 73);
+    expect(breakdown.neutralFactors.some((f) => f.code === "support_slot_signal")).toBe(true);
+    expect(breakdown.negativeFactors.some((f) => f.code === "support_slot_signal")).toBe(false);
   });
 
   it("includes the date-proximity factor from the injected result", () => {

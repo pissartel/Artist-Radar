@@ -15,6 +15,7 @@ export interface RawSceneAgendaEvent {
   genresDetected?: string[];
   confidenceScore?: number;
   imageUrl?: string | null;
+  ticketUrl?: string | null;
 }
 
 export function normalizeSceneAgendaEvent(
@@ -46,6 +47,7 @@ export function normalizeSceneAgendaEvent(
     venueName: event.venueName ?? null,
     lineup: uniqueStrings(event.lineupArtists ?? []),
     imageUrl: event.imageUrl ?? null,
+    ticketUrl: event.ticketUrl ?? null,
     contacts: []
   };
   const normalized = normalizeBookingSource(raw);

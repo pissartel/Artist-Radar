@@ -1,4 +1,5 @@
 import { pickBestContact } from "./contactExtraction.js";
+import { analyzeSupportSlotPotential } from "./supportSlotPotential.js";
 import type { BookingScore, BookingSearchInput, BookingTarget } from "./types.js";
 import type { DateProximityResult } from "./dateProximity.js";
 
@@ -40,10 +41,6 @@ export interface OpportunityMatchBreakdown {
   neutralFactors: MatchFactor[];
 }
 
-const SUPPORT_SLOT_OPEN_PATTERN =
-  /\b(support tba|support à venir|support a venir|première partie à venir|premiere partie a venir|line-?up soon|lineup soon|guests? tba|\+\s*guests?)\b/i;
-const FULL_LINEUP_WORDING_PATTERN =
-  /\b(full lineup|line-?up complet|complete lineup|lineup announced|lineup finalized|full line-?up announced)\b/i;
 const EVENT_LIKE_CATEGORIES = new Set(["event", "festival"]);
 
 export function buildMatchFactors(
@@ -64,7 +61,7 @@ export function buildMatchFactors(
     buildDataCompletenessFactor(target)
   ].filter((factor): factor is MatchFactor => factor !== null);
 
-  const { support, lineup } = buildSupportSlotFactors(target);
+  const { support, lineup } = buildSupportSlotFactors(input, target);
   if (support) factors.push(support);
   if (lineup) factors.push(lineup);
 
@@ -195,34 +192,50 @@ function buildDataCompletenessFactor(target: BookingTarget): MatchFactor | null 
   return null;
 }
 
-function buildSupportSlotFactors(target: BookingTarget): { support: MatchFactor | null; lineup: MatchFactor | null } {
-  if (!EVENT_LIKE_CATEGORIES.has(target.category)) {
+// Delegates to the shared support-slot-potential analysis (issue #158) so the
+// UI-facing match factors and the compatibility score never disagree about
+// what the evidence shows. Festivals are excluded: analyzeSupportSlotPotential
+// only returns a result for a single concert with its own announced bill.
+function buildSupportSlotFactors(
+  input: BookingSearchInput,
+  target: BookingTarget
+): { support: MatchFactor | null; lineup: MatchFactor | null } {
+  const analysis = analyzeSupportSlotPotential(target, input);
+  if (!analysis) {
     return { support: null, lineup: null };
   }
 
-  const text = [target.description, ...target.evidence, ...(target.pastProgramming ?? [])].filter(Boolean).join(" ");
-  const hasOpenSignal = SUPPORT_SLOT_OPEN_PATTERN.test(text);
-  if (hasOpenSignal) {
+  if (analysis.status === "likely") {
     return {
       support: {
         code: "support_slot_signal",
         label: "The event may still have room for a support act",
+        detail: analysis.reasons[0],
         impact: "positive"
       },
       lineup: null
     };
   }
 
-  const listedPerformers = target.lineup ?? [];
-  const hasFinalizedWording = FULL_LINEUP_WORDING_PATTERN.test(text);
-  const likelyFull = hasFinalizedWording || listedPerformers.length >= 2;
-  if (likelyFull) {
+  if (analysis.status === "possible") {
+    return {
+      support: {
+        code: "support_slot_signal",
+        label: "No fully announced lineup — a support slot may be possible",
+        detail: analysis.reasons[0],
+        impact: "positive"
+      },
+      lineup: null
+    };
+  }
+
+  if (analysis.status === "unlikely") {
     return {
       support: null,
       lineup: {
         code: "lineup_availability",
         label: "The announced lineup may already be complete",
-        detail: "The announced lineup already contains several artists and may be complete.",
+        detail: analysis.reasons[0],
         impact: "negative"
       }
     };

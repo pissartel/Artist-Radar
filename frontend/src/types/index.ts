@@ -150,6 +150,16 @@ export interface OpportunityMatchBreakdown {
   neutralFactors: MatchFactor[];
 }
 
+// Support-slot-potential analysis (issue #158): a probability signal, never
+// a confirmed fact that a slot is available.
+export type SupportSlotStatus = "likely" | "possible" | "unlikely" | "unknown";
+
+export interface SupportSlotPotential {
+  status: SupportSlotStatus;
+  confidenceScore: number;
+  reasons: string[];
+}
+
 // Purpose a contact serves, so the detail panel can group contacts instead
 // of listing them as one undifferentiated block. "general" is the honest
 // default for contacts whose purpose isn't known — never guessed.
@@ -224,6 +234,10 @@ export interface Opportunity {
   // Structured positive/negative factors backing matchScore. Prefer this over
   // matchReasons for any user-facing "why this matches" UI.
   matchBreakdown?: OpportunityMatchBreakdown;
+  // Structured support-slot-potential analysis for concert opportunities
+  // (issue #158). Null/absent when this analysis doesn't apply (e.g.
+  // festivals). Never implies a slot is confirmed available.
+  supportSlotPotential?: SupportSlotPotential | null;
   recommendedAction?: string;
   // Headline act(s) for a live event (concert/festival/opening_slot). The
   // full bill (headliner + support) is carried by `lineup` below.

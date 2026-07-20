@@ -43,6 +43,11 @@ export default function OpportunityActions({ opportunity, variant = "full", clas
     );
   }
 
+  // "full" now only surfaces the external Contact/Get tickets links — the
+  // Interested/Contacted toggles moved to icon buttons in the page header
+  // (issue #132 review feedback: icons with tooltips, not large buttons at
+  // the bottom of the page). `interested`/`contacted` state is still read
+  // above so the hook stays the single source of truth other variants share.
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
       {contactAction && (
@@ -65,50 +70,7 @@ export default function OpportunityActions({ opportunity, variant = "full", clas
           {ticketAction.label}
         </a>
       )}
-      <TextToggleButton
-        active={interested}
-        activeLabel="Interested"
-        inactiveLabel="Mark as interested"
-        activeClassName="text-accent-text bg-accent-tint border-accent-tint"
-        onClick={toggleInterested}
-      />
-      <TextToggleButton
-        active={contacted}
-        activeLabel="Contacted"
-        inactiveLabel="Mark as contacted"
-        activeClassName="text-success-text bg-success-tint border-success-tint"
-        onClick={toggleContacted}
-      />
     </div>
-  );
-}
-
-function TextToggleButton({
-  active,
-  activeLabel,
-  inactiveLabel,
-  activeClassName,
-  onClick,
-}: {
-  active: boolean;
-  activeLabel: string;
-  inactiveLabel: string;
-  activeClassName: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus ${
-        active
-          ? activeClassName
-          : "text-foreground-secondary border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint"
-      }`}
-    >
-      {active ? activeLabel : inactiveLabel}
-    </button>
   );
 }
 

@@ -1,5 +1,6 @@
 import type {
   ContactPurpose,
+  LineupEntry,
   MatchFactor,
   Opportunity,
   OpportunityCategory,
@@ -321,6 +322,129 @@ export function getAdditionalMetadata(opportunity: Opportunity): MetadataItem[] 
     items.push(...opportunity.metadata);
   }
   return items;
+}
+
+export const LINEUP_POSITION_LABELS: Record<NonNullable<LineupEntry["position"]>, string> = {
+  headliner: "Headliner",
+  support: "Support",
+  opener: "Opener",
+  other: "Other",
+};
+
+// Prefers the structured `lineupEntries` from the backend. Falls back to the
+// flat `headliner`/`lineup` strings, marking only the names we can actually
+// confirm as headliners — the rest are listed without a position rather than
+// guessing "support" or "opener" (issue #132 review feedback).
+export function getLineupEntries(opportunity: Opportunity): LineupEntry[] {
+  if (opportunity.lineupEntries && opportunity.lineupEntries.length > 0) {
+    return opportunity.lineupEntries;
+  }
+
+  const headliners = opportunity.headliner ?? [];
+  const headlinerNames = new Set(headliners.map((name) => name.trim().toLowerCase()));
+  const entries: LineupEntry[] = headliners.map((name) => ({ name, position: "headliner" }));
+
+  for (const name of opportunity.lineup) {
+    if (headlinerNames.has(name.trim().toLowerCase())) continue;
+    entries.push({ name });
+  }
+
+  return entries;
+}
+
+const VENUE_TYPE_LABELS: Record<string, string> = {
+  venue: "Venue",
+  bar: "Bar",
+  association: "Association",
+  festival: "Festival",
+  cultural_centre: "Cultural Centre",
+};
+
+export function getVenueTypeLabel(opportunity: Opportunity): string | null {
+  if (!opportunity.venueType) return null;
+  return VENUE_TYPE_LABELS[opportunity.venueType] ?? opportunity.venueType;
+}
+
+export interface SourceEvidenceItem {
+  url: string;
+  title: string | null;
+  website: string | null;
+  retrievedInfo: string | null;
+}
+
+// Prefers the richer `sourceEvidence` from the backend; falls back to the
+// flat `sourceUrls` (hostname + link only) so every source is still listed,
+// not only the first one (issue #132 review feedback).
+export function getSourceEvidence(opportunity: Opportunity): SourceEvidenceItem[] {
+  if (opportunity.sourceEvidence && opportunity.sourceEvidence.length > 0) {
+    return opportunity.sourceEvidence.map((item) => ({
+      url: item.url,
+      title: item.title ?? null,
+      website: getUrlHostname(item.url),
+      retrievedInfo: item.retrievedInfo ?? null,
+    }));
+  }
+
+  return (opportunity.sourceUrls ?? []).map((url) => ({
+    url,
+    title: null,
+    website: getUrlHostname(url),
+    retrievedInfo: null,
+  }));
+}
+
+export type OpportunitySignalKind =
+  | "support_slot_available"
+  | "open_call"
+  | "venue_contact"
+  | "general_event";
+
+export interface OpportunitySignalInfo {
+  kind: OpportunitySignalKind;
+  label: string;
+  description: string;
+}
+
+// Tells the artist, at a glance, what kind of opportunity this is — derived
+// only from fields/factors we already have, never guessed (issue #132 review
+// feedback: "make it immediately clear whether this is an announced show
+// with a support slot, an open call, a venue to contact, or a general event").
+export function getOpportunitySignal(opportunity: Opportunity): OpportunitySignalInfo {
+  if (opportunity.organizationType === "open_call") {
+    return {
+      kind: "open_call",
+      label: "Open call",
+      description: "This organizer is accepting submissions or applications.",
+    };
+  }
+
+  if (opportunity.type === "venue") {
+    return {
+      kind: "venue_contact",
+      label: "Venue to contact",
+      description: "No confirmed event yet — this venue can be contacted about future booking opportunities.",
+    };
+  }
+
+  const allFactors = [
+    ...(opportunity.matchBreakdown?.positiveFactors ?? []),
+    ...(opportunity.matchBreakdown?.neutralFactors ?? []),
+  ];
+  const hasSupportSlotSignal = allFactors.some((factor) => factor.code === "support_slot_signal");
+
+  if (isLiveEventOpportunity(opportunity) && hasSupportSlotSignal) {
+    return {
+      kind: "support_slot_available",
+      label: "Announced show — possible support slot",
+      description: "A public support-slot signal was found for this show.",
+    };
+  }
+
+  return {
+    kind: "general_event",
+    label: "General event",
+    description: "No confirmed opportunity signal was found yet for this listing.",
+  };
 }
 
 function locationRank(opportunity: Opportunity, artistCity?: string, artistCountry?: string): number {

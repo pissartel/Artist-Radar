@@ -528,6 +528,195 @@ export const UnifiedOpportunitySchema = z
     }
   });
 
+/**
+ * Generic model for any music-industry opportunity (issue #167): concerts,
+ * venues, festivals, labels, playlists, producers/engineers, visual
+ * collaborators, etc. Shared fields apply to every type; type-specific
+ * details live in dedicated, independently optional groups so populating
+ * one type's metadata never touches another type's fields. Categories
+ * without a dedicated group yet fall back to `typeSpecific`, keeping the
+ * model extensible without a schema change for every new type.
+ */
+export const OpportunityCategorySchema = z.enum([
+  "concert",
+  "venue",
+  "festival",
+  "label",
+  "booker",
+  "booking_agency",
+  "manager",
+  "management_company",
+  "playlist",
+  "playlist_curator",
+  "association",
+  "collective",
+  "promoter",
+  "producer",
+  "recording_studio",
+  "sound_engineer",
+  "mixing_engineer",
+  "mastering_engineer",
+  "visual_artist",
+  "graphic_designer",
+  "album_artwork_designer",
+  "photographer",
+  "videographer",
+  "other"
+]);
+
+export const OpportunityGeographicScopeSchema = z.enum([
+  "local",
+  "regional",
+  "national",
+  "international",
+  "online",
+  "unknown"
+]);
+
+export const OpportunityStatusSchema = z.enum(["open", "closed", "invite_only", "unknown"]);
+
+// Multiple sources can contribute to one consolidated entity; every one of
+// them is retained instead of collapsing to a single "source" string.
+export const OpportunitySourceReferenceSchema = z.object({
+  name: z.string().trim().min(1),
+  url: z.string().trim().url().nullable(),
+  retrievedAt: z.string().trim().min(1).nullable().optional(),
+  confidence: ConfidenceScoreSchema.optional()
+});
+
+export const OpportunitySocialLinksSchema = z.object({
+  instagramUrl: OptionalUrlSchema,
+  facebookUrl: OptionalUrlSchema,
+  twitterUrl: OptionalUrlSchema,
+  tiktokUrl: OptionalUrlSchema,
+  youtubeUrl: OptionalUrlSchema,
+  linkedinUrl: OptionalUrlSchema
+});
+
+export const ConcertOpportunityDetailsSchema = z.object({
+  eventDate: z.string().trim().min(1).nullable().optional(),
+  dateRange: OpportunityDateRangeSchema.nullable().optional(),
+  doorsTime: z.string().trim().min(1).nullable().optional(),
+  venueName: z.string().trim().min(1).nullable().optional(),
+  headliners: z.array(z.string().trim().min(1)).default([]),
+  lineup: z.array(z.string().trim().min(1)).default([]),
+  ticketUrl: OptionalUrlSchema,
+  applicationDeadline: z.string().trim().min(1).nullable().optional()
+});
+
+export const LabelOpportunityDetailsSchema = z.object({
+  signedArtists: z.array(z.string().trim().min(1)).default([]),
+  labelGenres: z.array(z.string().trim().min(1)).default([]),
+  territory: z.string().trim().min(1).nullable().optional(),
+  acceptsDemos: z.boolean().nullable().optional(),
+  demoSubmissionUrl: OptionalUrlSchema,
+  distributor: z.string().trim().min(1).nullable().optional()
+});
+
+export const PlaylistOpportunityDetailsSchema = z.object({
+  platform: z.string().trim().min(1).nullable().optional(),
+  playlistUrl: OptionalUrlSchema,
+  curatorName: z.string().trim().min(1).nullable().optional(),
+  followerCount: z.number().int().nonnegative().nullable().optional(),
+  submissionPlatform: z.string().trim().min(1).nullable().optional(),
+  submissionUrl: OptionalUrlSchema,
+  submissionType: z.enum(["free", "paid", "unknown"]).default("unknown"),
+  estimatedGenreFit: z.number().min(0).max(1).nullable().optional()
+});
+
+export const ProducerOrStudioOpportunityDetailsSchema = z.object({
+  services: z.array(z.string().trim().min(1)).default([]),
+  recordingLocation: z.string().trim().min(1).nullable().optional(),
+  remoteWorkAvailable: z.boolean().nullable().optional(),
+  previousArtists: z.array(z.string().trim().min(1)).default([]),
+  genres: z.array(z.string().trim().min(1)).default([]),
+  credits: z.array(z.string().trim().min(1)).default([]),
+  portfolioUrl: OptionalUrlSchema,
+  pricingIndication: z.string().trim().min(1).nullable().optional()
+});
+
+const PRODUCER_OR_STUDIO_OPPORTUNITY_TYPES = [
+  "producer",
+  "recording_studio",
+  "sound_engineer",
+  "mixing_engineer",
+  "mastering_engineer"
+] as const;
+
+export const GenericOpportunitySchema = z
+  .object({
+    id: z.string().trim().min(1),
+    name: z.string().trim().min(1),
+    opportunityType: OpportunityCategorySchema,
+    shortDescription: z.string().trim().min(1).nullable().optional(),
+    city: z.string().trim().min(1).nullable().optional(),
+    country: z.string().trim().min(1).nullable().optional(),
+    geographicScope: OpportunityGeographicScopeSchema.default("unknown"),
+    websiteUrl: OptionalUrlSchema,
+    sourceUrl: OptionalUrlSchema,
+    contactPageUrl: OptionalUrlSchema,
+    // Contact fields are never fabricated: null/absent means "uncertain", per AGENTS.md.
+    publicEmail: z.string().trim().email().nullable().optional(),
+    socialLinks: OpportunitySocialLinksSchema.default({}),
+    associatedArtists: z.array(z.string().trim().min(1)).default([]),
+    associatedGenres: z.array(z.string().trim().min(1)).default([]),
+    // Reuses ArtistTierSchema: audience size buckets are the same concept
+    // whether they describe an artist or an opportunity's typical audience.
+    audienceLevel: ArtistTierSchema.default("unknown"),
+    status: OpportunityStatusSchema.default("unknown"),
+    applicationUrl: OptionalUrlSchema,
+    sources: z.array(OpportunitySourceReferenceSchema).min(1, "at least one source reference is required"),
+    lastVerifiedAt: z.string().trim().min(1).nullable().optional(),
+    confidenceScore: ConfidenceScoreSchema,
+    compatibilityScore: z.number().int().min(0).max(100).nullable().optional(),
+    compatibilityExplanation: z.string().trim().min(1).nullable().optional(),
+    dataCompleteness: z.number().min(0).max(1).nullable().optional(),
+
+    // Type-specific detail groups, namespaced per category so filling one
+    // never affects another opportunity type's fields.
+    concert: ConcertOpportunityDetailsSchema.nullable().optional(),
+    label: LabelOpportunityDetailsSchema.nullable().optional(),
+    playlist: PlaylistOpportunityDetailsSchema.nullable().optional(),
+    producerOrStudio: ProducerOrStudioOpportunityDetailsSchema.nullable().optional(),
+    // Escape hatch for categories without a dedicated group yet (venue,
+    // festival, booker, manager, visual/graphic roles, etc.).
+    typeSpecific: z.record(z.string(), z.unknown()).nullable().optional()
+  })
+  .superRefine((value, ctx) => {
+    if (value.concert && value.opportunityType !== "concert") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["concert"],
+        message: "concert details only apply to concert opportunities"
+      });
+    }
+    if (value.label && value.opportunityType !== "label") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["label"],
+        message: "label details only apply to label opportunities"
+      });
+    }
+    if (value.playlist && value.opportunityType !== "playlist") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["playlist"],
+        message: "playlist details only apply to playlist opportunities"
+      });
+    }
+    if (
+      value.producerOrStudio &&
+      !(PRODUCER_OR_STUDIO_OPPORTUNITY_TYPES as readonly string[]).includes(value.opportunityType)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["producerOrStudio"],
+        message:
+          "producerOrStudio details only apply to producer, recording_studio, sound_engineer, mixing_engineer or mastering_engineer opportunities"
+      });
+    }
+  });
+
 export type Mode = z.infer<typeof ModeSchema>;
 export type PipelineStage = z.infer<typeof PipelineStageSchema>;
 export type PipelineExecutionStatus = z.infer<typeof PipelineExecutionStatusSchema>;
@@ -566,3 +755,13 @@ export type OpportunitySearchResult = z.infer<typeof OpportunitySearchResultSche
 export type OpportunityEntityType = z.infer<typeof OpportunityEntityTypeSchema>;
 export type UnifiedOpportunity = z.infer<typeof UnifiedOpportunitySchema>;
 export type EventQualityStatus = z.infer<typeof EventQualityStatusSchema>;
+export type OpportunityCategory = z.infer<typeof OpportunityCategorySchema>;
+export type OpportunityGeographicScope = z.infer<typeof OpportunityGeographicScopeSchema>;
+export type OpportunityStatus = z.infer<typeof OpportunityStatusSchema>;
+export type OpportunitySourceReference = z.infer<typeof OpportunitySourceReferenceSchema>;
+export type OpportunitySocialLinks = z.infer<typeof OpportunitySocialLinksSchema>;
+export type ConcertOpportunityDetails = z.infer<typeof ConcertOpportunityDetailsSchema>;
+export type LabelOpportunityDetails = z.infer<typeof LabelOpportunityDetailsSchema>;
+export type PlaylistOpportunityDetails = z.infer<typeof PlaylistOpportunityDetailsSchema>;
+export type ProducerOrStudioOpportunityDetails = z.infer<typeof ProducerOrStudioOpportunityDetailsSchema>;
+export type GenericOpportunity = z.infer<typeof GenericOpportunitySchema>;

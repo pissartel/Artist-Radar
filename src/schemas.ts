@@ -297,6 +297,30 @@ export const MatchFactorSchema = z.object({
   scoreContribution: z.number().optional()
 });
 
+// Actionable-contact priority tiers from issue #159 (organizer/promoter
+// outranks a venue's generic booking contact, a bare contact form, the
+// organizer's own social profile, the headliner's booking/tour contact, and
+// finally a generic venue contact; ticketing is always a supporting action).
+export const ContactPriorityRoleSchema = z.enum([
+  "organizer_promoter",
+  "venue_booking",
+  "contact_form",
+  "organizer_social",
+  "headliner_agency",
+  "generic_venue",
+  "ticketing"
+]);
+
+export const ContactEnrichmentConfidenceSchema = z.enum(["verified", "likely", "unverified"]);
+
+export const RankedContactSchema = z.object({
+  role: ContactPriorityRoleSchema,
+  type: z.enum(["email", "contact_form", "social", "phone", "unknown"]),
+  value: z.string().trim().min(1),
+  sourceUrl: z.string().trim().url().nullable(),
+  verified: z.boolean()
+});
+
 export const SupportSlotStatusSchema = z.enum(["likely", "possible", "unlikely", "unknown"]);
 
 export const SupportSlotPotentialSchema = z.object({
@@ -355,6 +379,16 @@ export const OpportunitySchema = z.object({
   // Structured support-slot-potential analysis (issue #158). Null when this
   // analysis doesn't apply to the opportunity type (e.g. festivals).
   supportSlotPotential: SupportSlotPotentialSchema.nullable().optional(),
+  // Ranked primary actionable contact (organizer/promoter first, per issue
+  // #159), or null when nothing could be confirmed. Ticketing links never
+  // populate this field — see `secondaryActions`.
+  primaryContact: RankedContactSchema.nullable().optional(),
+  // Remaining ranked contacts plus the ticketing link, always supporting
+  // actions rather than a substitute for `primaryContact`.
+  secondaryActions: z.array(RankedContactSchema).default([]),
+  // Confidence in `primaryContact` and when contact data was last verified.
+  contactConfidence: ContactEnrichmentConfidenceSchema.optional(),
+  contactLastVerifiedAt: z.string().trim().min(1).nullable().optional(),
   // Internal-only metadata; must not be surfaced directly on frontend cards.
   internalReview: OpportunityInternalReviewSchema.optional()
 });

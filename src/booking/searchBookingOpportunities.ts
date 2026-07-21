@@ -5,6 +5,10 @@ import { normalizeOpportunityTitle } from "./titleNormalization.js";
 import { scoreDateProximity } from "./dateProximity.js";
 import { buildMatchFactors } from "./matchFactors.js";
 import { analyzeSupportSlotPotential } from "./supportSlotPotential.js";
+import { enrichOpportunity } from "../enrichment/enrichOpportunity.js";
+import { buildDefaultWebExtractProvider, getEnabledBookingSearchProviders } from "../providers/web/providers.js";
+import type { WebExtractProvider } from "../providers/web/WebExtractProvider.js";
+import type { WebSearchProvider } from "../providers/web/WebSearchProvider.js";
 import type {
   BookingOpportunity,
   BookingRejectedByReason,
@@ -23,10 +27,21 @@ import {
 } from "./providers/BookingSourceProvider.js";
 import { warnLog } from "../utils/logger.js";
 
+export interface ContactEnrichmentProviders {
+  webExtractProvider?: WebExtractProvider | null;
+  webSearchProvider?: WebSearchProvider | null;
+}
+
 export interface SearchBookingOpportunitiesOptions {
   providers?: BookingSourceProvider[];
   env?: BookingRelevanceEnv;
   now?: Date;
+  /**
+   * Organizer/promoter/ticketing contact enrichment (issue #159). Pass
+   * explicit providers to enable it, `null` to force-disable, or omit to
+   * fall back to `ENABLE_CONTACT_ENRICHMENT` env-based defaults.
+   */
+  contactEnrichment?: ContactEnrichmentProviders | null;
 }
 
 export async function searchBookingOpportunities(
@@ -60,6 +75,16 @@ export async function searchBookingOpportunities(
     .map((target) => buildOpportunity(input, target, now))
     .sort((left, right) => right.score - left.score)
     .slice(0, input.limit);
+
+  const contactEnrichmentProviders = resolveContactEnrichmentProviders(options.contactEnrichment);
+  if (contactEnrichmentProviders) {
+    // Enrichment only ever runs against the final, already-scored opportunity
+    // list (a "valid base event"), and never removes an opportunity: a
+    // failure here is caught and logged, leaving `contactEnrichment: null`.
+    await Promise.all(
+      opportunities.map((opportunity) => attachContactEnrichment(opportunity, contactEnrichmentProviders))
+    );
+  }
 
   return {
     input,
@@ -159,8 +184,50 @@ function buildOpportunity(input: BookingSearchInput, target: BookingTarget, now:
     bookingScore,
     matchBreakdown,
     supportSlotPotential,
-    internalReview: buildInternalReview(target, bestContact, titleResult.wasRewritten)
+    internalReview: buildInternalReview(target, bestContact, titleResult.wasRewritten),
+    contactEnrichment: null
   };
+}
+
+function resolveContactEnrichmentProviders(
+  explicit: ContactEnrichmentProviders | null | undefined
+): ContactEnrichmentProviders | null {
+  if (explicit !== undefined) {
+    return explicit;
+  }
+  if (process.env.ENABLE_CONTACT_ENRICHMENT !== "true") {
+    return null;
+  }
+  return {
+    webExtractProvider: buildDefaultWebExtractProvider(process.env),
+    webSearchProvider: getEnabledBookingSearchProviders(process.env)[0] ?? null
+  };
+}
+
+async function attachContactEnrichment(
+  opportunity: BookingOpportunity,
+  providers: ContactEnrichmentProviders
+): Promise<void> {
+  try {
+    opportunity.contactEnrichment = await enrichOpportunity(
+      {
+        name: opportunity.name,
+        sourceUrl: opportunity.sourceUrl,
+        sourceType: opportunity.sourceType,
+        contacts: opportunity.target.contacts,
+        eventDate: opportunity.eventDate,
+        venueName: opportunity.target.venueName ?? null,
+        city: opportunity.city,
+        headliners: opportunity.target.lineup ?? []
+      },
+      providers
+    );
+  } catch (error) {
+    warnLog(
+      "booking",
+      `Contact enrichment failed for "${opportunity.name}" and was skipped: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
 }
 
 function buildInternalReview(

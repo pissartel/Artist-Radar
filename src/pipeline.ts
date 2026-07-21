@@ -159,6 +159,10 @@ function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpportunit
     ticketUrl: opportunity.ticketUrl ?? undefined,
     matchBreakdown: opportunity.matchBreakdown,
     supportSlotPotential: opportunity.supportSlotPotential,
+    primaryContact: opportunity.contactEnrichment?.primaryContact ?? null,
+    secondaryActions: opportunity.contactEnrichment?.secondaryActions ?? [],
+    contactConfidence: opportunity.contactEnrichment?.confidenceLevel,
+    contactLastVerifiedAt: opportunity.contactEnrichment?.lastVerifiedAt ?? null,
     relatedArtist: opportunity.derivedFromSimilarArtist
       ? {
           name: opportunity.derivedFromSimilarArtist.name,

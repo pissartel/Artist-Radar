@@ -1,13 +1,17 @@
 import { extractPublicContactSignals } from "../booking/contactExtraction.js";
 import type { BookingSourceType, ContactCandidate } from "../booking/types.js";
 import type { WebExtractProvider, WebExtractResult } from "../providers/web/WebExtractProvider.js";
+import type { WebSearchProvider } from "../providers/web/WebSearchProvider.js";
 import { debugLog } from "../utils/logger.js";
 import { classifyContactRole } from "./classifyContact.js";
-import type {
-  EnrichableOpportunity,
-  EnrichedContact,
-  OpportunityEnrichment,
-  VerifiableField
+import { rankContacts } from "./contactPriority.js";
+import { extractOrganizerAndPromoter } from "./organizerExtraction.js";
+import {
+  HEADLINER_AGENCY_SEARCH_MARKER,
+  type EnrichableOpportunity,
+  type EnrichedContact,
+  type OpportunityEnrichment,
+  type VerifiableField
 } from "./types.js";
 
 const OFFICIAL_SOURCE_TYPES: BookingSourceType[] = [
@@ -34,6 +38,8 @@ const enrichmentCache = new Map<string, CacheEntry>();
 
 export interface EnrichOpportunityOptions {
   webExtractProvider?: WebExtractProvider | null;
+  /** Used only to locate the headline artist's booking agency/tour contact when it isn't on the opportunity's own source page. */
+  webSearchProvider?: WebSearchProvider | null;
   now?: Date;
   forceRefresh?: boolean;
   cacheTtlMs?: number;
@@ -114,10 +120,30 @@ async function buildEnrichment(
   const pageText = [page?.text, page?.markdown].filter(Boolean).join("\n");
   const links = extractLinksFromText(pageText);
 
-  const contacts = mergeContacts(opportunity.contacts, pageText, links, sourceUrl);
+  const headliner = extractHeadliner(pageText, sourceUrl, Boolean(page));
+  const headlinerNames = headliner.value ?? opportunity.headliners ?? [];
+  const agencyContacts = await findHeadlinerAgencyContacts(
+    opportunity,
+    headlinerNames,
+    options.webSearchProvider ?? null,
+    extractProvider,
+    warnings
+  );
+
+  const contacts = mergeContacts(opportunity.contacts, pageText, links, sourceUrl, agencyContacts);
   const socialProfiles = links
     .filter((link) => SOCIAL_LINK_PATTERN.test(link))
     .map((link): VerifiableField<string> => ({ value: link, verified: Boolean(page), sourceUrl }));
+  const ticketUrl = extractTicketUrl(links, sourceUrl, Boolean(page));
+  const organizerExtraction = pageText ? extractOrganizerAndPromoter(pageText) : { organizerName: null, promoterName: null };
+
+  const { primaryContact, secondaryActions, confidenceLevel } = rankContacts({
+    contacts,
+    socialProfiles,
+    ticketUrl,
+    headliners: headlinerNames,
+    primarySourceUrl: sourceUrl
+  });
 
   return {
     opportunityName: opportunity.name,
@@ -126,25 +152,137 @@ async function buildEnrichment(
     contacts,
     socialProfiles,
     bookingInstructions: extractBookingInstructions(pageText, sourceUrl, Boolean(page)),
-    organizerName: { value: opportunity.name, verified: Boolean(page), sourceUrl },
+    organizerName: buildNameField(organizerExtraction.organizerName, sourceUrl, Boolean(page)),
+    promoterName: buildNameField(organizerExtraction.promoterName, sourceUrl, Boolean(page)),
     venueAddress: extractVenueAddress(pageText, sourceUrl, Boolean(page)),
     eventDate: {
       value: opportunity.eventDate ?? null,
       verified: Boolean(page) && Boolean(opportunity.eventDate) && pageText.includes(opportunity.eventDate ?? ""),
       sourceUrl
     },
-    headliner: extractHeadliner(pageText, sourceUrl, Boolean(page)),
-    ticketUrl: extractTicketUrl(links, sourceUrl, Boolean(page)),
+    headliner,
+    ticketUrl,
+    primaryContact,
+    secondaryActions,
+    confidenceLevel,
     lastVerifiedAt: now.toISOString(),
     warnings
   };
+}
+
+function buildNameField(value: string | null, sourceUrl: string | null, pageFetched: boolean): VerifiableField<string> {
+  if (!pageFetched || !value) {
+    return { value: null, verified: false, sourceUrl: null };
+  }
+  return { value, verified: true, sourceUrl };
+}
+
+interface AgencyContactCandidate {
+  candidate: ContactCandidate;
+  contextText: string;
+}
+
+/**
+ * Searches for the headline artist's booking agency/tour-manager contact
+ * (issue #159 scope: search combining announced artists, event context and
+ * source domain). Only trusts a contact confirmed on a freshly fetched page —
+ * a search-result snippet alone is never enough to store a contact.
+ */
+async function findHeadlinerAgencyContacts(
+  opportunity: EnrichableOpportunity,
+  headliners: string[],
+  webSearchProvider: WebSearchProvider | null,
+  webExtractProvider: WebExtractProvider | null,
+  warnings: string[]
+): Promise<AgencyContactCandidate[]> {
+  const headliner = headliners[0];
+  if (!webSearchProvider || !webExtractProvider || !headliner) {
+    return [];
+  }
+
+  const query = buildHeadlinerAgencyQuery(opportunity, headliner);
+  let results: Awaited<ReturnType<WebSearchProvider["search"]>> = [];
+  try {
+    results = await webSearchProvider.search(query, { limit: 3 });
+  } catch (error) {
+    warnings.push(`Headliner agency search failed: ${error instanceof Error ? error.message : String(error)}.`);
+    return [];
+  }
+
+  const sourceHostname = safeHostname(opportunity.sourceUrl);
+  const candidateUrl = results
+    .map((result) => result.url)
+    .find((url): url is string => Boolean(url) && safeHostname(url) !== sourceHostname && !isAggregatorUrl(url as string));
+  if (!candidateUrl) {
+    return [];
+  }
+
+  try {
+    const page = await webExtractProvider.extract(candidateUrl);
+    if (!page) {
+      return [];
+    }
+    const pageText = [page.text, page.markdown].filter(Boolean).join("\n");
+    const links = extractLinksFromText(pageText);
+    return extractPublicContactSignals(pageText, links)
+      .filter((signal): signal is ContactCandidate & { value: string } => Boolean(signal.value))
+      .map((signal) => ({
+        candidate: {
+          ...signal,
+          sourceUrl: signal.sourceUrl ?? candidateUrl,
+          notes: [signal.notes, HEADLINER_AGENCY_SEARCH_MARKER].filter(Boolean).join(" ")
+        },
+        contextText: pageText
+      }));
+  } catch (error) {
+    warnings.push(`Headliner agency page fetch failed: ${error instanceof Error ? error.message : String(error)}.`);
+    return [];
+  }
+}
+
+function buildHeadlinerAgencyQuery(opportunity: EnrichableOpportunity, headliner: string): string {
+  const context = [opportunity.venueName, opportunity.city].filter(Boolean).join(" ");
+  return `${headliner} booking agent OR agency OR "tour manager" ${context}`.trim();
+}
+
+const AGGREGATOR_HOSTNAMES = [
+  "instagram.com",
+  "facebook.com",
+  "youtube.com",
+  "youtu.be",
+  "ticketmaster.com",
+  "dice.fm",
+  "shotgun.live",
+  "eventbrite.com",
+  "songkick.com",
+  "bandsintown.com"
+];
+
+function isAggregatorUrl(value: string): boolean {
+  const hostname = safeHostname(value);
+  if (!hostname) {
+    return true;
+  }
+  return AGGREGATOR_HOSTNAMES.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
+}
+
+function safeHostname(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    return new URL(value).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
 }
 
 function mergeContacts(
   existingContacts: ContactCandidate[],
   pageText: string,
   links: string[],
-  sourceUrl: string | null
+  sourceUrl: string | null,
+  agencyContacts: AgencyContactCandidate[]
 ): EnrichedContact[] {
   const freshContacts = pageText ? extractPublicContactSignals(pageText, links) : [];
   const merged = new Map<string, EnrichedContact>();
@@ -165,6 +303,28 @@ function mergeContacts(
       sourceUrl: contact.sourceUrl ?? sourceUrl,
       verified: true,
       notes: contact.notes ?? null
+    });
+  }
+
+  // Contacts confirmed on a separately fetched page (e.g. the headliner's
+  // booking agency site): classified from that page's own context, since the
+  // value won't appear anywhere in the opportunity's own `pageText`.
+  for (const { candidate, contextText } of agencyContacts) {
+    if (!candidate.value) {
+      continue;
+    }
+    const key = contactKey(candidate.type, candidate.value);
+    if (merged.has(key)) {
+      continue;
+    }
+    const contextLine = extractContextLine(candidate.value, contextText);
+    merged.set(key, {
+      type: candidate.type,
+      value: candidate.value,
+      role: classifyContactRole(candidate.value, contextLine),
+      sourceUrl: candidate.sourceUrl ?? sourceUrl,
+      verified: true,
+      notes: candidate.notes ?? null
     });
   }
 

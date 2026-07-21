@@ -1,4 +1,5 @@
 import type { ArtistProfile, ArtistTier, SimilarArtist } from "../schemas.js";
+import type { OpportunityEnrichment } from "../enrichment/types.js";
 import type { OpportunityMatchBreakdown } from "./matchFactors.js";
 import type { SupportSlotPotentialResult } from "./supportSlotPotential.js";
 
@@ -195,6 +196,10 @@ export interface BookingOpportunity {
   // Structured support-slot-potential analysis (issue #158), null for
   // opportunity types this analysis doesn't apply to (e.g. festivals).
   supportSlotPotential: SupportSlotPotentialResult | null;
+  // Organizer/promoter/ticketing contact enrichment (issue #159), populated
+  // after this opportunity is built. Null until enrichment runs (or when it
+  // is disabled/fails) — enrichment failure never removes the base opportunity.
+  contactEnrichment: OpportunityEnrichment | null;
 }
 
 export interface BookingRejectedByReason {

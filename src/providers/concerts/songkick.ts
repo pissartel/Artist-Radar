@@ -167,7 +167,7 @@ async function fetchSongkickArtistId(
   url.searchParams.set("query", artistName);
 
   try {
-    const response = await fetchWithTimeout(url.toString(), { headers: { Accept: "application/json" } }, timeoutMs, fetchImpl);
+    const response = await fetchWithTimeout(url.toString(), { headers: { Accept: "application/json" } }, timeoutMs, fetchImpl, "concert-history");
 
     if (response.status === 401 || response.status === 403) {
       warnLog("concert-history", `Songkick rejected credentials while resolving "${artistName}" (HTTP ${response.status}).`);
@@ -225,7 +225,7 @@ async function fetchSongkickEvents(
   }
 
   try {
-    const response = await fetchWithTimeout(url.toString(), { headers: { Accept: "application/json" } }, timeoutMs, fetchImpl);
+    const response = await fetchWithTimeout(url.toString(), { headers: { Accept: "application/json" } }, timeoutMs, fetchImpl, "concert-history");
 
     if (response.status === 401 || response.status === 403) {
       warnLog("concert-history", `Songkick rejected credentials for "${artistName}" (HTTP ${response.status}).`);

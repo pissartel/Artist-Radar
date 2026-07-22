@@ -323,6 +323,71 @@ Known limitations: MusicBrainz event/venue data is community-contributed and far
 
 **Manual validation:** run the CLI `booking` command for an artist with `ENABLE_OPENAGENDA=true` (optionally `ENABLE_MUSICBRAINZ_EVENT_HISTORY=true`) and inspect `outputs/booking/<run-id>/booking.json` for `venue` opportunities whose `target.venueArtistEvidence` carries real source URLs for each similar artist's past concert there. Tuesday Fall (Spotify ID `2RO6dHJK11CKcEg1G7XYps`, pop punk, Paris, target "grandes villes françaises") is a useful manual example — not hardcoded application logic.
 
+### TicketmasterBookingSourceProvider
+
+Disabled by default. Requires both `ENABLE_TICKETMASTER_CONCERTS=true` and `TICKETMASTER_API_KEY`; missing either skips the provider with a clear debug log (scope `ticketmaster`, `DEBUG_TICKETMASTER_CONCERTS=true`) and the rest of the pipeline continues normally.
+
+Runs three complementary searches against the official Ticketmaster Discovery API v2 (`events.json`, `attractions.json`, `venues.json`) rather than one large generic query:
+
+- **Genre + location** — `segmentName=Music`, one query per mapped Ticketmaster classification (`src/providers/ticketmaster/genreMapping.ts`'s `ticketmasterGenreMappings`, e.g. `pop punk` → `Punk`, `Alternative Rock`, `Rock`; not exhaustive), scoped to the user-entered city (preferred) or the artist profile's city, with a configurable radius. Only upcoming events are kept as targets.
+- **Similar artists** — the same top-N-by-compatibility selection used elsewhere in the codebase (`SimilarArtist.totalRelevance`, deterministic, never random), bounded to `TICKETMASTER_SIMILAR_ARTIST_LIMIT` artists processed with concurrency `DEFAULT_TICKETMASTER_CONCURRENCY = 2`. For each artist: resolves a Ticketmaster attraction (`resolveAttraction` — deterministic scoring on exact/alias/substring name match, required Music classification, genre compatibility; `ambiguous`/`not_found` results skip event retrieval for that artist rather than guessing), then fetches upcoming events plus a best-effort, bounded past-events query (`TICKETMASTER_PAST_LOOKBACK_MONTHS`).
+- **Venue/scene evidence** — every similar artist's events are aggregated by venue (`src/modules/ticketmasterEvidence.ts`) and by city/region, feeding a `venueCompatibilityScore` (more compatible artists, more recent activity, upcoming events all increase it) and exposed on the pipeline result (see below), not just used internally.
+
+**Known Ticketmaster limitations, preserved deliberately rather than papered over:**
+
+- Not a complete source of small DIY concerts, bars, associations, full lineups, past concert history, or venue booking contacts — only events sold/distributed through Ticketmaster-affiliated systems.
+- Past-event queries are best-effort and opportunistic. Zero results never means "this artist has never played anywhere" — the provider never reconstructs a full career history.
+- Lineup completeness is uncertain. A single listed attraction on a future event produces a hedged `supportSlotSignal: "possible"` heuristic (with an explicit, always-present explanation sentence) — never a confirmed "support slot available" claim. Multiple listed attractions produce `"unlikely"`. Festivals/multi-day events are detected separately (`eventType: "festival"`, from event name, classification, or attraction count ≥ 4) and are never evaluated for a standalone venue support slot.
+- Attraction name resolution never automatically picks the first search result: two similarly-scored candidates are reported `ambiguous` and that artist's event retrieval is skipped entirely, even if that means missing real data, rather than risk attributing events to the wrong artist.
+
+**Cost controls:** every event/attraction/venue query is memoized per exact parameter shape for the lifetime of the provider instance (one booking search); retries are bounded (max 2) and only for HTTP 429/5xx, never for 400/401/403/404; the API key travels as a URL query parameter (Ticketmaster's own requirement) and is redacted from any logged URL (`src/utils/fetchWithTimeout.ts`'s `redactUrlForLogging`) so it never appears in debug output.
+
+**Cross-provider deduplication:** Ticketmaster events merge with existing OpenAgenda/web-discovered targets when they share a calendar date and a normalized-equal venue name (or matching city as a fallback when venue-name evidence is missing on one side) — never on event title alone. A merge preserves the richer venue/lineup/image/contact data from either side and keeps the second source's URL as an evidence line (`src/booking/searchBookingOpportunities.ts`'s `dedupeTargets`/`mergeBookingTargets`), since `BookingTarget` carries one primary `sourceUrl`, not a list.
+
+**Optional configuration:**
+
+- `TICKETMASTER_COUNTRY_CODE` — explicit ISO code; otherwise resolved from the artist profile's country name via a small, non-exhaustive lookup table, or omitted entirely (never hardcoded to one country — the same implementation works for Bordeaux, Lyon, Lille, Nantes, Toulouse, or cities outside France).
+- `TICKETMASTER_SEARCH_RADIUS_KM` (default 100), `TICKETMASTER_EVENT_LIMIT` (default 50), `TICKETMASTER_SIMILAR_ARTIST_LIMIT` (default 5), `TICKETMASTER_LOOKAHEAD_MONTHS` (default 12), `TICKETMASTER_PAST_LOOKBACK_MONTHS` (default 18).
+
+**Pipeline output:** `OpportunitySearchRunResult.ticketmaster` (booking mode only, optional — undefined when Ticketmaster is disabled or the run isn't in booking mode) exposes `opportunities` (a filtered view of the already-scored/deduped booking opportunities whose `sourceProvider` is `"ticketmaster"`, not a second ranking system), `similarArtistEvents`, `venueEvidence`, `sceneEvidence` and `diagnostics` (query/cache/error counters — never the API key or raw request headers).
+
+**Known limitation:** no real `TICKETMASTER_API_KEY` was available while implementing this, so the client/adapter is built against Ticketmaster's documented public Discovery API v2 contract but has not been live-verified. Run the manual CLI test below with a real key before relying on this in production, and specifically double-check attraction search relevance (an API's own "search"/"keyword" matching sometimes matches more loosely than its documentation implies — this exact category of issue was found and fixed once already, for OpenAgenda, elsewhere in this booking pipeline).
+
+**Manual CLI test:**
+
+```bash
+DEBUG_TICKETMASTER_CONCERTS=true ENABLE_TICKETMASTER_CONCERTS=true TICKETMASTER_API_KEY=... \
+npx tsx src/cli.ts booking --artist "Tuesday Fall" --city "Paris" --genre "pop punk"
+```
+
+With no key configured, the startup log reports `Ticketmaster: disabled (TICKETMASTER_API_KEY is missing)` and the rest of the pipeline runs unaffected.
+
+Example debug output:
+
+```text
+[ticketmaster] Integration enabled
+[ticketmaster] Search location: Paris, FR
+[ticketmaster] Radius: 100 km
+[ticketmaster] Target genres: pop punk
+[ticketmaster] Ticketmaster classifications: Punk, Alternative Rock, Rock
+[ticketmaster] [genre-search] Searching future events
+[ticketmaster] [genre-search] Raw events: 48
+[ticketmaster] [genre-search] Relevant events after scoring: 12
+[ticketmaster] [similar-artists] Found 34 similar artists
+[ticketmaster] [similar-artists] Selected top 5
+[ticketmaster] [similar-artists] 1. Artist A — compatibility: 0.91
+[ticketmaster] [Artist A][attraction] Searching attraction
+[ticketmaster] [Artist A][attraction] Resolved to K8vZ... — confidence: 0.97
+[ticketmaster] [Artist A][events] Past: 1 | Upcoming: 4
+[ticketmaster] [deduplication] Raw opportunities: 22
+[ticketmaster] [deduplication] Final opportunities: 15
+[ticketmaster] Top opportunities:
+[ticketmaster] 0.89 | 2026-10-12 | Artist A | Venue Name | Paris
+[ticketmaster] 15 relevant events and 9 compatible venues found
+```
+
+When `DEBUG_TICKETMASTER_CONCERTS` is not set, only the final one-line summary prints.
+
 ## Provider Priority
 
 For pop punk booking, providers run in this order:
@@ -332,7 +397,8 @@ For pop punk booking, providers run in this order:
 3. **Scene agenda web search** — uses first available search provider against scene agenda sites
 4. **Web search providers** — one provider per enabled Tavily/Exa key
 5. **OpenAgenda** — secondary; requires `ENABLE_OPENAGENDA=true` and `OPENAGENDA_API_KEY`
-6. **Firecrawl** — optional; requires `ENABLE_FIRECRAWL_BOOKING=true` and `FIRECRAWL_API_KEY`
+6. **Ticketmaster** — optional; requires `ENABLE_TICKETMASTER_CONCERTS=true` and `TICKETMASTER_API_KEY`
+7. **Firecrawl** — optional; requires `ENABLE_FIRECRAWL_BOOKING=true` and `FIRECRAWL_API_KEY`
 
 Booking search works with zero API keys — native scene agenda fetch runs by default for punk genres.
 
@@ -357,6 +423,15 @@ Booking search works with zero API keys — native scene agenda fetch runs by de
 | `BOOKING_MAX_SIMILAR_ARTISTS_FOR_VENUE_HISTORY` | Override the similar-artist count used for concert-history venue discovery | `10` |
 | `BOOKING_MAX_HISTORICAL_EVENTS_PER_ARTIST` | Override the max historical events fetched per similar artist per provider | `20` |
 | `BOOKING_HISTORICAL_EVENT_LOOKBACK_MONTHS` | Override how far back concert-history venue discovery looks | `24` |
+| `ENABLE_TICKETMASTER_CONCERTS` | `true` to enable Ticketmaster | `false` |
+| `TICKETMASTER_API_KEY` | Enables Ticketmaster Discovery API v2 | — |
+| `TICKETMASTER_COUNTRY_CODE` | ISO 3166-1 alpha-2 override for location search | resolved from artist profile country, or omitted |
+| `TICKETMASTER_SEARCH_RADIUS_KM` | Location search radius | `100` |
+| `TICKETMASTER_EVENT_LIMIT` | Max events per genre/location query | `50` |
+| `TICKETMASTER_SIMILAR_ARTIST_LIMIT` | Top-N similar artists processed | `5` |
+| `TICKETMASTER_LOOKAHEAD_MONTHS` | Upcoming-event search window | `12` |
+| `TICKETMASTER_PAST_LOOKBACK_MONTHS` | Best-effort past-event search window | `18` |
+| `DEBUG_TICKETMASTER_CONCERTS` | `true` for detailed per-artist/per-provider Ticketmaster logs | `false` (compact summary only) |
 
 ## Future Providers
 

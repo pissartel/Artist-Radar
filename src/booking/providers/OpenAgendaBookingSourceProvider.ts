@@ -22,7 +22,7 @@ export interface OpenAgendaBookingSourceProviderOptions {
   seeds?: OpenAgendaLocationSeed[];
 }
 
-interface OpenAgendaEvent {
+export interface OpenAgendaEvent {
   uid?: string | number;
   title?: string | Record<string, string | undefined> | null;
   description?: string | Record<string, string | undefined> | null;
@@ -69,7 +69,7 @@ interface OpenAgendaAgendaResponse {
   total?: number;
 }
 
-interface SelectedOpenAgendaAgenda {
+export interface SelectedOpenAgendaAgenda {
   uid: string;
   title: string | null;
   slug: string | null;
@@ -226,7 +226,7 @@ export function buildOpenAgendaBookingSourceProvider(
   };
 }
 
-async function discoverAgendas({
+export async function discoverAgendas({
   apiKey,
   baseUrl,
   fetchImpl,
@@ -539,7 +539,7 @@ function buildOpenAgendaAgendaSearchUrl(baseUrl: string | undefined, query: stri
   return url.toString();
 }
 
-async function fetchOpenAgenda(endpoint: string, apiKey: string, fetchImpl: FetchLike): Promise<Response> {
+export async function fetchOpenAgenda(endpoint: string, apiKey: string, fetchImpl: FetchLike): Promise<Response> {
   return fetchImpl(endpoint, {
     method: "GET",
     headers: {
@@ -553,7 +553,7 @@ function isOpenAgendaEnabled(env: OpenAgendaBookingSourceProviderEnv): boolean {
   return env.ENABLE_OPENAGENDA === "true" || env.ENABLE_OPENAGENDA_BOOKING === "true";
 }
 
-function findMatchingOpenAgendaSeeds(
+export function findMatchingOpenAgendaSeeds(
   seeds: OpenAgendaLocationSeed[],
   locations: string[],
   target: string | null
@@ -670,7 +670,7 @@ function classifyOpenAgendaCategory(title: string, description: string): Booking
   return "event";
 }
 
-function parseAgendaUids(value: string | undefined): string[] {
+export function parseAgendaUids(value: string | undefined): string[] {
   if (!value) {
     return [];
   }
@@ -723,7 +723,7 @@ function textList(value: unknown): string[] {
   return [];
 }
 
-function firstText(...values: unknown[]): string | null {
+export function firstText(...values: unknown[]): string | null {
   for (const value of values) {
     const text = textList(value)[0];
     if (text) {
@@ -733,7 +733,7 @@ function firstText(...values: unknown[]): string | null {
   return null;
 }
 
-function localizedText(value: OpenAgendaEvent["title"]): string | null {
+export function localizedText(value: OpenAgendaEvent["title"]): string | null {
   if (!value) {
     return null;
   }

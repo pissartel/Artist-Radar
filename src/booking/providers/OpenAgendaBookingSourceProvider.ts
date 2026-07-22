@@ -46,6 +46,14 @@ export interface OpenAgendaEvent {
     begin?: string | null;
     end?: string | null;
   }>;
+  slug?: string | null;
+  // Present when this event was fetched through an aggregator agenda (e.g. a
+  // regional webzine) rather than the organizer's own agenda; its slug/uid
+  // identify the true owning agenda for building a working event page URL.
+  originAgenda?: {
+    uid?: string | number;
+    slug?: string | null;
+  } | null;
 }
 
 interface OpenAgendaAgenda {
@@ -529,7 +537,7 @@ function buildOpenAgendaEventsUrl(baseUrl: string | undefined, agendaUid: string
   return url.toString();
 }
 
-function buildOpenAgendaAgendaSearchUrl(baseUrl: string | undefined, query: string, limit: number): string {
+export function buildOpenAgendaAgendaSearchUrl(baseUrl: string | undefined, query: string, limit: number): string {
   const url = new URL(`${baseUrl ?? "https://api.openagenda.com"}/v2/agendas`);
   url.searchParams.set("search", query);
   url.searchParams.set("size", String(Math.max(1, Math.min(limit, 20))));
@@ -705,7 +713,7 @@ function normalizeSearchText(value: string): string {
     .toLowerCase();
 }
 
-function textList(value: unknown): string[] {
+export function textList(value: unknown): string[] {
   if (!value) {
     return [];
   }

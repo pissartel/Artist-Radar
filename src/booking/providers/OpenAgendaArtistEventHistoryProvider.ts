@@ -1,11 +1,13 @@
 import { OPENAGENDA_LOCATION_SEEDS, type OpenAgendaLocationSeed } from "../config/openAgendaSeeds.js";
 import {
+  buildOpenAgendaAgendaSearchUrl,
   discoverAgendas,
   fetchOpenAgenda,
   findMatchingOpenAgendaSeeds,
   firstText,
   localizedText,
   parseAgendaUids,
+  textList,
   type OpenAgendaEvent,
   type SelectedOpenAgendaAgenda
 } from "./OpenAgendaBookingSourceProvider.js";
@@ -157,27 +159,116 @@ async function resolveAgendas({
   }
 
   // No configured or seeded agendas: fall back to the same discovery used by
-  // OpenAgendaBookingSourceProvider, scoped to the requested location(s). A
-  // minimal synthetic input is enough since discovery only reads genre/target
-  // for keyword generation, both generic here (this call is artist-name
-  // driven, not genre driven).
+  // OpenAgendaBookingSourceProvider, scoped to the requested location(s),
+  // PLUS a supplementary venue-focused agenda search. A live probe against
+  // the real OpenAgenda API showed the shared discovery's scoring
+  // (scoreAgenda in OpenAgendaBookingSourceProvider.ts) gives a location
+  // text match alone enough score to reach its top-5 cut, so results are
+  // often dominated by places whose name merely contains the location
+  // (e.g. "Puiseux-en-France", "Info Jeunes France") ahead of real venues.
+  // The supplementary search below, scoped to a venue-focused keyword
+  // phrase and filtered by title before any ranking/truncation happens,
+  // reliably surfaces real SMACs/clubs instead (Le Batofar, La Sirène, Le
+  // Tamanoir, La Vapeur, Le 106, regional aggregators like LA MURMURE...).
   const syntheticInput: BookingSearchInput = {
     artist: "",
     city: locations[0] ?? "",
-    genre: "concert",
+    genre: "salle de musiques actuelles SMAC club concerts programmation",
     target: null,
     links: [],
     limit: 1
   };
-  return discoverAgendas({
-    apiKey,
-    baseUrl,
-    fetchImpl,
-    input: syntheticInput,
-    locations,
-    seeds: matchedSeeds,
-    searchedQueries: [],
-    warnings: []
+  const [discovered, supplementary] = await Promise.all([
+    discoverAgendas({
+      apiKey,
+      baseUrl,
+      fetchImpl,
+      input: syntheticInput,
+      locations,
+      seeds: matchedSeeds,
+      searchedQueries: [],
+      warnings: []
+    }),
+    fetchVenueFocusedAgendas(apiKey, baseUrl, fetchImpl, locations)
+  ]);
+
+  // Extra precision safety net: only keep discovered agendas whose title
+  // carries an actual live-music signal, dropping stragglers (e.g. a
+  // department's generic civic listing) that the shared discovery query
+  // may still surface. Not applied to env-override/seed agendas, which are
+  // already explicit/trusted.
+  const filteredDiscovered = discovered.filter((agenda) => !agenda.title || MUSIC_AGENDA_TITLE_PATTERN.test(agenda.title));
+
+  return uniqueAgendasByUid([...supplementary, ...filteredDiscovered]).slice(0, 10);
+}
+
+const MUSIC_AGENDA_TITLE_PATTERN =
+  /\b(concert|concerts|musique|musiques|music|festival|club|salle|scène|scene|live|smac|philharmonie|conservatoire|programmation)\b/i;
+
+interface OpenAgendaAgendaSearchHit {
+  uid?: string | number;
+  title?: unknown;
+  slug?: string | null;
+  official?: boolean;
+}
+
+interface OpenAgendaAgendaSearchResponse {
+  agendas?: OpenAgendaAgendaSearchHit[];
+  data?: OpenAgendaAgendaSearchHit[];
+}
+
+// Searches directly for venue-focused agendas (bypassing the shared
+// discovery's location-weighted scoring/truncation) and keeps only titles
+// carrying a real live-music signal, checked before any ranking happens.
+async function fetchVenueFocusedAgendas(
+  apiKey: string,
+  baseUrl: string | undefined,
+  fetchImpl: FetchLike,
+  locations: string[]
+): Promise<SelectedOpenAgendaAgenda[]> {
+  const results = await Promise.all(
+    locations.slice(0, 3).map(async (location) => {
+      try {
+        const query = `${location} salle de musiques actuelles SMAC club concerts programmation`;
+        const response = await fetchOpenAgenda(buildOpenAgendaAgendaSearchUrl(baseUrl, query, 10), apiKey, fetchImpl);
+        if (!response.ok) {
+          return [];
+        }
+        const body = (await response.json()) as OpenAgendaAgendaSearchResponse;
+        return body.agendas ?? body.data ?? [];
+      } catch {
+        return [];
+      }
+    })
+  );
+
+  return results.flat().flatMap((hit): SelectedOpenAgendaAgenda[] => {
+    const uid = hit.uid === undefined ? null : String(hit.uid).trim();
+    const title = localizedText(hit.title as OpenAgendaEvent["title"]);
+    if (!uid || !title || !MUSIC_AGENDA_TITLE_PATTERN.test(title)) {
+      return [];
+    }
+    return [{
+      uid,
+      title,
+      slug: hit.slug ?? null,
+      official: typeof hit.official === "boolean" ? hit.official : null,
+      sourceUrl: hit.slug ? `https://openagenda.com/${hit.slug}` : `https://openagenda.com/agendas/${uid}`,
+      matchedQuery: null,
+      matchedLocation: locations[0] ?? null,
+      source: "discovery"
+    }];
+  });
+}
+
+function uniqueAgendasByUid(agendas: SelectedOpenAgendaAgenda[]): SelectedOpenAgendaAgenda[] {
+  const seen = new Set<string>();
+  return agendas.filter((agenda) => {
+    if (seen.has(agenda.uid)) {
+      return false;
+    }
+    seen.add(agenda.uid);
+    return true;
   });
 }
 
@@ -210,6 +301,18 @@ function buildArtistEventsUrl(
   if (dateTo) {
     url.searchParams.set("timings[lte]", `${dateTo}T23:59:59.000Z`);
   }
+  // Most events don't carry an external canonicalUrl/url/registrationUrl
+  // (confirmed via a live probe against the real API), so slug and
+  // originAgenda are requested to build a working openagenda.com event page
+  // as a fallback real source (verified: https://openagenda.com/{agendaSlug}/events/{eventSlug} resolves).
+  // description/longDescription/keywords are requested so the artist-name
+  // verification below has real content to check, not just the title.
+  for (const field of [
+    "uid", "title", "description", "longDescription", "keywords", "location", "firstTiming", "timings",
+    "url", "canonicalUrl", "registrationUrl", "slug", "originAgenda"
+  ]) {
+    url.searchParams.append("includeFields[]", field);
+  }
   return url.toString();
 }
 
@@ -218,7 +321,19 @@ function toHistoricalArtistEvent(
   artistName: string,
   agenda: SelectedOpenAgendaAgenda
 ): HistoricalArtistEvent | null {
-  const sourceUrl = firstText(event.canonicalUrl, event.url, event.registrationUrl);
+  // OpenAgenda's `search` parameter matches loosely on individual words, not
+  // the artist name as a phrase (confirmed via a live probe: searching "Feu!
+  // Chatterton" returned 17 events about fireworks/ceramics/traffic lights —
+  // 0 of which actually mentioned the band, all matched on the standalone
+  // word "feu"/fire). Every candidate must be re-verified here: the artist
+  // name must actually appear in the event's own title/description/keywords,
+  // or it's discarded rather than kept as an unverified, misleading match.
+  if (!eventMentionsArtist(event, artistName)) {
+    return null;
+  }
+
+  const constructedUrl = buildOpenAgendaEventPageUrl(event, agenda);
+  const sourceUrl = firstText(event.canonicalUrl, event.url, event.registrationUrl) ?? constructedUrl;
   const venueName = event.location?.name?.trim() || null;
   if (!sourceUrl || !venueName) {
     return null;
@@ -236,6 +351,50 @@ function toHistoricalArtistEvent(
     organizer: agenda.title,
     confidence: agenda.official ? 0.72 : 0.6
   };
+}
+
+function eventMentionsArtist(event: OpenAgendaEvent, artistName: string): boolean {
+  const normalizedArtistName = normalizeForMatch(artistName);
+  if (!normalizedArtistName) {
+    return false;
+  }
+  const text = normalizeForMatch([
+    localizedText(event.title) ?? "",
+    localizedText(event.description) ?? "",
+    localizedText(event.longDescription) ?? "",
+    ...textList(event.keywords)
+  ].join(" "));
+  return text.includes(normalizedArtistName);
+}
+
+// Lowercases, strips accents and collapses punctuation to spaces so minor
+// formatting differences ("Feu! Chatterton" vs "Feu Chatterton") don't cause
+// a genuine mention to be missed, without loosening the match into a
+// word-by-word/fuzzy one like OpenAgenda's own search does.
+function normalizeForMatch(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+// Builds a real, dereferenceable OpenAgenda event page from the event's own
+// slug plus its owning agenda's slug (the queried agenda, or, when the event
+// was surfaced through an aggregator, the event's originAgenda). Returns
+// null rather than guessing when a slug is missing on either side, per
+// AGENTS.md — never invent a source URL.
+function buildOpenAgendaEventPageUrl(event: OpenAgendaEvent, agenda: SelectedOpenAgendaAgenda): string | null {
+  if (!event.slug) {
+    return null;
+  }
+  const agendaSlug = event.originAgenda?.slug ?? agenda.slug;
+  if (!agendaSlug) {
+    return null;
+  }
+  return `https://openagenda.com/${agendaSlug}/events/${event.slug}`;
 }
 
 function uniqueStrings(values: string[]): string[] {

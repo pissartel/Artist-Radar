@@ -60,7 +60,7 @@ describe("OpenAgendaArtistEventHistoryProvider", () => {
         events: [
           {
             uid: 1,
-            title: { fr: "Peer One en concert" },
+            title: { fr: "Paris Peer One en concert" },
             canonicalUrl: "https://openagenda.com/agendas/123/events/1",
             location: { name: "Le Sample", city: "Paris", country: "France" },
             firstTiming: { begin: "2025-05-10T20:00:00+02:00" }
@@ -75,7 +75,7 @@ describe("OpenAgendaArtistEventHistoryProvider", () => {
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       artistName: "Paris Peer One",
-      eventName: "Peer One en concert",
+      eventName: "Paris Peer One en concert",
       eventDate: "2025-05-10T20:00:00+02:00",
       venueName: "Le Sample",
       city: "Paris",
@@ -91,6 +91,7 @@ describe("OpenAgendaArtistEventHistoryProvider", () => {
         events: [
           {
             uid: 2,
+            title: { fr: "Concert avec Paris Peer One" },
             url: "https://openagenda.com/agendas/123/events/2",
             location: { name: "Minimal Venue" }
           }
@@ -107,7 +108,7 @@ describe("OpenAgendaArtistEventHistoryProvider", () => {
       sourceUrl: "https://openagenda.com/agendas/123/events/2",
       city: null,
       country: null,
-      eventName: null,
+      eventName: "Concert avec Paris Peer One",
       eventDate: null
     });
   });
@@ -116,8 +117,8 @@ describe("OpenAgendaArtistEventHistoryProvider", () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
       responseWithJson({
         events: [
-          { uid: 3, canonicalUrl: "https://openagenda.com/agendas/123/events/3" }, // no location/venue name
-          { uid: 4, location: { name: "Untraceable Venue" } } // no URL at all
+          { uid: 3, title: { fr: "Paris Peer One" }, canonicalUrl: "https://openagenda.com/agendas/123/events/3" }, // no location/venue name
+          { uid: 4, title: { fr: "Paris Peer One" }, location: { name: "Untraceable Venue" } } // no URL at all
         ]
       })
     );
@@ -126,6 +127,39 @@ describe("OpenAgendaArtistEventHistoryProvider", () => {
     const events = await provider.findPastEvents({ artistName: "Paris Peer One" });
 
     expect(events).toEqual([]);
+  });
+
+  it("discards events OpenAgenda's loose word-level search matched but that don't actually mention the artist", async () => {
+    // OpenAgenda's `search` parameter matches individual words, not the full
+    // artist name as a phrase (confirmed against the real API: searching
+    // "Feu! Chatterton" returned events about fireworks/traffic lights that
+    // only shared the standalone word "feu"). Verified via title/description
+    // here so an unrelated event never gets attributed to the artist.
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      responseWithJson({
+        events: [
+          {
+            uid: 5,
+            title: { fr: "Feu d'artifice du 14 juillet" },
+            description: { fr: "Un grand feu d'artifice pour clôturer la fête." },
+            canonicalUrl: "https://openagenda.com/agendas/123/events/5",
+            location: { name: "Place de la Mairie" }
+          },
+          {
+            uid: 6,
+            title: { fr: "Feu! Chatterton en concert" },
+            canonicalUrl: "https://openagenda.com/agendas/123/events/6",
+            location: { name: "Le Sample" }
+          }
+        ]
+      })
+    );
+    const provider = buildOpenAgendaArtistEventHistoryProvider({ env: enabledEnv, fetchImpl });
+
+    const events = await provider.findPastEvents({ artistName: "Feu! Chatterton" });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ venueName: "Le Sample" });
   });
 
   it("memoizes agenda resolution per resolved location across multiple artists", async () => {

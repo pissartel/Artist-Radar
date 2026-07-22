@@ -1,20 +1,44 @@
 import type { WebExtractProvider } from "../../providers/web/WebExtractProvider.js";
 import type { WebSearchProvider, WebSearchResult } from "../../providers/web/WebSearchProvider.js";
 import { warnLog } from "../../utils/logger.js";
+import {
+  buildVenueTargetsFromArtistEventHistory,
+  dedupeHistoricalArtistEvents,
+  fetchHistoricalEventsForSimilarArtists,
+  getHistoricalEventLookbackMonths,
+  getMaxHistoricalEventsPerArtist,
+  getMaxSimilarArtistsForVenueDiscovery,
+  selectSimilarArtistsForLiveHistory,
+  type ArtistEventHistoryProvider
+} from "../artistEventHistory.js";
 import { extractEventDate } from "../dateParsing.js";
 import { matchBookingGenres } from "../genreMatching.js";
 import { normalizeBookingSource } from "../normalizeBookingTarget.js";
 import { compareArtistPopularity, isStrongSimilarArtistForBooking } from "../relevance.js";
-import type { BookingSearchInput, RawBookingSource } from "../types.js";
+import type { BookingSearchInput, BookingTarget, RawBookingSource } from "../types.js";
 import type { BookingSourceProvider } from "./BookingSourceProvider.js";
 import type { SimilarArtist } from "../../schemas.js";
 
 export interface SimilarArtistLiveHistoryProviderOptions {
-  webSearchProvider: WebSearchProvider;
+  /**
+   * Optional so this provider can run purely on structured
+   * eventHistoryProviders (issue #182, e.g. OpenAgenda/MusicBrainz) without
+   * requiring a paid web search API key. When omitted, the free-text
+   * city/country/support-slot search below is skipped entirely.
+   */
+  webSearchProvider?: WebSearchProvider | null;
   webExtractProvider?: WebExtractProvider | null;
   maxSimilarArtists?: number;
   maxResultsPerArtist?: number;
   maxExtractPages?: number;
+  /**
+   * Structured concert-history providers (issue #182), e.g. OpenAgenda or
+   * MusicBrainz adapters. Optional and additive: when omitted, this
+   * provider behaves exactly as before (free-text web search only).
+   */
+  eventHistoryProviders?: ArtistEventHistoryProvider[];
+  maxHistoricalEventsPerArtist?: number;
+  historicalEventLookbackMonths?: number;
 }
 
 const SUPPORT_SIGNAL_PATTERN = /\b(première partie|premiere partie|1ère partie|1ere partie|support tba|support à venir|support a venir|\+\s*guests?|line-?up (bientôt|soon)|lineup (bientôt|soon)|invités? à venir|invites? a venir)\b/i;
@@ -23,9 +47,10 @@ export function buildSimilarArtistLiveHistoryBookingSourceProvider(
   options: SimilarArtistLiveHistoryProviderOptions
 ): BookingSourceProvider {
   return {
-    providerName: `similar_artist_live_history:${options.webSearchProvider.providerName}`,
+    providerName: `similar_artist_live_history:${options.webSearchProvider?.providerName ?? "structured_only"}`,
     async search({ input, maxResults }) {
-      const similarArtists = selectSimilarArtistsForBooking(input, options.maxSimilarArtists ?? 6);
+      const webSearchProvider = options.webSearchProvider ?? null;
+      const similarArtists = webSearchProvider ? selectSimilarArtistsForBooking(input, options.maxSimilarArtists ?? 6) : [];
       const rawSources: RawBookingSource[] = [];
       const searchedQueries: string[] = [];
       const extractQueue: Array<{ url: string; artist: SimilarArtist | null }> = [];
@@ -38,36 +63,18 @@ export function buildSimilarArtistLiveHistoryBookingSourceProvider(
       let countryFallbackUsed = false;
       const resolvedLocations = new Set<string>([city, country]);
 
-      for (const artist of similarArtists) {
-        const cityQueries = buildSimilarArtistCityQueries(artist, city).slice(0, 2);
-        cityQueriesGenerated += cityQueries.length;
-        let artistCityResultCount = 0;
+      if (webSearchProvider) {
+        for (const artist of similarArtists) {
+          const cityQueries = buildSimilarArtistCityQueries(artist, city).slice(0, 2);
+          cityQueriesGenerated += cityQueries.length;
+          let artistCityResultCount = 0;
 
-        for (const query of cityQueries) {
-          searchedQueries.push(query);
-          const results = await options.webSearchProvider.search(query, {
-            limit: Math.min(options.maxResultsPerArtist ?? 3, maxResults ?? input.limit)
-          });
-          artistCityResultCount += results.length;
-          rawSimilarArtistResultCount += results.length;
-          for (const result of results) {
-            rawSources.push(webResultToSimilarArtistSource(input, artist, result));
-            if (result.url && !isLowValueUrl(result.url)) {
-              extractQueue.push({ url: result.url, artist });
-            }
-          }
-        }
-
-        if (artistCityResultCount === 0) {
-          countryFallbackUsed = true;
-          warnLog("booking", `Similar artist live-history: Firecrawl returned 0 results for city-level search. Running France-level fallback for "${artist.name}".`);
-          const countryQueries = buildSimilarArtistCountryQueries(artist, country).slice(0, 3);
-          countryQueriesGenerated += countryQueries.length;
-          for (const query of countryQueries) {
+          for (const query of cityQueries) {
             searchedQueries.push(query);
-            const results = await options.webSearchProvider.search(query, {
+            const results = await webSearchProvider.search(query, {
               limit: Math.min(options.maxResultsPerArtist ?? 3, maxResults ?? input.limit)
             });
+            artistCityResultCount += results.length;
             rawSimilarArtistResultCount += results.length;
             for (const result of results) {
               rawSources.push(webResultToSimilarArtistSource(input, artist, result));
@@ -76,21 +83,43 @@ export function buildSimilarArtistLiveHistoryBookingSourceProvider(
               }
             }
           }
+
+          if (artistCityResultCount === 0) {
+            countryFallbackUsed = true;
+            warnLog("booking", `Similar artist live-history: Firecrawl returned 0 results for city-level search. Running France-level fallback for "${artist.name}".`);
+            const countryQueries = buildSimilarArtistCountryQueries(artist, country).slice(0, 3);
+            countryQueriesGenerated += countryQueries.length;
+            for (const query of countryQueries) {
+              searchedQueries.push(query);
+              const results = await webSearchProvider.search(query, {
+                limit: Math.min(options.maxResultsPerArtist ?? 3, maxResults ?? input.limit)
+              });
+              rawSimilarArtistResultCount += results.length;
+              for (const result of results) {
+                rawSources.push(webResultToSimilarArtistSource(input, artist, result));
+                if (result.url && !isLowValueUrl(result.url)) {
+                  extractQueue.push({ url: result.url, artist });
+                }
+              }
+            }
+          }
         }
       }
 
-      const supportSlotQueryList = buildSupportSlotDiscoveryQueries(input.genre, city, country).slice(0, 8);
+      const supportSlotQueryList = webSearchProvider ? buildSupportSlotDiscoveryQueries(input.genre, city, country).slice(0, 8) : [];
       let rawSupportSlotResultCount = 0;
-      for (const query of supportSlotQueryList) {
-        searchedQueries.push(query);
-        const results = await options.webSearchProvider.search(query, {
-          limit: Math.min(options.maxResultsPerArtist ?? 3, maxResults ?? input.limit)
-        });
-        rawSupportSlotResultCount += results.length;
-        for (const result of results) {
-          rawSources.push(webResultToSupportSlotSource(input, result));
-          if (result.url && !isLowValueUrl(result.url)) {
-            extractQueue.push({ url: result.url, artist: null });
+      if (webSearchProvider) {
+        for (const query of supportSlotQueryList) {
+          searchedQueries.push(query);
+          const results = await webSearchProvider.search(query, {
+            limit: Math.min(options.maxResultsPerArtist ?? 3, maxResults ?? input.limit)
+          });
+          rawSupportSlotResultCount += results.length;
+          for (const result of results) {
+            rawSources.push(webResultToSupportSlotSource(input, result));
+            if (result.url && !isLowValueUrl(result.url)) {
+              extractQueue.push({ url: result.url, artist: null });
+            }
           }
         }
       }
@@ -121,10 +150,22 @@ export function buildSimilarArtistLiveHistoryBookingSourceProvider(
 
       const supportSignalCount = rawSources.filter((source) => hasSupportSignal(source.text ?? "")).length;
 
-      const targets = rawSources.flatMap((source) => {
+      const freeTextTargets = rawSources.flatMap((source) => {
         const normalized = normalizeBookingSource(source);
         return normalized ? [normalized] : [];
       });
+
+      const eventHistoryProviders = options.eventHistoryProviders ?? [];
+      const historyResult = eventHistoryProviders.length > 0
+        ? await runStructuredEventHistorySearch(input, eventHistoryProviders, {
+            maxSimilarArtists: options.maxSimilarArtists,
+            maxHistoricalEventsPerArtist: options.maxHistoricalEventsPerArtist,
+            historicalEventLookbackMonths: options.historicalEventLookbackMonths,
+            countries: [country]
+          })
+        : null;
+
+      const targets = [...freeTextTargets, ...(historyResult?.targets ?? [])];
 
       const locationMode: "city" | "country" | "city_and_country" =
         countryFallbackUsed && cityQueriesGenerated > 0 ? "city_and_country" :
@@ -138,26 +179,32 @@ export function buildSimilarArtistLiveHistoryBookingSourceProvider(
         rawSupportSlotResults: rawSupportSlotResultCount,
         extractedCandidates: extractItems.length,
         supportSignalCount,
-        keptTargets: targets.length
+        keptTargets: freeTextTargets.length
       });
 
       if (countryFallbackUsed) {
         warnLog("booking", "Running specialized scene agenda fallback (if ENABLE_SCENE_AGENDAS=true, scene agenda providers will provide additional results).");
       }
 
+      if (historyResult) {
+        logStructuredEventHistorySummary(historyResult);
+      }
+
       return {
         targets,
-        sourceProvider: `similar_artist_live_history:${options.webSearchProvider.providerName}`,
+        sourceProvider: `similar_artist_live_history:${webSearchProvider?.providerName ?? "structured_only"}`,
         searchedQueries,
         warnings: [
-          ...(similarArtists.length === 0 ? ["No genre/popularity-compatible similar artists were available for booking live-history search."] : []),
-          ...(countryFallbackUsed ? ["City-level search returned zero results for some artists; country-level fallback was used."] : [])
+          ...(webSearchProvider && similarArtists.length === 0 ? ["No genre/popularity-compatible similar artists were available for booking live-history search."] : []),
+          ...(countryFallbackUsed ? ["City-level search returned zero results for some artists; country-level fallback was used."] : []),
+          ...(historyResult?.warnings ?? [])
         ],
         metadata: {
           similarArtistsConsidered: input.similarArtists?.length ?? 0,
-          similarArtistsKept: similarArtists.length,
+          similarArtistsKept: historyResult ? historyResult.similarArtistsKept : similarArtists.length,
+          similarArtistsKeptForFreeTextSearch: similarArtists.length,
           rawSourceCount: rawSources.length,
-          searchProvider: options.webSearchProvider.providerName,
+          searchProvider: webSearchProvider?.providerName ?? null,
           extractProvider: options.webExtractProvider?.providerName ?? null,
           generatedQueryCount: cityQueriesGenerated + countryQueriesGenerated + supportSlotQueryList.length,
           rawSearchResultCount: rawSimilarArtistResultCount + rawSupportSlotResultCount,
@@ -165,11 +212,89 @@ export function buildSimilarArtistLiveHistoryBookingSourceProvider(
           supportSignalCount,
           locationMode,
           resolvedLocations: [...resolvedLocations],
-          countryFallbackUsed
+          countryFallbackUsed,
+          historicalVenueTargets: historyResult?.targets.length ?? 0,
+          eventHistoryProviderCount: eventHistoryProviders.length,
+          eventHistoryProviderDiagnostics: historyResult?.providerDiagnostics ?? []
         }
       };
     }
   };
+}
+
+interface StructuredEventHistorySearchOptions {
+  maxSimilarArtists?: number;
+  maxHistoricalEventsPerArtist?: number;
+  historicalEventLookbackMonths?: number;
+  countries?: string[];
+}
+
+interface StructuredEventHistorySearchResult {
+  targets: BookingTarget[];
+  warnings: string[];
+  similarArtistsKept: number;
+  providerDiagnostics: Array<{ providerName: string; artistName: string; status: "ok" | "failed"; eventCount: number; message?: string }>;
+}
+
+// Structured, provider-neutral concert-history path (issue #182): selects a
+// mix of small/medium/local/close-audience similar artists (rather than the
+// stricter free-text selection above), fans out to every configured
+// ArtistEventHistoryProvider with bounded artist concurrency, and turns the
+// resulting historical events into venue candidates carrying per-artist
+// evidence. A failing provider or artist is isolated and reported as a
+// warning; it never aborts the rest of the search.
+async function runStructuredEventHistorySearch(
+  input: BookingSearchInput,
+  eventHistoryProviders: ArtistEventHistoryProvider[],
+  options: StructuredEventHistorySearchOptions
+): Promise<StructuredEventHistorySearchResult> {
+  const maxSimilarArtists = options.maxSimilarArtists ?? getMaxSimilarArtistsForVenueDiscovery();
+  const lookbackMonths = options.historicalEventLookbackMonths ?? getHistoricalEventLookbackMonths();
+  const maxHistoricalEventsPerArtist = options.maxHistoricalEventsPerArtist ?? getMaxHistoricalEventsPerArtist();
+  const similarArtists = selectSimilarArtistsForLiveHistory(input, maxSimilarArtists);
+
+  if (similarArtists.length === 0) {
+    return {
+      targets: [],
+      warnings: ["No genre/popularity-compatible similar artists were available for concert-history venue discovery."],
+      similarArtistsKept: 0,
+      providerDiagnostics: []
+    };
+  }
+
+  const now = new Date();
+  const dateFrom = new Date(now);
+  dateFrom.setMonth(dateFrom.getMonth() - lookbackMonths);
+
+  const fetchResult = await fetchHistoricalEventsForSimilarArtists(similarArtists, eventHistoryProviders, {
+    maxHistoricalEventsPerArtist,
+    countries: options.countries?.length ? options.countries : undefined,
+    dateFrom: dateFrom.toISOString().slice(0, 10),
+    dateTo: now.toISOString().slice(0, 10)
+  });
+
+  const dedupedEvents = dedupeHistoricalArtistEvents(fetchResult.events);
+  const targets = buildVenueTargetsFromArtistEventHistory(input, similarArtists, dedupedEvents, {
+    now,
+    lookbackMonths
+  });
+
+  return {
+    targets,
+    warnings: fetchResult.warnings,
+    similarArtistsKept: similarArtists.length,
+    providerDiagnostics: fetchResult.providerDiagnostics
+  };
+}
+
+function logStructuredEventHistorySummary(result: StructuredEventHistorySearchResult): void {
+  warnLog("booking", [
+    "Similar artist concert-history venue discovery:",
+    `- similar artists selected: ${result.similarArtistsKept}`,
+    `- venue candidates found: ${result.targets.length}`,
+    `- provider failures: ${result.providerDiagnostics.filter((diagnostic) => diagnostic.status === "failed").length}`,
+    `- warnings: ${result.warnings.length}`
+  ].join("\n"));
 }
 
 function selectSimilarArtistsForBooking(input: BookingSearchInput, limit: number): SimilarArtist[] {

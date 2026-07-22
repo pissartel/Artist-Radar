@@ -17,6 +17,8 @@ export interface BookingRelevanceSummary {
   openAgendaCandidatesKept: number;
   venueDiscoveryCandidatesFound: number;
   venueDiscoveryCandidatesKept: number;
+  eventHistoryVenueCandidatesFound: number;
+  eventHistoryVenueCandidatesKept: number;
   rejectedOldEvents: number;
   rejectedPastEvents: number;
   rejectedGenreMismatchEvents: number;
@@ -77,6 +79,8 @@ export function filterBookingTargetsForRelevance(
     openAgendaCandidatesKept: 0,
     venueDiscoveryCandidatesFound: targets.filter((target) => target.sourceProvider === "venue_discovery").length,
     venueDiscoveryCandidatesKept: 0,
+    eventHistoryVenueCandidatesFound: targets.filter((target) => target.sourceProvider === "similar_artist_event_history").length,
+    eventHistoryVenueCandidatesKept: 0,
     rejectedOldEvents: 0,
     rejectedPastEvents: 0,
     rejectedGenreMismatchEvents: 0,
@@ -133,6 +137,9 @@ export function filterBookingTargetsForRelevance(
     }
     if (enriched.sourceProvider === "venue_discovery") {
       summary.venueDiscoveryCandidatesKept += 1;
+    }
+    if (enriched.sourceProvider === "similar_artist_event_history") {
+      summary.eventHistoryVenueCandidatesKept += 1;
     }
     kept.push(enriched);
   }

@@ -21,6 +21,7 @@ import {
   type NativeFetchSceneAgendaEnv
 } from "./NativeFetchSceneAgendaProvider.js";
 import { buildSimilarArtistLiveHistoryBookingSourceProvider } from "./SimilarArtistLiveHistoryBookingSourceProvider.js";
+import { buildVenueDiscoveryBookingSourceProvider } from "./VenueDiscoveryBookingSourceProvider.js";
 import { buildWebSearchBookingSourceProvider } from "./WebSearchBookingSourceProvider.js";
 import { warnLog } from "../../utils/logger.js";
 
@@ -71,6 +72,18 @@ export function buildDefaultBookingSourceProviders(
       webExtractProvider: similarArtistExtractProvider,
       maxSimilarArtists: 6,
       maxResultsPerArtist: 3,
+      maxExtractPages: 6
+    }));
+
+    // Dedicated venue/organization discovery, independent of any announced
+    // event (issue #168): SMACs, bars, clubs, associations, collectives and
+    // promoters are searched directly rather than inferred from event pages.
+    providers.push(buildVenueDiscoveryBookingSourceProvider({
+      webSearchProvider: similarArtistSearchProvider,
+      webExtractProvider: similarArtistExtractProvider,
+      maxOrganizationQueries: 10,
+      maxSimilarArtistVenueQueries: 6,
+      maxResultsPerQuery: 4,
       maxExtractPages: 6
     }));
   }

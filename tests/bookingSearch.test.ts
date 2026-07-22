@@ -738,7 +738,11 @@ describe("Booking Search core", () => {
           targets: [
             baseTarget({ name: "Future Pop Punk", genres: ["pop punk"], eventDate: "2026-08-01", confidence: 0.8 }),
             baseTarget({ name: "Recent Emo", genres: ["emo"], eventDate: "2025-06-01", confidence: 0.8 }),
-            baseTarget({ name: "Old Punk", genres: ["punk rock"], eventDate: "2023-01-01", confidence: 0.9 }),
+            // category "event" (not the default "venue"): this row tests that an
+            // old *dated event* gets rejected. Venue/organization candidates are
+            // evergreen and are deliberately exempt from date-based rejection
+            // (issue #168) — see venueDiscoveryBookingSourceProvider.test.ts.
+            baseTarget({ name: "Old Punk", category: "event", genres: ["punk rock"], eventDate: "2023-01-01", confidence: 0.9 }),
             baseTarget({ name: "Techno Only", genres: ["techno"], description: "Techno club night.", eventDate: "2026-08-01", confidence: 0.9 }),
             baseTarget({ name: "Generic Rock", genres: ["rock"], description: "Rock concert music.", eventDate: "2026-08-01", confidence: 0.9 })
           ]

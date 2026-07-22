@@ -1,5 +1,5 @@
 import { matchBookingGenres } from "./genreMatching.js";
-import type { BookingSearchInput, BookingTarget, DateConfidence, OpportunityKind } from "./types.js";
+import type { BookingSearchInput, BookingTarget, BookingTargetCategory, DateConfidence, OpportunityKind } from "./types.js";
 import type { SimilarArtist } from "../schemas.js";
 import { toDateOnlyString } from "../utils/dateOnly.js";
 
@@ -15,6 +15,8 @@ export interface BookingRelevanceSummary {
   sceneAgendaCandidatesKept: number;
   openAgendaCandidatesFound: number;
   openAgendaCandidatesKept: number;
+  venueDiscoveryCandidatesFound: number;
+  venueDiscoveryCandidatesKept: number;
   rejectedOldEvents: number;
   rejectedPastEvents: number;
   rejectedGenreMismatchEvents: number;
@@ -34,6 +36,24 @@ const DEFAULT_RECENT_EVENT_MONTHS = 24;
 const HIGH_CONFIDENCE_WITHOUT_DATE = 0.82;
 const REJECT_GENRE_PATTERN = /\b(jazz|classical|musique classique|techno|house|rap|trap|hip hop|metal|chanson|cover band|tribute)\b/i;
 const PUNK_CROSSOVER_PATTERN = /\b(pop punk|punk rock|punk|emo|hardcore|easycore|skate punk|melodic punk)\b/i;
+
+// Recurring venues and organizations are evergreen opportunities: they do not
+// stop being relevant just because no upcoming show has been announced yet
+// (issue #168). One-off events, festivals, springboards and open calls still
+// need a real date/deadline signal to be actionable.
+const EVERGREEN_ORGANIZATION_CATEGORIES: ReadonlySet<BookingTargetCategory> = new Set([
+  "venue",
+  "bar",
+  "association",
+  "collective",
+  "promoter",
+  "live_producer",
+  "booking_agency"
+]);
+
+export function isEvergreenOrganizationCategory(category: BookingTargetCategory): boolean {
+  return EVERGREEN_ORGANIZATION_CATEGORIES.has(category);
+}
 
 export function getRecentEventMonths(env: BookingRelevanceEnv = process.env): number {
   const parsed = Number.parseInt(env.BOOKING_RECENT_EVENT_MONTHS ?? "", 10);
@@ -55,6 +75,8 @@ export function filterBookingTargetsForRelevance(
     sceneAgendaCandidatesKept: 0,
     openAgendaCandidatesFound: targets.filter((target) => target.sourceType === "openagenda").length,
     openAgendaCandidatesKept: 0,
+    venueDiscoveryCandidatesFound: targets.filter((target) => target.sourceProvider === "venue_discovery").length,
+    venueDiscoveryCandidatesKept: 0,
     rejectedOldEvents: 0,
     rejectedPastEvents: 0,
     rejectedGenreMismatchEvents: 0,
@@ -65,7 +87,7 @@ export function filterBookingTargetsForRelevance(
   const kept: BookingTarget[] = [];
 
   for (const target of targets) {
-    const dateStatus = classifyEventDate(target.eventDate ?? null, recentMonths, now);
+    const dateStatus = computeBookingDateStatus(target, recentMonths, now);
     const genreStatus = classifyBookingGenreEvidence(input, target);
 
     if (dateStatus.rejectReason === "old_event") {
@@ -108,6 +130,9 @@ export function filterBookingTargetsForRelevance(
     }
     if (enriched.sourceType === "specialized_scene_agenda") {
       summary.sceneAgendaCandidatesKept += 1;
+    }
+    if (enriched.sourceProvider === "venue_discovery") {
+      summary.venueDiscoveryCandidatesKept += 1;
     }
     kept.push(enriched);
   }
@@ -224,6 +249,41 @@ interface EventDateClassification {
   ageMonths: number | null;
   rejectReason: "old_event" | "missing_date" | "past_event" | null;
   evidence: string;
+}
+
+// Applies classifyEventDate's date logic for one-off events, but exempts
+// evergreen venue/organization categories from date-based rejection: they
+// remain actionable with no date at all, and an old event mention on their
+// page does not invalidate the organization itself.
+function computeBookingDateStatus(target: BookingTarget, recentMonths: number, now: Date): EventDateClassification {
+  const isEvergreen = isEvergreenOrganizationCategory(target.category);
+
+  if (!target.eventDate) {
+    if (isEvergreen) {
+      return {
+        isFutureEvent: null,
+        isPastEvent: false,
+        dateConfidence: "unclear",
+        opportunityKind: "actionable",
+        ageMonths: null,
+        rejectReason: null,
+        evidence: "Evergreen venue/organization opportunity; no upcoming event is required."
+      };
+    }
+    return classifyEventDate(null, recentMonths, now);
+  }
+
+  const status = classifyEventDate(target.eventDate, recentMonths, now);
+  if (isEvergreen && status.rejectReason === "old_event") {
+    return {
+      ...status,
+      isPastEvent: false,
+      opportunityKind: "actionable",
+      rejectReason: null,
+      evidence: `${status.evidence} Kept as an evergreen venue/organization opportunity despite the old event reference.`
+    };
+  }
+  return status;
 }
 
 export function classifyEventDate(eventDate: string | null, recentMonths: number, now: Date = new Date()): EventDateClassification {

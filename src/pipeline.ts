@@ -14,12 +14,14 @@ import { normalizeOpportunityUrls } from "./services/urlNormalization.js";
 import { findVenueEventCandidates } from "./modules/venueEventFinder.js";
 import type { ArtistProfile, EventCandidate, VenueCandidate } from "./schemas.js";
 import type { SimilarArtist } from "./schemas.js";
-import { debugLog } from "./utils/logger.js";
+import { debugLog, warnLog } from "./utils/logger.js";
 import type { SimilarArtistSeedRecord } from "./modules/similarArtistSeeds.js";
 import type { LastFmSimilarArtist } from "./services/lastfmService.js";
 import type { MusicBrainzArtistMetadata } from "./services/musicBrainzService.js";
 import { searchBookingOpportunities, type SearchBookingOpportunitiesOptions } from "./booking/searchBookingOpportunities.js";
 import type { BookingOpportunity, BookingSearchResult } from "./booking/types.js";
+import { findSimilarArtistConcerts, type SimilarArtistConcertsResult } from "./modules/similarArtistConcerts.js";
+import { buildDefaultArtistConcertProviders, type ArtistConcertProvider } from "./providers/concerts/ArtistConcertProvider.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
@@ -32,6 +34,11 @@ export interface RunOpportunitySearchOptions {
   musicBrainzSearch?: (artistName: string) => Promise<MusicBrainzArtistMetadata | null>;
   seedCandidates?: SimilarArtistSeedRecord[];
   bookingSearchOptions?: SearchBookingOpportunitiesOptions;
+  // Concert-history providers (Bandsintown, Songkick, setlist.fm) for the
+  // top-N most compatible similar artists. Defaults to the env-gated
+  // provider set; override for tests or to disable the feature entirely
+  // (empty array).
+  artistConcertProviders?: ArtistConcertProvider[];
   // When provided, pipeline stage progress is recorded in the in-memory
   // execution store (see pipelineExecutionState.ts) so a status endpoint can
   // report it back to the caller while this call is still running.
@@ -44,6 +51,10 @@ export interface OpportunitySearchRunResult {
   venueCandidates: VenueCandidate[];
   eventCandidates: EventCandidate[];
   opportunities: Opportunity[];
+  // Recent past and upcoming concerts for the top-N most compatible similar
+  // artists (Bandsintown/Songkick/setlist.fm). Optional: omitted rather than
+  // failing the whole analysis when the enrichment step itself errors.
+  similarArtistConcerts?: SimilarArtistConcertsResult[];
   bookingSearch?: BookingSearchResult;
 }
 
@@ -89,6 +100,10 @@ export async function runOpportunitySearch(
       seedCandidates: options.seedCandidates
     });
     const groupedSimilarArtists = groupSimilarArtistsByTier(similarArtists);
+    const similarArtistConcerts = await findSimilarArtistConcertsSafely(
+      flattenSimilarArtists(groupedSimilarArtists),
+      options.artistConcertProviders
+    );
     track("SEARCHING_OPPORTUNITIES");
     const { venueCandidates, eventCandidates } = await findVenueEventCandidates({
       profile,
@@ -124,7 +139,8 @@ export async function runOpportunitySearch(
         venueCandidates,
         eventCandidates,
         opportunities: bookingSearch.opportunities.map(mapBookingOpportunityToLegacyOpportunity),
-        bookingSearch
+        bookingSearch,
+        similarArtistConcerts
       };
       track("COMPLETED");
       if (executionId) {
@@ -161,7 +177,8 @@ export async function runOpportunitySearch(
       similarArtists: groupedSimilarArtists,
       venueCandidates,
       eventCandidates,
-      opportunities: validated.opportunities.slice(0, input.limit)
+      opportunities: validated.opportunities.slice(0, input.limit),
+      similarArtistConcerts
     };
     track("COMPLETED");
     if (executionId) {
@@ -215,7 +232,7 @@ function countSimilarArtists(groups: SimilarArtistsByTier): number {
   return groups.local_peer.length + groups.regional_peer.length + groups.support_target.length + groups.reference.length + groups.to_verify.length + groups.unknown.length;
 }
 
-function flattenSimilarArtists(groups: SimilarArtistsByTier): SimilarArtist[] {
+export function flattenSimilarArtists(groups: SimilarArtistsByTier): SimilarArtist[] {
   return [
     ...groups.local_peer,
     ...groups.regional_peer,
@@ -224,4 +241,21 @@ function flattenSimilarArtists(groups: SimilarArtistsByTier): SimilarArtist[] {
     ...groups.to_verify,
     ...groups.unknown
   ];
+}
+
+// A failure enriching similar artists with concert history must never fail
+// the whole artist analysis (AGENTS.md-style resilience, matching the
+// booking pipeline's own provider-isolation conventions elsewhere in this
+// file): degrade to an empty result and log a warning instead of throwing.
+async function findSimilarArtistConcertsSafely(
+  similarArtists: SimilarArtist[],
+  providers: ArtistConcertProvider[] | undefined
+): Promise<SimilarArtistConcertsResult[]> {
+  try {
+    const resolvedProviders = providers ?? buildDefaultArtistConcertProviders();
+    return await findSimilarArtistConcerts(similarArtists, resolvedProviders);
+  } catch (error) {
+    warnLog("concert-history", `Similar-artist concert-history enrichment failed and was skipped: ${error instanceof Error ? error.message : String(error)}`);
+    return [];
+  }
 }

@@ -12,7 +12,7 @@ import type { SpotifyArtistProfile } from "./services/spotifyService.js";
 import { gatherSearchContext } from "./services/searchService.js";
 import { normalizeOpportunityUrls } from "./services/urlNormalization.js";
 import { findVenueEventCandidates } from "./modules/venueEventFinder.js";
-import type { ArtistProfile, EventCandidate, VenueCandidate } from "./schemas.js";
+import type { ArtistProfile, EventCandidate, GenericOpportunity, VenueCandidate } from "./schemas.js";
 import type { SimilarArtist } from "./schemas.js";
 import { debugLog, warnLog } from "./utils/logger.js";
 import type { SimilarArtistSeedRecord } from "./modules/similarArtistSeeds.js";
@@ -23,6 +23,12 @@ import type { BookingOpportunity, BookingSearchResult } from "./booking/types.js
 import { findSimilarArtistConcerts, type SimilarArtistConcertsResult } from "./modules/similarArtistConcerts.js";
 import { buildDefaultArtistConcertProviders, type ArtistConcertProvider } from "./providers/concerts/ArtistConcertProvider.js";
 import { buildTicketmasterPipelineSection, type TicketmasterPipelineSection } from "./modules/ticketmasterEvidence.js";
+import {
+  buildDefaultLabelDiscoveryOptions,
+  discoverLabelOpportunities,
+  type DiscoverLabelOpportunitiesOptions
+} from "./labels/discoverLabelOpportunities.js";
+import type { LabelSearchInput } from "./labels/types.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
@@ -40,6 +46,7 @@ export interface RunOpportunitySearchOptions {
   // provider set; override for tests or to disable the feature entirely
   // (empty array).
   artistConcertProviders?: ArtistConcertProvider[];
+  labelDiscoveryOptions?: DiscoverLabelOpportunitiesOptions;
   // When provided, pipeline stage progress is recorded in the in-memory
   // execution store (see pipelineExecutionState.ts) so a status endpoint can
   // report it back to the caller while this call is still running.
@@ -62,6 +69,9 @@ export interface OpportunitySearchRunResult {
   // wasn't used. `ticketmaster.opportunities` is a filtered view of
   // bookingSearch.opportunities, not a second scoring system.
   ticketmaster?: TicketmasterPipelineSection;
+  // Label opportunities (issue #169), discovered and ranked independently of
+  // the concert-oriented booking pipeline since labels aren't event-based.
+  labelOpportunities?: GenericOpportunity[];
 }
 
 export async function runOpportunitySearch(
@@ -120,6 +130,7 @@ export async function runOpportunitySearch(
     await gatherSearchContext(input);
 
     if (input.mode === "booking") {
+      const flattenedSimilarArtists = flattenSimilarArtists(groupedSimilarArtists);
       const bookingSearch = await searchBookingOpportunities({
         artist: input.artist,
         city: input.city,
@@ -128,7 +139,7 @@ export async function runOpportunitySearch(
         links: input.links,
         limit: input.limit,
         artistProfile: profile,
-        similarArtists: flattenSimilarArtists(groupedSimilarArtists)
+        similarArtists: flattenedSimilarArtists
       }, options.bookingSearchOptions);
       debugLog("pipeline", "runOpportunitySearch booking provider summary", {
         providerCount: bookingSearch.sourceMetadata.length,
@@ -136,6 +147,16 @@ export async function runOpportunitySearch(
         opportunitiesCount: bookingSearch.opportunities.length,
         warningsCount: bookingSearch.warnings.length
       });
+
+      const labelOpportunities = await runLabelDiscoverySafely({
+        artist: input.artist,
+        city: input.city,
+        genre: input.genre,
+        target: input.target,
+        limit: input.limit,
+        artistProfile: profile,
+        similarArtists: flattenedSimilarArtists
+      }, options.labelDiscoveryOptions);
       track("SCORING_RESULTS");
       track("PREPARING_OVERVIEW");
 
@@ -147,7 +168,8 @@ export async function runOpportunitySearch(
         opportunities: bookingSearch.opportunities.map(mapBookingOpportunityToLegacyOpportunity),
         bookingSearch,
         similarArtistConcerts,
-        ticketmaster: buildTicketmasterEvidenceSafely(bookingSearch)
+        ticketmaster: buildTicketmasterEvidenceSafely(bookingSearch),
+        labelOpportunities
       };
       track("COMPLETED");
       if (executionId) {
@@ -197,6 +219,27 @@ export async function runOpportunitySearch(
       failPipelineExecution(executionId, currentStage, error);
     }
     throw error;
+  }
+}
+
+// Label discovery (issue #169) is an additive enrichment of the booking
+// pipeline; a failure here must never take down the core booking search.
+async function runLabelDiscoverySafely(
+  input: LabelSearchInput,
+  options: DiscoverLabelOpportunitiesOptions | undefined
+): Promise<GenericOpportunity[]> {
+  try {
+    const labelDiscovery = await discoverLabelOpportunities(input, options ?? buildDefaultLabelDiscoveryOptions());
+    debugLog("pipeline", "runOpportunitySearch label discovery summary", {
+      candidateCount: labelDiscovery.metadata.rawCandidateCount,
+      keptOpportunities: labelDiscovery.metadata.keptOpportunities,
+      warningsCount: labelDiscovery.warnings.length
+    });
+    return labelDiscovery.opportunities;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    debugLog("pipeline", "runOpportunitySearch label discovery failed and was skipped", { message });
+    return [];
   }
 }
 

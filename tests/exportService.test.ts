@@ -255,6 +255,7 @@ describe("export utilities", () => {
     expect(paths.bookingSummary).toEqual({
       similarArtistsCount: 1,
       bookingOpportunitiesCount: 1,
+      labelOpportunitiesCount: 0,
       sourcesUsedCount: 1,
       warningsCount: 2
     });

@@ -87,9 +87,34 @@ export interface BookingTarget {
   deadline?: string | null;
   recommendedAction?: BookingSuggestedAction | null;
   derivedFromSimilarArtist?: DerivedFromSimilarArtist | null;
+  /**
+   * Structured evidence connecting this venue candidate to each similar
+   * artist's past concert there (issue #182), preserved alongside the
+   * free-text `evidence` so a later scoring/UI ticket can explain, e.g.,
+   * "this venue programmed 3 similar artists in the last 18 months".
+   */
+  venueArtistEvidence?: VenueArtistEvidence[];
   contacts: ContactCandidate[];
   confidence: number;
   evidence: string[];
+}
+
+/**
+ * Links a discovered venue candidate to one similar artist's past concert
+ * there (issue #182). One venue accumulates one evidence record per
+ * matching historical event so future scoring/UI can count independent
+ * confirmations rather than relying on an unexplained aggregate number.
+ */
+export interface VenueArtistEvidence {
+  venueId: string;
+  similarArtistId: string;
+  similarArtistName?: string;
+  eventName?: string;
+  eventDate?: string;
+  sourceUrl: string;
+  collectedAt: string;
+  sourceProvider: string;
+  confidence: number;
 }
 
 export interface BookingSourceMetadata {

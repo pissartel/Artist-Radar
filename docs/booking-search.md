@@ -256,12 +256,72 @@ The manual GitHub Actions workflow can be configured with `workflow_dispatch` in
 
 Do not add these values to `.env` in code changes.
 
+### Similar-artist concert-history venue discovery (issue #182)
+
+Complements `SimilarArtistLiveHistoryBookingSourceProvider`'s free-text web search with a second, structured path: instead of inferring a venue from prose, it queries structured concert-history APIs for a curated set of similar artists and extracts venues from their **actual past concerts**, attaching hard evidence (artist, event, date, source URL) to each venue candidate. It is additive — the existing web-search-based discovery (and issue #168's `VenueDiscoveryBookingSourceProvider`) is untouched and keeps running unchanged.
+
+**Provider-neutral interface** (`src/booking/artistEventHistory.ts`):
+
+```ts
+interface ArtistEventHistoryProvider {
+  providerName: string;
+  findPastEvents(input: {
+    artistName: string;
+    artistExternalIds?: Record<string, string>;
+    countries?: string[];
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<HistoricalArtistEvent[]>;
+}
+```
+
+Adding a new provider (e.g. Bandsintown, Songkick) means implementing this interface and registering it in `BookingSourceProvider.ts`'s `eventHistoryProviders` array — the selection/dedup/venue-building pipeline never needs to change.
+
+**Pipeline:**
+
+1. `selectSimilarArtistsForLiveHistory` picks up to `MAX_SIMILAR_ARTISTS_FOR_VENUE_DISCOVERY` (default 10) similar artists, favoring a mix of strong genre matches, small/medium/local artists and artists with an audience reasonably close to the target — deliberately broader than the stricter selection used by the free-text path, so large reference artists don't dominate.
+2. `fetchHistoricalEventsForSimilarArtists` fans out to every configured `ArtistEventHistoryProvider` for every selected artist, with bounded artist concurrency (`mapWithConcurrency`, default concurrency 3) and `Promise.allSettled` per artist × provider call. A failing provider/artist pair never aborts the rest — it's recorded as a warning (`"<providerName> failed for \"<artistName>\": <message>"`) and a structured diagnostic, and the search continues with whatever succeeded.
+3. `dedupeHistoricalArtistEvents` deterministically merges duplicate events (same normalized artist name, date, venue name, city and source URL).
+4. `buildVenueTargetsFromArtistEventHistory` groups events into one `BookingTarget` per venue (`category: "venue"`, already evergreen per issue #168 — no upcoming date is required), attaching one `VenueArtistEvidence` record per matching historical event so a later scoring/UI ticket can state e.g. "this venue programmed 3 similar artists in the last 18 months."
+
+**Venue deduplication:** venue identity is normalized name + city + country. Normalization strips a leading French article (`Le`/`La`/`Les`/`L'`) and a trailing city-name suffix, so `Le Krakatoa`, `Krakatoa` and `Krakatoa Mérignac` (city: Mérignac) all resolve to the same venue. Only the identity key is normalized — the displayed venue name is left as reported by the source.
+
+**Confidence** is computed deterministically (never by an LLM) from: source officialness, location match, recency, similar-artist popularity proximity (per-event evidence), plus number of independent similar artists confirming the venue, evidence count, recent-event count and official-source count (aggregate candidate confidence). Individual signals are kept on each `VenueArtistEvidence` record rather than only an unexplained aggregate number.
+
+**No LLM calls**: both providers below return fully structured JSON (event name/date, venue name/city/country, source URL) — deterministic parsing only.
+
+#### OpenAgendaArtistEventHistoryProvider
+
+Default/primary structured source. Reuses `OpenAgendaBookingSourceProvider`'s agenda discovery/config-override resolution (`discoverAgendas`, `findMatchingOpenAgendaSeeds`, agenda UID env overrides, `src/booking/config/openAgendaSeeds.ts` seeds) rather than re-implementing location-to-agenda matching. Agenda resolution is memoized per resolved country for the lifetime of the provider instance (one booking search), so the (potentially ~30-query) agenda discovery runs at most once per country even though `findPastEvents` is called once per similar artist. Each artist then only costs one lightweight `search=<artistName>` events call per resolved agenda (capped at 5 agendas), with `timings[gte]`/`timings[lte]` applied for the recency window.
+
+Gated by the same flags as `OpenAgendaBookingSourceProvider`: `ENABLE_OPENAGENDA=true` (or `ENABLE_OPENAGENDA_BOOKING=true`) and `OPENAGENDA_API_KEY`. No new required configuration.
+
+Known limitation: without seeded or env-configured agenda UIDs for a location, the first run for that location pays the discovery cost; OpenAgenda's own event coverage is also limited to venues/organizers that publish through OpenAgenda.
+
+#### MusicBrainzArtistEventHistoryProvider
+
+Complementary source, **opt-in and off by default** via `ENABLE_MUSICBRAINZ_EVENT_HISTORY=true` — never the sole source. Resolves each similar artist's MusicBrainz ID (reusing `searchMusicBrainzArtistByName`, memoized per artist name for the provider instance's lifetime) then browses MusicBrainz's `event` entity (`GET /ws/2/event?artist=<mbid>&inc=place-rels`) for events carrying a `place` (venue) relation. Both the MBID lookup and the event browse are serialized through the existing shared `scheduleMusicBrainzRequest` queue, so the global MusicBrainz 1-request/second rate limit is respected automatically alongside any other MusicBrainz usage in the same process.
+
+Known limitations: MusicBrainz event/venue data is community-contributed and far sparser than OpenAgenda's — many similar artists will simply have no MusicBrainz events. A place's `area` is used as a best-effort city (never a verified administrative city), and country is left `null` rather than guessed, since it isn't reliably derivable from a place's `area` alone.
+
+**Configurable limits** (`src/booking/artistEventHistory.ts`, env-overridable, same pattern as `BOOKING_RECENT_EVENT_MONTHS`):
+
+- `MAX_SIMILAR_ARTISTS_FOR_VENUE_DISCOVERY = 10` — override with `BOOKING_MAX_SIMILAR_ARTISTS_FOR_VENUE_HISTORY`
+- `MAX_HISTORICAL_EVENTS_PER_ARTIST = 20` — override with `BOOKING_MAX_HISTORICAL_EVENTS_PER_ARTIST`
+- `HISTORICAL_EVENT_LOOKBACK_MONTHS = 24` — override with `BOOKING_HISTORICAL_EVENT_LOOKBACK_MONTHS`
+
+**Cache/cost controls:** all "cache" here is the same in-memory, per-run `Map<string, Promise<T>>` memoization pattern already used elsewhere in the codebase (e.g. `similarArtistsFinder.ts`'s MusicBrainz genre lookups) — scoped to one booking search, not a persistent cross-run cache. Artist concurrency is bounded (`mapWithConcurrency`, default 3); each artist-provider call is capped to `MAX_HISTORICAL_EVENTS_PER_ARTIST` events; agenda/MBID resolution is memoized so it isn't repeated for every similar artist.
+
+**Works without a web search API key:** unlike the free-text half of `SimilarArtistLiveHistoryBookingSourceProvider`, `eventHistoryProviders` don't require Tavily/Exa/Firecrawl — `BookingSourceProvider.ts` registers a structured-only instance of the provider when no web search key is configured but at least one event-history provider (OpenAgenda or MusicBrainz) is enabled.
+
+**Manual validation:** run the CLI `booking` command for an artist with `ENABLE_OPENAGENDA=true` (optionally `ENABLE_MUSICBRAINZ_EVENT_HISTORY=true`) and inspect `outputs/booking/<run-id>/booking.json` for `venue` opportunities whose `target.venueArtistEvidence` carries real source URLs for each similar artist's past concert there. Tuesday Fall (Spotify ID `2RO6dHJK11CKcEg1G7XYps`, pop punk, Paris, target "grandes villes françaises") is a useful manual example — not hardcoded application logic.
+
 ## Provider Priority
 
 For pop punk booking, providers run in this order:
 
 1. **Direct scene agenda fetch** (NativeFetchSceneAgendaProvider) — ConcertsPunk, Razibus, PunknRollAgenda auto-selected; no API key required
-2. **Similar artist live history** — uses first available search provider (Tavily → Exa → Firecrawl)
+2. **Similar artist live history** — uses first available search provider (Tavily → Exa → Firecrawl); its structured concert-history path (OpenAgenda/MusicBrainz) runs alongside it, or on its own when no search provider is configured
 3. **Scene agenda web search** — uses first available search provider against scene agenda sites
 4. **Web search providers** — one provider per enabled Tavily/Exa key
 5. **OpenAgenda** — secondary; requires `ENABLE_OPENAGENDA=true` and `OPENAGENDA_API_KEY`
@@ -286,6 +346,10 @@ Booking search works with zero API keys — native scene agenda fetch runs by de
 | `RAZIBUS_URL` | Override Razibus listing URL | `https://razibus.net/evenements-a-venir.php` |
 | `PUNKNROLL_AGENDA_URL` | Override Punk'n Roll Agenda listing URL | `https://agenda.punknroll.fr/` |
 | `FRANCE_PUNK_SCENE_URL` | Set France Punk Scene listing URL | — (disabled by default) |
+| `ENABLE_MUSICBRAINZ_EVENT_HISTORY` | `true` to enable the complementary MusicBrainz concert-history venue provider (issue #182) | `false` (opt-in) |
+| `BOOKING_MAX_SIMILAR_ARTISTS_FOR_VENUE_HISTORY` | Override the similar-artist count used for concert-history venue discovery | `10` |
+| `BOOKING_MAX_HISTORICAL_EVENTS_PER_ARTIST` | Override the max historical events fetched per similar artist per provider | `20` |
+| `BOOKING_HISTORICAL_EVENT_LOOKBACK_MONTHS` | Override how far back concert-history venue discovery looks | `24` |
 
 ## Future Providers
 

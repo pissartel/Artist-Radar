@@ -256,6 +256,8 @@ function logBookingRelevanceSummary(
     `- Scene agenda candidates kept after date/genre filters: ${summary.sceneAgendaCandidatesKept}`,
     `- OpenAgenda candidates found: ${summary.openAgendaCandidatesFound}`,
     `- OpenAgenda candidates kept after date/genre filters: ${summary.openAgendaCandidatesKept}`,
+    `- Venue discovery candidates found: ${summary.venueDiscoveryCandidatesFound}`,
+    `- Venue discovery candidates kept (no event date required): ${summary.venueDiscoveryCandidatesKept}`,
     `- Rejected old events: ${summary.rejectedOldEvents}`,
     `- Rejected genre-mismatch events: ${summary.rejectedGenreMismatchEvents}`,
     "Rejected candidates by reason:",

@@ -33,6 +33,11 @@ import {
 import { buildSimilarArtistLiveHistoryBookingSourceProvider } from "./SimilarArtistLiveHistoryBookingSourceProvider.js";
 import { buildVenueDiscoveryBookingSourceProvider } from "./VenueDiscoveryBookingSourceProvider.js";
 import { buildWebSearchBookingSourceProvider } from "./WebSearchBookingSourceProvider.js";
+import {
+  buildTicketmasterBookingSourceProvider,
+  isTicketmasterEnabled,
+  type TicketmasterBookingProviderEnv
+} from "./TicketmasterBookingSourceProvider.js";
 import { warnLog } from "../../utils/logger.js";
 import type { ArtistEventHistoryProvider } from "../artistEventHistory.js";
 
@@ -61,7 +66,8 @@ export interface DefaultBookingProviderEnv extends
   MusicBrainzArtistEventHistoryProviderEnv,
   SceneAgendaProviderEnv,
   NativeFetchSceneAgendaEnv,
-  FirecrawlBookingEnv {
+  FirecrawlBookingEnv,
+  TicketmasterBookingProviderEnv {
   MOCK_AI?: string;
 }
 
@@ -145,6 +151,10 @@ export function buildDefaultBookingSourceProviders(
     buildFirecrawlBookingSourceProvider(env, fetchImpl)
   );
 
+  if (isTicketmasterEnabled(env)) {
+    providers.push(buildTicketmasterBookingSourceProvider({ env, fetchImpl }));
+  }
+
   for (const webSearchProvider of webSearchProviders) {
     providers.push(buildWebSearchBookingSourceProvider({
       webSearchProvider,
@@ -173,6 +183,7 @@ function logBookingProviderStartup(env: DefaultBookingProviderEnv): void {
   const openAgendaEventHistory = getOpenAgendaEventHistoryStatus(env);
   const musicBrainzEventHistory = getMusicBrainzEventHistoryStatus(env);
   const firecrawl = getFirecrawlProviderStatus(env);
+  const ticketmaster = getTicketmasterProviderStatus(env);
   const mock = getMockProviderStatus(env);
   warnLog("booking", [
     "Booking providers:",
@@ -186,6 +197,7 @@ function logBookingProviderStartup(env: DefaultBookingProviderEnv): void {
     `- OpenAgendaEventHistory: ${openAgendaEventHistory.enabled ? "enabled" : "disabled"} (${openAgendaEventHistory.reason})`,
     `- MusicBrainzEventHistory: ${musicBrainzEventHistory.enabled ? "enabled" : "disabled"} (${musicBrainzEventHistory.reason})`,
     `- Firecrawl: ${firecrawl.enabled ? "enabled" : "disabled"} (${firecrawl.reason})`,
+    `- Ticketmaster: ${ticketmaster.enabled ? "enabled" : "disabled"} (${ticketmaster.reason})`,
     `- Mock: ${mock.enabled ? "enabled" : "disabled"} (${mock.reason})`
   ].join("\n"));
 }
@@ -205,6 +217,16 @@ function getMusicBrainzEventHistoryStatus(env: DefaultBookingProviderEnv): { ena
     return { enabled: false, reason: "ENABLE_MUSICBRAINZ_EVENT_HISTORY is not true (opt-in, off by default)" };
   }
   return { enabled: true, reason: "enabled by ENABLE_MUSICBRAINZ_EVENT_HISTORY" };
+}
+
+function getTicketmasterProviderStatus(env: DefaultBookingProviderEnv): { enabled: boolean; reason: string } {
+  if (env.ENABLE_TICKETMASTER_CONCERTS !== "true") {
+    return { enabled: false, reason: "ENABLE_TICKETMASTER_CONCERTS is not true" };
+  }
+  if (!env.TICKETMASTER_API_KEY) {
+    return { enabled: false, reason: "TICKETMASTER_API_KEY is missing" };
+  }
+  return { enabled: true, reason: "enabled (TICKETMASTER_API_KEY present)" };
 }
 
 function getTavilyBookingStatus(env: DefaultBookingProviderEnv): { enabled: boolean; reason: string } {

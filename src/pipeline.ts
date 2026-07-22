@@ -22,6 +22,7 @@ import { searchBookingOpportunities, type SearchBookingOpportunitiesOptions } fr
 import type { BookingOpportunity, BookingSearchResult } from "./booking/types.js";
 import { findSimilarArtistConcerts, type SimilarArtistConcertsResult } from "./modules/similarArtistConcerts.js";
 import { buildDefaultArtistConcertProviders, type ArtistConcertProvider } from "./providers/concerts/ArtistConcertProvider.js";
+import { buildTicketmasterPipelineSection, type TicketmasterPipelineSection } from "./modules/ticketmasterEvidence.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
@@ -56,6 +57,11 @@ export interface OpportunitySearchRunResult {
   // failing the whole analysis when the enrichment step itself errors.
   similarArtistConcerts?: SimilarArtistConcertsResult[];
   bookingSearch?: BookingSearchResult;
+  // Ticketmaster-derived venue/scene evidence and diagnostics (issue #189),
+  // undefined when Ticketmaster is disabled/not configured or booking mode
+  // wasn't used. `ticketmaster.opportunities` is a filtered view of
+  // bookingSearch.opportunities, not a second scoring system.
+  ticketmaster?: TicketmasterPipelineSection;
 }
 
 export async function runOpportunitySearch(
@@ -140,7 +146,8 @@ export async function runOpportunitySearch(
         eventCandidates,
         opportunities: bookingSearch.opportunities.map(mapBookingOpportunityToLegacyOpportunity),
         bookingSearch,
-        similarArtistConcerts
+        similarArtistConcerts,
+        ticketmaster: buildTicketmasterEvidenceSafely(bookingSearch)
       };
       track("COMPLETED");
       if (executionId) {
@@ -257,5 +264,17 @@ async function findSimilarArtistConcertsSafely(
   } catch (error) {
     warnLog("concert-history", `Similar-artist concert-history enrichment failed and was skipped: ${error instanceof Error ? error.message : String(error)}`);
     return [];
+  }
+}
+
+// Ticketmaster evidence assembly is a pure, already-fetched-data operation
+// (no extra API calls), but a failure here must still never fail the whole
+// artist analysis — degrade to undefined with a logged warning instead.
+function buildTicketmasterEvidenceSafely(bookingSearch: BookingSearchResult): TicketmasterPipelineSection | undefined {
+  try {
+    return buildTicketmasterPipelineSection(bookingSearch);
+  } catch (error) {
+    warnLog("ticketmaster", `Ticketmaster evidence assembly failed and was skipped: ${error instanceof Error ? error.message : String(error)}`);
+    return undefined;
   }
 }

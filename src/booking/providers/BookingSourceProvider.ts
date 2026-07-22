@@ -10,6 +10,16 @@ import { buildFirecrawlBookingSourceProvider, isFirecrawlBookingEnabled, type Fi
 import { buildMockBookingSourceProvider } from "./MockBookingSourceProvider.js";
 import { buildOpenAgendaBookingSourceProvider, type OpenAgendaBookingSourceProviderEnv } from "./OpenAgendaBookingSourceProvider.js";
 import {
+  buildOpenAgendaArtistEventHistoryProvider,
+  isOpenAgendaArtistEventHistoryEnabled,
+  type OpenAgendaArtistEventHistoryProviderEnv
+} from "./OpenAgendaArtistEventHistoryProvider.js";
+import {
+  buildMusicBrainzArtistEventHistoryProvider,
+  isMusicBrainzEventHistoryEnabled,
+  type MusicBrainzArtistEventHistoryProviderEnv
+} from "./MusicBrainzArtistEventHistoryProvider.js";
+import {
   buildSceneAgendaBookingSourceProvider,
   getSceneAgendaProviderStatus,
   getSceneAgendaSourceStatuses,
@@ -24,6 +34,7 @@ import { buildSimilarArtistLiveHistoryBookingSourceProvider } from "./SimilarArt
 import { buildVenueDiscoveryBookingSourceProvider } from "./VenueDiscoveryBookingSourceProvider.js";
 import { buildWebSearchBookingSourceProvider } from "./WebSearchBookingSourceProvider.js";
 import { warnLog } from "../../utils/logger.js";
+import type { ArtistEventHistoryProvider } from "../artistEventHistory.js";
 
 export interface BookingSourceProviderContext {
   input: BookingSearchInput;
@@ -43,7 +54,14 @@ export interface BookingSourceProvider {
   search(context: BookingSourceProviderContext): Promise<BookingSourceProviderResult>;
 }
 
-export interface DefaultBookingProviderEnv extends WebProviderEnv, OpenAgendaBookingSourceProviderEnv, SceneAgendaProviderEnv, NativeFetchSceneAgendaEnv, FirecrawlBookingEnv {
+export interface DefaultBookingProviderEnv extends
+  WebProviderEnv,
+  OpenAgendaBookingSourceProviderEnv,
+  OpenAgendaArtistEventHistoryProviderEnv,
+  MusicBrainzArtistEventHistoryProviderEnv,
+  SceneAgendaProviderEnv,
+  NativeFetchSceneAgendaEnv,
+  FirecrawlBookingEnv {
   MOCK_AI?: string;
 }
 
@@ -66,13 +84,28 @@ export function buildDefaultBookingSourceProviders(
     ? new FirecrawlExtractProvider(env, fetchImpl)
     : webExtractProvider;
 
+  // Structured concert-history providers (issue #182): OpenAgenda is the
+  // default/primary structured source (self-gated by ENABLE_OPENAGENDA, same
+  // flag as OpenAgendaBookingSourceProvider). MusicBrainz is complementary
+  // and opt-in only, since resolving+browsing per artist is serialized
+  // through a shared 1-request/second rate limit and its event/venue
+  // coverage is sparser than OpenAgenda's.
+  const eventHistoryProviders: ArtistEventHistoryProvider[] = [];
+  if (isOpenAgendaArtistEventHistoryEnabled(env)) {
+    eventHistoryProviders.push(buildOpenAgendaArtistEventHistoryProvider({ env, fetchImpl }));
+  }
+  if (isMusicBrainzEventHistoryEnabled(env)) {
+    eventHistoryProviders.push(buildMusicBrainzArtistEventHistoryProvider({ env }));
+  }
+
   if (similarArtistSearchProvider) {
     providers.push(buildSimilarArtistLiveHistoryBookingSourceProvider({
       webSearchProvider: similarArtistSearchProvider,
       webExtractProvider: similarArtistExtractProvider,
       maxSimilarArtists: 6,
       maxResultsPerArtist: 3,
-      maxExtractPages: 6
+      maxExtractPages: 6,
+      eventHistoryProviders
     }));
 
     // Dedicated venue/organization discovery, independent of any announced
@@ -86,6 +119,11 @@ export function buildDefaultBookingSourceProviders(
       maxResultsPerQuery: 4,
       maxExtractPages: 6
     }));
+  } else if (eventHistoryProviders.length > 0) {
+    // No web search API key configured: concert-history venue discovery
+    // (issue #182) can still run on structured providers alone, since
+    // OpenAgenda/MusicBrainz don't depend on Tavily/Exa/Firecrawl.
+    providers.push(buildSimilarArtistLiveHistoryBookingSourceProvider({ eventHistoryProviders }));
   }
 
   if (similarArtistSearchProvider && getSceneAgendaProviderStatus(env).enabled) {
@@ -132,6 +170,8 @@ function logBookingProviderStartup(env: DefaultBookingProviderEnv): void {
   const exa = getExaBookingStatus(env);
   const jina = getJinaReaderStatus(env);
   const openAgenda = getOpenAgendaProviderStatus(env);
+  const openAgendaEventHistory = getOpenAgendaEventHistoryStatus(env);
+  const musicBrainzEventHistory = getMusicBrainzEventHistoryStatus(env);
   const firecrawl = getFirecrawlProviderStatus(env);
   const mock = getMockProviderStatus(env);
   warnLog("booking", [
@@ -143,9 +183,28 @@ function logBookingProviderStartup(env: DefaultBookingProviderEnv): void {
     `- Exa: ${exa.enabled ? "enabled" : "disabled"} (${exa.reason})`,
     `- JinaReader: ${jina.enabled ? "enabled" : "disabled"} (${jina.reason})`,
     `- OpenAgenda: ${openAgenda.enabled ? "enabled" : "disabled"} (${openAgenda.reason})`,
+    `- OpenAgendaEventHistory: ${openAgendaEventHistory.enabled ? "enabled" : "disabled"} (${openAgendaEventHistory.reason})`,
+    `- MusicBrainzEventHistory: ${musicBrainzEventHistory.enabled ? "enabled" : "disabled"} (${musicBrainzEventHistory.reason})`,
     `- Firecrawl: ${firecrawl.enabled ? "enabled" : "disabled"} (${firecrawl.reason})`,
     `- Mock: ${mock.enabled ? "enabled" : "disabled"} (${mock.reason})`
   ].join("\n"));
+}
+
+function getOpenAgendaEventHistoryStatus(env: DefaultBookingProviderEnv): { enabled: boolean; reason: string } {
+  if (!isOpenAgendaArtistEventHistoryEnabled(env)) {
+    if (env.ENABLE_OPENAGENDA !== "true" && env.ENABLE_OPENAGENDA_BOOKING !== "true") {
+      return { enabled: false, reason: "ENABLE_OPENAGENDA is not true" };
+    }
+    return { enabled: false, reason: "OPENAGENDA_API_KEY is missing" };
+  }
+  return { enabled: true, reason: "enabled (reuses OpenAgenda agenda discovery, scoped to similar-artist concert history)" };
+}
+
+function getMusicBrainzEventHistoryStatus(env: DefaultBookingProviderEnv): { enabled: boolean; reason: string } {
+  if (!isMusicBrainzEventHistoryEnabled(env)) {
+    return { enabled: false, reason: "ENABLE_MUSICBRAINZ_EVENT_HISTORY is not true (opt-in, off by default)" };
+  }
+  return { enabled: true, reason: "enabled by ENABLE_MUSICBRAINZ_EVENT_HISTORY" };
 }
 
 function getTavilyBookingStatus(env: DefaultBookingProviderEnv): { enabled: boolean; reason: string } {

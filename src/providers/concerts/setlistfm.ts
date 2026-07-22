@@ -135,7 +135,8 @@ async function fetchSetlistFmPage(
       url.toString(),
       { headers: { Accept: "application/json", "x-api-key": apiKey } },
       timeoutMs,
-      fetchImpl
+      fetchImpl,
+      "concert-history"
     );
 
     if (response.status === 401 || response.status === 403) {

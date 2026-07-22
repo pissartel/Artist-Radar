@@ -1,6 +1,17 @@
-import { debugLog } from "./logger.js";
+import { debugLog, type DebugScope } from "./logger.js";
 
 type FetchLike = typeof fetch;
+
+// Some providers (Ticketmaster) require the API key as a URL query
+// parameter rather than a header. debugLog's own redaction only inspects
+// object keys/Authorization-style string values, so it would not catch a
+// secret embedded inside an arbitrary logged URL string — redact it here,
+// before the URL ever reaches a log call, regardless of which provider.
+const SECRET_QUERY_PARAM_PATTERN = /([?&](?:apikey|api_key|key|token|access_token)=)[^&]+/gi;
+
+export function redactUrlForLogging(url: string): string {
+  return url.replace(SECRET_QUERY_PARAM_PATTERN, "$1[redacted]");
+}
 
 /**
  * Aborts the request after `timeoutMs` rather than letting a slow/unreachable
@@ -11,15 +22,16 @@ export async function fetchWithTimeout(
   url: string,
   init: RequestInit,
   timeoutMs: number,
-  fetchImpl: FetchLike = fetch
+  fetchImpl: FetchLike = fetch,
+  scope: DebugScope = "sources"
 ): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(new Error(`Request timed out after ${timeoutMs}ms`)), timeoutMs);
   try {
     return await fetchImpl(url, { ...init, signal: controller.signal });
   } catch (error) {
-    debugLog("concert-history", "request failed", {
-      endpoint: url,
+    debugLog(scope, "request failed", {
+      endpoint: redactUrlForLogging(url),
       errorName: error instanceof Error ? error.name : "Error",
       errorMessage: error instanceof Error ? error.message : String(error)
     });

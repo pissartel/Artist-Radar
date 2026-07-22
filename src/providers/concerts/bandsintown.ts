@@ -73,7 +73,7 @@ export function buildBandsintownConcertProvider(options: BandsintownProviderOpti
       url.searchParams.set("date", "upcoming");
 
       try {
-        const response = await fetchWithTimeout(url.toString(), { headers: { Accept: "application/json" } }, timeoutMs, fetchImpl);
+        const response = await fetchWithTimeout(url.toString(), { headers: { Accept: "application/json" } }, timeoutMs, fetchImpl, "concert-history");
 
         if (response.status === 404) {
           // Bandsintown returns 404 for an artist it doesn't track; not an error.

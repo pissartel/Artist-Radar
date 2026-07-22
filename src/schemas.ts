@@ -612,7 +612,11 @@ export const LabelOpportunityDetailsSchema = z.object({
   territory: z.string().trim().min(1).nullable().optional(),
   acceptsDemos: z.boolean().nullable().optional(),
   demoSubmissionUrl: OptionalUrlSchema,
-  distributor: z.string().trim().min(1).nullable().optional()
+  distributor: z.string().trim().min(1).nullable().optional(),
+  // Whether the label shows evidence of current activity (recent releases,
+  // no closure/hiatus language). null means uncertain, per AGENTS.md — never
+  // defaulted to true/false without textual evidence.
+  isActive: z.boolean().nullable().optional()
 });
 
 export const PlaylistOpportunityDetailsSchema = z.object({

@@ -21,7 +21,7 @@ export interface ExportPaths {
 export interface BookingRequestOutputInput {
   artistData: OpportunitySearchRunResult["artistProfile"];
   similarArtists: OpportunitySearchRunResult["similarArtists"];
-  bookingResult: Pick<OpportunitySearchRunResult, "opportunities" | "venueCandidates" | "eventCandidates" | "bookingSearch">;
+  bookingResult: Pick<OpportunitySearchRunResult, "opportunities" | "venueCandidates" | "eventCandidates" | "bookingSearch" | "labelOpportunities">;
   outputDir: string;
 }
 
@@ -35,6 +35,7 @@ export interface BookingRequestOutputPaths {
 export interface BookingOutputSummary {
   similarArtistsCount: number;
   bookingOpportunitiesCount: number;
+  labelOpportunitiesCount: number;
   sourcesUsedCount: number;
   warningsCount: number;
 }
@@ -230,6 +231,9 @@ export async function writeBookingRequestOutputs({
       warnings: bookingWarnings,
       sourceMetadata,
       rejectedByReason
+    },
+    labels: {
+      opportunities: bookingResult.labelOpportunities ?? []
     }
   };
 
@@ -244,6 +248,7 @@ export async function writeBookingRequestOutputs({
     summary: {
       similarArtistsCount: flattenedSimilarArtists.length,
       bookingOpportunitiesCount: bookingOpportunities.length,
+      labelOpportunitiesCount: bookingOutput.labels.opportunities.length,
       sourcesUsedCount: sourcesUsed.length,
       warningsCount: artistOutput.warnings.length + similarArtistsOutput.warnings.length + bookingOutput.booking.warnings.length
     }
@@ -260,6 +265,7 @@ export function formatBookingOutputLog(paths: Required<Pick<ExportPaths, "artist
     "Booking output summary:",
     `- Similar artists: ${paths.bookingSummary.similarArtistsCount}`,
     `- Booking opportunities: ${paths.bookingSummary.bookingOpportunitiesCount}`,
+    `- Label opportunities: ${paths.bookingSummary.labelOpportunitiesCount}`,
     `- Sources used: ${paths.bookingSummary.sourcesUsedCount}`,
     `- Warnings: ${paths.bookingSummary.warningsCount}`
   ].join("\n");

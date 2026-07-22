@@ -189,12 +189,41 @@ Responsibilities:
 - Return deterministic venueCandidates and eventCandidates in `MOCK_AI=true`
 - Include small and medium venue candidates for Paris and major French cities
 - Include possible support opportunities without claiming support slots are confirmed
-- Keep Bandsintown out of the MVP provider stack until explicit authorization or partnership exists
 
-Bandsintown note:
-- Bandsintown API access appears limited to an artist's own data unless approved otherwise
-- Artist Radar must not rely on Bandsintown as a general multi-artist event discovery API
-- Bandsintown can be reconsidered only with explicit authorization, partnership, or a permitted use case
+Bandsintown note (updated): the prior restriction on Bandsintown as a general multi-artist event discovery API no longer applies — authorization/partnership is now in place. Bandsintown is used for exactly that purpose in "Similar Artist Concert History" below (recent past and upcoming concerts across the top-N similar artists for one analysis run). Any *other* use of Bandsintown beyond that documented feature should still be treated as requiring separate confirmation before shipping.
+
+## Similar Artist Concert History
+
+`findSimilarArtistConcerts(similarArtists, providers, options)` — `src/modules/similarArtistConcerts.ts`
+
+For the top-N most compatible similar artists (by the existing `SimilarArtist.totalRelevance` ranking, 0-100), retrieves recent past and upcoming concerts from Bandsintown, Songkick and setlist.fm, normalizes and deduplicates across providers, and attaches the result to `OpportunitySearchRunResult.similarArtistConcerts` (optional; both booking and promo modes). This is general artist-analysis enrichment, not booking-opportunity generation — it produces evidence for a later scoring/matching step, not opportunities itself.
+
+Responsibilities:
+- `selectTopCompatibleSimilarArtists` sorts by `totalRelevance` descending, deterministic tiebreak by name — never a random subset. Limit: `SIMILAR_ARTISTS_CONCERT_LIMIT`, default 10.
+- Only the selected top-N are queried; provider calls are bounded to 2-3 similar artists in flight at a time (`mapWithConcurrency`, `src/utils/concurrency.ts`), and every artist's provider calls run through `Promise.allSettled` so one failing provider or artist never aborts the rest.
+- Each selected artist's MusicBrainz ID is resolved once (reusing `searchMusicBrainzArtistByName`, the same service already used by similar-artist enrichment elsewhere, memoized per artist name) and passed to all providers — only setlist.fm actually needs it (preferred lookup key), but resolving it once at the orchestration level keeps every provider adapter simple/stateless about identity resolution.
+- Recency/result limits: `RECENT_PAST_MONTHS` (default 18), `PAST_EVENTS_PER_ARTIST` (default 10), `UPCOMING_EVENTS_PER_ARTIST` (default 10). Providers without API-side date filtering (Songkick gigography, setlist.fm) stop paginating once an event older than the cutoff is seen or a hard page cap is hit — the complete gig history is never downloaded.
+- Deduplication (`dedupeArtistConcerts`) groups by (normalized artist name, calendar date) and merges when venue names normalize equal (`src/utils/venueNameNormalization.ts`: accent-stripping plus leading-article/city-suffix handling, e.g. "Le Krakatoa" / "Krakatoa" / "Krakatoa Mérignac" all resolve the same) or one side is missing a venue name and cities match. Uncertain matches (different venue, no shared city) are kept separate rather than merged incorrectly. Merging unions `sources[]` and prefers whichever side has richer venue/lineup data — never discards information or invents a missing field.
+- `classifyConcertStatus` derives `past`/`upcoming` from the event date against "now" (not just trusting each provider's own signal), except an explicit `cancelled` signal always wins.
+- CLI logging is gated by `DEBUG_ARTIST_CONCERTS=true` (scope `concert-history`) for the detailed per-artist/per-provider trace (found/selected artists, per-provider fetch+result counts, raw vs deduplicated counts); a compact final summary table (one line per past/upcoming concert, with merged provider names) always prints regardless of the debug flag.
+
+Providers (`src/providers/concerts/`), each self-gated by its own env var and logged as enabled/disabled at startup:
+- **Bandsintown** (`bandsintown.ts`, `BANDSINTOWN_APP_ID`) — upcoming events only. `getPastConcerts` always returns `[]`: the public API has no reliable historical archive, so no attempt is made to reconstruct one. Multi-artist use is authorized for this feature specifically (see the updated Bandsintown note above); any other use should be confirmed separately.
+- **Songkick** (`songkick.ts`, `SONGKICK_API_KEY`) — resolves the artist ID via `search/artists.json` (memoized per artist name for the provider instance's lifetime), then `calendar.json` for upcoming and `gigography.json` (paginated, `order=desc`) for past.
+- **setlist.fm** (`setlistfm.ts`, `SETLISTFM_API_KEY`) — past concerts only; `getUpcomingConcerts` always returns `[]` (a setlist.fm result must never be read as an upcoming booking opportunity). Prefers an artist's MusicBrainz ID (`/artist/{mbid}/setlists`); falls back to `/search/setlists?artistName=` only with a strict post-fetch check that the returned artist name actually matches — setlist.fm's search matches loosely, not by exact phrase, so a raw search hit is never trusted without verifying the artist name is actually present in the result.
+- All three: missing API key, artist not found, HTTP 401/403/404/429, timeouts and malformed payloads are caught and logged (`warnLog`, scope `concert-history`) without throwing; the caller always gets `[]` for that provider/operation rather than a crash.
+- No provider uses an LLM or zod for response parsing — hand-written narrow TypeScript interfaces over each provider's stable REST contract, matching the rest of the codebase's provider convention (OpenAgenda, MusicBrainz, Tavily, Firecrawl).
+- **Known limitation**: no real Bandsintown/Songkick/setlist.fm API keys were available in this environment, so these three adapters are built against each provider's documented public API contract but have not been live-verified against the real APIs. Run the manual CLI test below with real keys before depending on this in production — treat any provider's "search" or fuzzy-match behavior as unverified until confirmed live, since a provider matching more loosely than its documentation implies is a realistic risk.
+
+Manual CLI test:
+
+```bash
+DEBUG_ARTIST_CONCERTS=true \
+BANDSINTOWN_APP_ID=... SONGKICK_API_KEY=... SETLISTFM_API_KEY=... \
+npx tsx src/cli.ts booking --artist "Tuesday Fall" --city "Paris" --genre "pop punk" --limit 10
+```
+
+With no keys configured, each provider logs `disabled (... is missing)` at startup and the rest of the pipeline completes normally — concert-history enrichment degrades to an empty result rather than failing the run.
 
 ## Instagram Enrichment
 

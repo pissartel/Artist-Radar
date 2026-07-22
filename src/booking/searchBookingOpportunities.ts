@@ -13,6 +13,7 @@ import type {
   BookingSourceMetadata,
   BookingSourceType,
   BookingTarget,
+  BookingTargetCategory,
   ContactCandidate,
   OpportunityInternalReview
 } from "./types.js";
@@ -22,6 +23,8 @@ import {
   type BookingSourceProviderResult
 } from "./providers/BookingSourceProvider.js";
 import { warnLog } from "../utils/logger.js";
+import { toDateOnlyString } from "../utils/dateOnly.js";
+import { normalizeKey, normalizeVenueName } from "../utils/venueNameNormalization.js";
 
 export interface SearchBookingOpportunitiesOptions {
   providers?: BookingSourceProvider[];
@@ -220,10 +223,17 @@ function buildFitSummary(action: string): string {
   return "This opportunity needs manual verification before outreach.";
 }
 
+// Venue-ish categories eligible for the cross-provider merge pass below.
+// Organizations without a date (e.g. a recurring venue profile with no
+// specific show) are intentionally excluded — same-date matching would be
+// meaningless for them, and the sourceUrl-based pass above already
+// deduplicates exact repeats.
+const VENUE_DEDUPE_CATEGORIES: ReadonlySet<BookingTargetCategory> = new Set(["venue", "bar", "event", "festival"]);
+
 function dedupeTargets(targets: BookingTarget[]): { targets: BookingTarget[]; duplicateCount: number } {
   const seen = new Set<string>();
   let duplicateCount = 0;
-  const deduped = targets.filter((target) => {
+  const firstPass = targets.filter((target) => {
     const key = `${target.sourceUrl ?? ""}:${target.name}:${target.category}`;
     if (seen.has(key)) {
       duplicateCount += 1;
@@ -232,7 +242,80 @@ function dedupeTargets(targets: BookingTarget[]): { targets: BookingTarget[]; du
     seen.add(key);
     return true;
   });
-  return { targets: deduped, duplicateCount };
+
+  // Second pass: the same real-world event/venue can arrive from different
+  // providers (e.g. Ticketmaster and OpenAgenda) with different sourceUrls,
+  // so the pass above won't catch it. Merge only when there's a real
+  // date+venue (or date+city+name) match — never on title alone, and
+  // uncertain matches are kept separate (issue #189).
+  const merged: BookingTarget[] = [];
+  for (const target of firstPass) {
+    const matchIndex = isVenueDedupeEligible(target)
+      ? merged.findIndex((existing) => isVenueDedupeEligible(existing) && isSameVenueEvent(existing, target))
+      : -1;
+
+    if (matchIndex === -1) {
+      merged.push(target);
+      continue;
+    }
+    duplicateCount += 1;
+    merged[matchIndex] = mergeBookingTargets(merged[matchIndex], target);
+  }
+
+  return { targets: merged, duplicateCount };
+}
+
+function isVenueDedupeEligible(target: BookingTarget): boolean {
+  return VENUE_DEDUPE_CATEGORIES.has(target.category) && Boolean(toDateOnlyString(target.eventDate ?? ""));
+}
+
+function isSameVenueEvent(left: BookingTarget, right: BookingTarget): boolean {
+  const leftDate = toDateOnlyString(left.eventDate ?? "");
+  const rightDate = toDateOnlyString(right.eventDate ?? "");
+  if (!leftDate || !rightDate || leftDate !== rightDate) {
+    return false;
+  }
+
+  const leftVenue = left.venueName ? normalizeVenueName(left.venueName, left.city) : null;
+  const rightVenue = right.venueName ? normalizeVenueName(right.venueName, right.city) : null;
+  if (leftVenue && rightVenue) {
+    return leftVenue === rightVenue;
+  }
+
+  // Neither side has usable venue-name evidence: only fall back to
+  // city+event-name, otherwise two unrelated same-day events in the same
+  // city would incorrectly merge.
+  const leftCity = left.city ? normalizeKey(left.city) : null;
+  const rightCity = right.city ? normalizeKey(right.city) : null;
+  return Boolean(leftCity && rightCity && leftCity === rightCity && normalizeKey(left.name) === normalizeKey(right.name));
+}
+
+// Preserves richer data from either side rather than letting whichever
+// provider happened to run first silently win; a duplicate's own source
+// URL/provider is preserved as an evidence line rather than dropped, since
+// BookingTarget carries a single primary sourceUrl (issue #189: "preserve
+// all source URLs").
+function mergeBookingTargets(existing: BookingTarget, incoming: BookingTarget): BookingTarget {
+  const additionalSourceNote = incoming.sourceUrl && incoming.sourceUrl !== existing.sourceUrl
+    ? `Also listed via ${incoming.sourceProvider ?? incoming.sourceType}: ${incoming.sourceUrl}`
+    : null;
+
+  return {
+    ...existing,
+    description: existing.description ?? incoming.description,
+    genres: uniqueStrings([...existing.genres, ...incoming.genres]),
+    estimatedCapacity: existing.estimatedCapacity ?? incoming.estimatedCapacity,
+    estimatedArtistTier: existing.estimatedArtistTier ?? incoming.estimatedArtistTier,
+    pastProgramming: uniqueStrings([...(existing.pastProgramming ?? []), ...(incoming.pastProgramming ?? [])]),
+    venueName: existing.venueName ?? incoming.venueName,
+    lineup: uniqueStrings([...(existing.lineup ?? []), ...(incoming.lineup ?? [])]),
+    imageUrl: existing.imageUrl ?? incoming.imageUrl,
+    ticketUrl: existing.ticketUrl ?? incoming.ticketUrl,
+    derivedFromSimilarArtist: existing.derivedFromSimilarArtist ?? incoming.derivedFromSimilarArtist,
+    contacts: [...existing.contacts, ...incoming.contacts],
+    confidence: Math.min(1, Math.max(existing.confidence, incoming.confidence) + 0.05),
+    evidence: uniqueStrings([...existing.evidence, ...incoming.evidence, additionalSourceNote].filter((value): value is string => Boolean(value)))
+  };
 }
 
 function collectSourcesUsed(targets: BookingTarget[]): string[] {

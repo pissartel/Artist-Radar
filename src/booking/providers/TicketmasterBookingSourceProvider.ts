@@ -326,7 +326,7 @@ async function searchGenreLocationEvents(
     const kept = genreMatch.level === "exact" || genreMatch.level === "related" || genreMatch.level === "generic";
     debugLog(
       "ticketmaster",
-      `[genre-search] ${kept ? "KEEP" : "DROP"} "${concert.name}" — ${concert.date.localDate} — ${concert.venue?.name ?? "unknown venue"}, ${concert.venue?.city ?? "unknown city"} — genre match: ${genreMatch.level} (event genres: ${(concert.classifications ?? []).map((c) => c.genre).filter(Boolean).join(", ") || "none"})`
+      `[genre-search] ${kept ? "KEEP" : "DROP"} "${concert.name}" — ${concert.date.localDate} — ${concert.venue?.name ?? "unknown venue"}, ${concert.venue?.city ?? "unknown city"} — genre match: ${genreMatch.level} (event genres: ${uniqueStrings((concert.classifications ?? []).flatMap((c) => [c.genre, c.subGenre]).filter((value): value is string => Boolean(value))).join(", ") || "none"})`
     );
     if (kept) {
       relevant.push(concert);
@@ -569,7 +569,8 @@ function logTopOpportunities(targets: BookingTarget[]): void {
   const top = [...targets].sort((left, right) => right.confidence - left.confidence).slice(0, 5);
   debugLog("ticketmaster", "Top opportunities:");
   for (const target of top) {
-    debugLog("ticketmaster", `${target.confidence.toFixed(2)} | ${target.eventDate ?? "unknown date"} | ${target.derivedFromSimilarArtist?.name ?? "-"} | ${target.venueName ?? target.name} | ${target.city ?? "unknown city"}`);
+    const viaSimilarArtist = target.derivedFromSimilarArtist ? ` (via similar artist ${target.derivedFromSimilarArtist.name})` : "";
+    debugLog("ticketmaster", `${target.confidence.toFixed(2)} | ${target.eventDate ?? "unknown date"} | ${target.name} | ${target.venueName ?? "unknown venue"} | ${target.city ?? "unknown city"}${viaSimilarArtist}`);
   }
 }
 

@@ -56,6 +56,7 @@ interface TicketmasterVenueApi {
 interface TicketmasterAttractionEmbedApi {
   id?: string;
   name?: string;
+  classifications?: TicketmasterClassificationApi[];
 }
 
 interface TicketmasterClassificationApi {
@@ -126,15 +127,25 @@ export function normalizeTicketmasterEvent(raw: TicketmasterEventApi, now: Date 
     return [{ ticketmasterId: attraction.id, name: attraction.name, isMainAttraction: index === 0 }];
   });
 
-  const classifications = (raw.classifications ?? []).flatMap((classification) => {
-    const segment = classification.segment?.name;
-    const genre = classification.genre?.name;
-    const subGenre = classification.subGenre?.name;
-    if (!segment && !genre && !subGenre) {
-      return [];
-    }
-    return [{ segment, genre, subGenre }];
-  });
+  const toClassificationEntries = (classifications: TicketmasterClassificationApi[] | undefined) =>
+    (classifications ?? []).flatMap((classification) => {
+      const segment = classification.segment?.name;
+      const genre = classification.genre?.name;
+      const subGenre = classification.subGenre?.name;
+      if (!segment && !genre && !subGenre) {
+        return [];
+      }
+      return [{ segment, genre, subGenre }];
+    });
+
+  // The event's own classification is often coarser than its attraction's
+  // (e.g. event tagged Rock/Pop while the attraction is tagged Rock/Pop
+  // Punk) — both are merged so genre matching sees the more specific signal
+  // rather than only the event's generic top-level tag.
+  const classifications = [
+    ...toClassificationEntries(raw.classifications),
+    ...attractionsApi.flatMap((attraction) => toClassificationEntries(attraction.classifications))
+  ];
 
   return {
     provider: "ticketmaster",

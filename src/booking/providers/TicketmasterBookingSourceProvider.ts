@@ -110,12 +110,26 @@ const COUNTRY_NAME_TO_CODE: Record<string, string> = {
   australia: "AU"
 };
 
-function resolveCountryCode(env: TicketmasterBookingProviderEnv, profileCountry: string | null | undefined): string | undefined {
+function resolveCountryCode(
+  env: TicketmasterBookingProviderEnv,
+  profileCountry: string | null | undefined,
+  targetRegion?: string | null
+): string | undefined {
   if (env.TICKETMASTER_COUNTRY_CODE) {
     return env.TICKETMASTER_COUNTRY_CODE.trim().toUpperCase();
   }
-  const normalized = profileCountry?.trim().toLowerCase();
-  return normalized ? COUNTRY_NAME_TO_CODE[normalized] : undefined;
+  // profileCollector.ts currently always sets artistProfile.country to null
+  // (no geocoding step exists yet), so --target is the only practical
+  // country signal available today; kept as a fallback rather than the
+  // primary source in case profile country detection is added later.
+  for (const candidate of [profileCountry, targetRegion]) {
+    const normalized = candidate?.trim().toLowerCase();
+    const code = normalized ? COUNTRY_NAME_TO_CODE[normalized] : undefined;
+    if (code) {
+      return code;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -198,7 +212,7 @@ async function runTicketmasterSearches(
   env: TicketmasterBookingProviderEnv
 ): Promise<TicketmasterSearchOutcome> {
   const city = input.city?.trim() || input.artistProfile?.city?.trim() || null;
-  const countryCode = resolveCountryCode(env, input.artistProfile?.country);
+  const countryCode = resolveCountryCode(env, input.artistProfile?.country, input.target);
   const radiusKm = getTicketmasterRadiusKm(env);
   const targetGenres = [input.genre, ...(input.artistProfile?.genres ?? [])];
 
@@ -242,7 +256,7 @@ async function runTicketmasterSearches(
   const similarArtistEvents = await mapWithConcurrency(
     similarArtists,
     DEFAULT_TICKETMASTER_CONCURRENCY,
-    (artist) => resolveSimilarArtistEvents(client, artist, targetGenres, env)
+    (artist) => resolveSimilarArtistEvents(client, artist, targetGenres, env, countryCode)
   );
 
   return { genreLocationEvents, similarArtistEvents, diagnostics: client.diagnostics };
@@ -342,7 +356,8 @@ async function resolveSimilarArtistEvents(
   client: TicketmasterClient,
   artist: SimilarArtist,
   targetGenres: string[],
-  env: TicketmasterBookingProviderEnv
+  env: TicketmasterBookingProviderEnv,
+  countryCode: string | undefined
 ): Promise<SimilarArtistTicketmasterEvents> {
   debugLog("ticketmaster", `[${artist.name}][attraction] Searching attraction`);
   const candidates = await client.searchAttractions(artist.name);
@@ -369,6 +384,14 @@ async function resolveSimilarArtistEvents(
   const pastStart = new Date(now);
   pastStart.setMonth(pastStart.getMonth() - pastLookbackMonths);
 
+  // Scoped to the same market as the genre+location search — a similar
+  // artist's shows abroad aren't a local booking opportunity for this
+  // artist, so they're not useful evidence here.
+  debugLog(
+    "ticketmaster",
+    `[${artist.name}][events] Querying events${countryCode ? ` restricted to countryCode=${countryCode}` : " (no country restriction — location unknown)"}`
+  );
+
   const [upcomingRaw, pastRaw] = await Promise.all([
     client.searchEvents({
       attractionId: resolution.attractionId,
@@ -376,7 +399,8 @@ async function resolveSimilarArtistEvents(
       endDateTime: `${toDateOnlyString(upcomingEnd)}T23:59:59Z`,
       size: "20",
       sort: "date,asc",
-      locale: "*"
+      locale: "*",
+      ...(countryCode ? { countryCode } : {})
     }, "artist"),
     // Best-effort only: Ticketmaster's past-event coverage is partial and
     // zero results here never means the artist has never played anywhere
@@ -387,7 +411,8 @@ async function resolveSimilarArtistEvents(
       endDateTime: `${toDateOnlyString(now)}T23:59:59Z`,
       size: "20",
       sort: "date,desc",
-      locale: "*"
+      locale: "*",
+      ...(countryCode ? { countryCode } : {})
     }, "artist")
   ]);
 

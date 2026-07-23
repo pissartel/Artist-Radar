@@ -272,23 +272,50 @@ async function searchGenreLocationEvents(
 
   const rawEvents: TicketmasterEventApi[] = [];
   for (const query of queries) {
+    const classificationName = "classificationName" in query ? query.classificationName : undefined;
+    debugLog("ticketmaster", `[genre-search] Query: classificationName=${classificationName ?? "(none)"} city=${baseParams.city} radius=${baseParams.radius}${baseParams.countryCode ? ` countryCode=${baseParams.countryCode}` : ""} ${baseParams.startDateTime}..${baseParams.endDateTime}`);
     const events = await client.searchEvents(query, "genre");
+    debugLog("ticketmaster", `[genre-search]   -> ${events.length} raw event(s)`);
     rawEvents.push(...events);
   }
   debugLog("ticketmaster", `[genre-search] Raw events: ${rawEvents.length}`);
+  logRawEventDetails("genre-search", rawEvents, now);
 
   const normalized = rawEvents.flatMap((event) => {
     const concert = normalizeTicketmasterEvent(event, now);
     return concert ? [concert] : [];
   });
 
-  const relevant = normalized.filter((concert) => {
+  const relevant: TicketmasterConcert[] = [];
+  for (const concert of normalized) {
     const genreMatch = matchEventGenres(concert, params.targetGenres);
-    return genreMatch.level === "exact" || genreMatch.level === "related" || genreMatch.level === "generic";
-  });
+    const kept = genreMatch.level === "exact" || genreMatch.level === "related" || genreMatch.level === "generic";
+    debugLog(
+      "ticketmaster",
+      `[genre-search] ${kept ? "KEEP" : "DROP"} "${concert.name}" — ${concert.date.localDate} — ${concert.venue?.name ?? "unknown venue"}, ${concert.venue?.city ?? "unknown city"} — genre match: ${genreMatch.level} (event genres: ${(concert.classifications ?? []).map((c) => c.genre).filter(Boolean).join(", ") || "none"})`
+    );
+    if (kept) {
+      relevant.push(concert);
+    }
+  }
   debugLog("ticketmaster", `[genre-search] Relevant events after scoring: ${relevant.length}`);
 
   return dedupeConcerts(relevant);
+}
+
+/** Logs every raw event's name/date/venue/city/url so real API output can be inspected manually, not just aggregate counts. */
+function logRawEventDetails(label: string, events: TicketmasterEventApi[], now: Date): void {
+  for (const event of events) {
+    const concert = normalizeTicketmasterEvent(event, now);
+    if (!concert) {
+      debugLog("ticketmaster", `[${label}]   - (dropped: missing id/name/date) raw name=${event.name ?? "?"} id=${event.id ?? "?"}`);
+      continue;
+    }
+    debugLog(
+      "ticketmaster",
+      `[${label}]   - ${concert.date.localDate} | ${concert.name} | ${concert.venue?.name ?? "unknown venue"}, ${concert.venue?.city ?? "unknown city"} | status=${concert.status} | ${concert.url ?? "no url"}`
+    );
+  }
 }
 
 async function resolveSimilarArtistEvents(
@@ -299,6 +326,13 @@ async function resolveSimilarArtistEvents(
 ): Promise<SimilarArtistTicketmasterEvents> {
   debugLog("ticketmaster", `[${artist.name}][attraction] Searching attraction`);
   const candidates = await client.searchAttractions(artist.name);
+  debugLog("ticketmaster", `[${artist.name}][attraction] ${candidates.length} raw candidate(s):`);
+  for (const candidate of candidates) {
+    const genres = (candidate.classifications ?? [])
+      .flatMap((c) => [c.genre?.name, c.subGenre?.name])
+      .filter((value): value is string => Boolean(value));
+    debugLog("ticketmaster", `[${artist.name}][attraction]   - "${candidate.name ?? "?"}" (id=${candidate.id ?? "?"}) genres: ${genres.join(", ") || "none"}`);
+  }
   const resolution = resolveAttraction(artist.name, candidates.map(toAttractionCandidate), { targetGenres: artist.genres });
 
   if (resolution.status !== "resolved" || !resolution.attractionId) {
@@ -347,6 +381,12 @@ async function resolveSimilarArtistEvents(
   const pastEvents = allEvents.filter((concert) => concert.status === "past");
 
   debugLog("ticketmaster", `[${artist.name}][events] Past: ${pastEvents.length} | Upcoming: ${upcomingEvents.length}`);
+  for (const concert of [...upcomingEvents, ...pastEvents]) {
+    debugLog(
+      "ticketmaster",
+      `[${artist.name}][events]   - [${concert.status}] ${concert.date.localDate} | ${concert.name} | ${concert.venue?.name ?? "unknown venue"}, ${concert.venue?.city ?? "unknown city"} | ${concert.url ?? "no url"}`
+    );
+  }
   return { artist, attractionResolution: resolution, pastEvents, upcomingEvents };
 }
 

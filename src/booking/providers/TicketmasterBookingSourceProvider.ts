@@ -258,7 +258,11 @@ async function searchGenreLocationEvents(
     startDateTime: `${toDateOnlyString(now)}T00:00:00Z`,
     endDateTime: `${toDateOnlyString(endDate)}T23:59:59Z`,
     size: String(Math.min(eventLimit, 50)),
-    sort: "date,asc"
+    sort: "date,asc",
+    // Ticketmaster defaults to an English-only locale, which silently
+    // excludes most non-US/UK market listings (e.g. Paris returns ~0
+    // events across every classification without this; with it, hundreds).
+    locale: "*"
   };
   if (params.countryCode) {
     baseParams.countryCode = params.countryCode;
@@ -355,7 +359,8 @@ async function resolveSimilarArtistEvents(
       startDateTime: `${toDateOnlyString(now)}T00:00:00Z`,
       endDateTime: `${toDateOnlyString(upcomingEnd)}T23:59:59Z`,
       size: "20",
-      sort: "date,asc"
+      sort: "date,asc",
+      locale: "*"
     }, "artist"),
     // Best-effort only: Ticketmaster's past-event coverage is partial and
     // zero results here never means the artist has never played anywhere
@@ -365,7 +370,8 @@ async function resolveSimilarArtistEvents(
       startDateTime: `${toDateOnlyString(pastStart)}T00:00:00Z`,
       endDateTime: `${toDateOnlyString(now)}T23:59:59Z`,
       size: "20",
-      sort: "date,desc"
+      sort: "date,desc",
+      locale: "*"
     }, "artist")
   ]);
 

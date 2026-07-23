@@ -388,6 +388,69 @@ Example debug output:
 
 When `DEBUG_TICKETMASTER_CONCERTS` is not set, only the final one-line summary prints.
 
+### OpenAIWebSearchConcertProvider
+
+Disabled by default. Complements Ticketmaster/OpenAgenda for emerging artists, DIY venues and past shows that structured APIs rarely cover. **It is a discovery and extraction provider, not an authoritative concert database** — every accepted concert must have supporting web evidence and pass application-level validation; a provider failure or "no results found" is never reported as proof that an artist has no concerts.
+
+For the top `OPENAI_CONCERT_SIMILAR_ARTIST_LIMIT` (default 5) most compatible similar artists, it calls the OpenAI Responses API with the built-in `web_search` tool once per artist (one consolidated call covering both the past and upcoming date window, not one call per event), requesting strict Structured Outputs validated against a Zod schema.
+
+**Anti-hallucination guardrails:**
+
+- Every event must be backed by at least one source URL that also appears among the response's own real `url_citation` annotations — a URL only present in the model's JSON but not actually cited by the web-search tool is dropped, and the event is rejected if no valid source remains.
+- Event dates are validated programmatically against the requested past/upcoming window; an unparsable or out-of-window date is rejected. Past-vs-upcoming status is always recalculated from the date, never trusted from the model's own field (cancelled/postponed are preserved, since those aren't date facts).
+- Artist identity is checked before any of its concerts are used: an exact normalized name match is required, or a sufficiently high model-reported identity confidence; ambiguous or rejected identities discard that artist's results entirely rather than risk a homonym.
+
+**Verification levels** (only `confirmed`/`probable` become booking opportunities; `unverified`/`rejected` are diagnostics only):
+
+- `confirmed` — an official artist/venue/festival/promoter source, a trusted ticketing source, or two independent credible (agenda/press) sources agreeing.
+- `probable` — a single credible cultural-agenda or press source with a complete date and venue.
+- `unverified` — incomplete date/venue, or only weak (social/other) sources.
+- `rejected` — invalid date, missing venue, or no source surviving citation cross-validation.
+
+Support-slot signals are always hedged (`possible`/`unlikely`/`unknown`), never a confirmed claim, using the same lineup-count heuristic as the rest of the booking pipeline.
+
+Caching is per-run memoization only (one call per unique artist + date window, for the duration of a single CLI invocation) — matching every other provider in this codebase. There is no persistent cross-run cache; repeated CLI runs re-query OpenAI.
+
+Configuration:
+
+- `ENABLE_OPENAI_CONCERT_DISCOVERY=true` — required to enable; reuses `OPENAI_API_KEY`
+- `OPENAI_CONCERT_MODEL` — defaults to `gpt-4.1-mini`
+- `OPENAI_CONCERT_SIMILAR_ARTIST_LIMIT` — defaults to `5`
+- `OPENAI_CONCERT_PAST_MONTHS` — defaults to `18`
+- `OPENAI_CONCERT_UPCOMING_MONTHS` — defaults to `12`
+- `OPENAI_CONCERT_MAX_EVENTS_PER_ARTIST` — defaults to `10`
+- `OPENAI_CONCERT_CONCURRENCY` — defaults to `1`
+- `DEBUG_OPENAI_CONCERTS=true` — detailed per-artist logs (raw/confirmed/probable/unverified/rejected counts, rejection reasons); a concise one-line summary always prints regardless
+
+**Estimated API calls per artist analysis:** 1 OpenAI Responses API call per selected similar artist (default 5), so 5 calls per run — no per-event or per-query-variation calls.
+
+Manual CLI test:
+
+```
+DEBUG_OPENAI_CONCERTS=true ENABLE_OPENAI_CONCERT_DISCOVERY=true npx tsx src/cli.ts booking \
+  --artist "Tuesday Fall" --city "Paris" --genre "pop punk" --target "France"
+```
+
+Expected debug output (abridged):
+
+```
+[openai-concerts] Integration enabled
+[openai-concerts] Model: gpt-4.1-mini
+[openai-concerts] Selected 5 similar artists
+[openai-concerts] 1. Mina Warren — compatibility: 0.87
+[openai-concerts] [Mina Warren] Search triggered
+[openai-concerts] [Mina Warren] Date windows: past=2025-01-24..2026-07-23 upcoming=2026-07-24..2027-07-24
+[openai-concerts] [Mina Warren] Raw extracted events: 7
+[openai-concerts] [Mina Warren] Confirmed: 4
+[openai-concerts] [Mina Warren] Probable: 2
+[openai-concerts] [Mina Warren] Unverified: 0
+[openai-concerts] [Mina Warren] Rejected: 1
+[openai-concerts] [Mina Warren] REJECT event reason=missing_source_url date=2025-04-12 venue=Unknown
+[openai-concerts] Found 12 verified concert records for 5 similar artists
+```
+
+**Known limitations:** no persistent cache (every run re-queries); no cross-provider trigger gating yet (it always searches the top N regardless of what Ticketmaster/OpenAgenda already found — a future enhancement once a structured provider's resolution state is available to check against); promoter/organizer/festival entity extraction is not yet wired into final opportunities.
+
 ## Provider Priority
 
 For pop punk booking, providers run in this order:
@@ -399,6 +462,7 @@ For pop punk booking, providers run in this order:
 5. **OpenAgenda** — secondary; requires `ENABLE_OPENAGENDA=true` and `OPENAGENDA_API_KEY`
 6. **Ticketmaster** — optional; requires `ENABLE_TICKETMASTER_CONCERTS=true` and `TICKETMASTER_API_KEY`
 7. **Firecrawl** — optional; requires `ENABLE_FIRECRAWL_BOOKING=true` and `FIRECRAWL_API_KEY`
+8. **OpenAI Web Search concert discovery** — optional, complementary; requires `ENABLE_OPENAI_CONCERT_DISCOVERY=true` and `OPENAI_API_KEY`; researches the top N similar artists only
 
 Booking search works with zero API keys — native scene agenda fetch runs by default for punk genres.
 
@@ -432,6 +496,13 @@ Booking search works with zero API keys — native scene agenda fetch runs by de
 | `TICKETMASTER_LOOKAHEAD_MONTHS` | Upcoming-event search window | `12` |
 | `TICKETMASTER_PAST_LOOKBACK_MONTHS` | Best-effort past-event search window | `18` |
 | `DEBUG_TICKETMASTER_CONCERTS` | `true` for detailed per-artist/per-provider Ticketmaster logs | `false` (compact summary only) |
+| `ENABLE_OPENAI_CONCERT_DISCOVERY` | `true` to enable OpenAI Web Search concert discovery | `false` |
+| `OPENAI_CONCERT_MODEL` | Model used for concert discovery | `gpt-4.1-mini` |
+| `OPENAI_CONCERT_SIMILAR_ARTIST_LIMIT` | Max similar artists researched | `5` |
+| `OPENAI_CONCERT_PAST_MONTHS` | Past search window (months) | `18` |
+| `OPENAI_CONCERT_UPCOMING_MONTHS` | Upcoming search window (months) | `12` |
+| `OPENAI_CONCERT_MAX_EVENTS_PER_ARTIST` | Max accepted events kept per artist | `10` |
+| `OPENAI_CONCERT_CONCURRENCY` | Concurrent OpenAI calls | `1` |
 
 ## Future Providers
 

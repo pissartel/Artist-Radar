@@ -38,6 +38,11 @@ import {
   isTicketmasterEnabled,
   type TicketmasterBookingProviderEnv
 } from "./TicketmasterBookingSourceProvider.js";
+import {
+  buildOpenAIWebSearchConcertProvider,
+  getOpenAIConcertDiscoveryStatus,
+  type OpenAIWebSearchConcertProviderEnv
+} from "./OpenAIWebSearchConcertProvider.js";
 import { warnLog } from "../../utils/logger.js";
 import type { ArtistEventHistoryProvider } from "../artistEventHistory.js";
 
@@ -67,7 +72,8 @@ export interface DefaultBookingProviderEnv extends
   SceneAgendaProviderEnv,
   NativeFetchSceneAgendaEnv,
   FirecrawlBookingEnv,
-  TicketmasterBookingProviderEnv {
+  TicketmasterBookingProviderEnv,
+  OpenAIWebSearchConcertProviderEnv {
   MOCK_AI?: string;
 }
 
@@ -155,6 +161,10 @@ export function buildDefaultBookingSourceProviders(
     providers.push(buildTicketmasterBookingSourceProvider({ env, fetchImpl }));
   }
 
+  if (getOpenAIConcertDiscoveryStatus(env).enabled) {
+    providers.push(buildOpenAIWebSearchConcertProvider({ env }));
+  }
+
   for (const webSearchProvider of webSearchProviders) {
     providers.push(buildWebSearchBookingSourceProvider({
       webSearchProvider,
@@ -184,6 +194,7 @@ function logBookingProviderStartup(env: DefaultBookingProviderEnv): void {
   const musicBrainzEventHistory = getMusicBrainzEventHistoryStatus(env);
   const firecrawl = getFirecrawlProviderStatus(env);
   const ticketmaster = getTicketmasterProviderStatus(env);
+  const openaiConcerts = getOpenAIConcertDiscoveryStatus(env);
   const mock = getMockProviderStatus(env);
   warnLog("booking", [
     "Booking providers:",
@@ -198,6 +209,7 @@ function logBookingProviderStartup(env: DefaultBookingProviderEnv): void {
     `- MusicBrainzEventHistory: ${musicBrainzEventHistory.enabled ? "enabled" : "disabled"} (${musicBrainzEventHistory.reason})`,
     `- Firecrawl: ${firecrawl.enabled ? "enabled" : "disabled"} (${firecrawl.reason})`,
     `- Ticketmaster: ${ticketmaster.enabled ? "enabled" : "disabled"} (${ticketmaster.reason})`,
+    `- OpenAIWebSearchConcerts: ${openaiConcerts.enabled ? "enabled" : "disabled"} (${openaiConcerts.reason})`,
     `- Mock: ${mock.enabled ? "enabled" : "disabled"} (${mock.reason})`
   ].join("\n"));
 }

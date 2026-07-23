@@ -1,5 +1,5 @@
 import { fetchWithTimeout, parseTimeoutMs, redactUrlForLogging } from "../../utils/fetchWithTimeout.js";
-import { warnLog } from "../../utils/logger.js";
+import { debugLog, warnLog } from "../../utils/logger.js";
 import { normalizeKey } from "../../utils/venueNameNormalization.js";
 import type { TicketmasterEventApi } from "./normalizeTicketmasterEvent.js";
 
@@ -194,7 +194,9 @@ export class TicketmasterClient {
 
   private async requestWithRetry(url: string, attempt = 0): Promise<Response | null> {
     try {
+      debugLog("ticketmaster", `[request]${attempt > 0 ? ` (retry ${attempt})` : ""} GET ${redactUrlForLogging(url)}`);
       const response = await fetchWithTimeout(url, { headers: { Accept: "application/json" } }, this.timeoutMs, this.fetchImpl);
+      debugLog("ticketmaster", `[request]   -> HTTP ${response.status}`);
 
       if (response.status === 429) {
         this.diagnostics.rateLimitErrors += 1;

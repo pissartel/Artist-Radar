@@ -206,7 +206,14 @@ async function runTicketmasterSearches(
   debugLog("ticketmaster", `Radius: ${radiusKm} km`);
   debugLog("ticketmaster", `Target genres: ${targetGenres.join(", ")}`);
 
-  const classifications = uniqueStrings(targetGenres.flatMap(mapGenreToTicketmasterClassifications)).slice(0, 3);
+  // Only the single closest Ticketmaster classification for the genre given
+  // as input is queried — not the broader fallback entries in
+  // ticketmasterGenreMappings (e.g. "pop punk" maps to ["Punk", "Alternative
+  // Rock", "Rock"], but querying "Rock"/"Alternative Rock" too pulls in
+  // generic Rock/Pop shows unrelated to the artist's actual genre, diluting
+  // relevance). Genre compatibility outranks result volume (CLAUDE.md).
+  const primaryClassification = mapGenreToTicketmasterClassifications(input.genre)[0];
+  const classifications = primaryClassification ? [primaryClassification] : [];
   debugLog("ticketmaster", `Ticketmaster classifications: ${classifications.length > 0 ? classifications.join(", ") : "none (falling back to keyword search)"}`);
 
   if (city) {

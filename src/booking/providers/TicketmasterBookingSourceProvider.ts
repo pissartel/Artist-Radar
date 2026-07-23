@@ -209,6 +209,15 @@ async function runTicketmasterSearches(
   const classifications = uniqueStrings(targetGenres.flatMap(mapGenreToTicketmasterClassifications)).slice(0, 3);
   debugLog("ticketmaster", `Ticketmaster classifications: ${classifications.length > 0 ? classifications.join(", ") : "none (falling back to keyword search)"}`);
 
+  if (city) {
+    debugLog(
+      "ticketmaster",
+      `[genre-search] Calling Ticketmaster for genre(s) "${targetGenres.join(", ")}" -> classifications [${classifications.join(", ") || "none"}] at location "${city}"${countryCode ? `, ${countryCode}` : ""} (radius ${radiusKm}km)`
+    );
+  } else {
+    debugLog("ticketmaster", "[genre-search] Skipped: no location (city) available for this artist");
+  }
+
   const genreLocationEvents = city
     ? await searchGenreLocationEvents(client, { city, countryCode, radiusKm, classifications, targetGenres, env })
     : [];

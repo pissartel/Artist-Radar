@@ -138,6 +138,10 @@ export function buildOpenAIWebSearchConcertProvider(options: OpenAIWebSearchConc
         }
       }
 
+      const venueLeadTargets = buildVenueLeadTargets(perArtistOutcomes);
+      debugLog("openai-concerts", `[venue-leads] ${venueLeadTargets.length} France-based venue lead(s) from past confirmed/probable concerts`);
+      targets.push(...venueLeadTargets);
+
       logSummary(perArtistOutcomes, diagnostics);
 
       return {
@@ -248,6 +252,10 @@ async function searchArtistConcerts(
     }
     if (verificationStatus === "confirmed") confirmedCount += 1;
     if (verificationStatus === "probable") probableCount += 1;
+    debugLog(
+      "openai-concerts",
+      `[${artist.name}] ACCEPT [${verificationStatus}/${status}] ${event.date} | ${event.eventName ?? "(unnamed)"} | ${event.venue.name}, ${event.venue.city ?? "?"}, ${event.venue.country ?? "unknown country"}`
+    );
 
     verified.push({
       artistName: artist.name,
@@ -332,6 +340,107 @@ function buildVenueEvidenceCounts(outcomes: ArtistConcertSearchOutcome[]): Map<s
     }
   }
   return counts;
+}
+
+interface VenueLeadMatch {
+  artistName: string;
+  compatibilityScore: number;
+  date: string;
+  sourceUrl: string | null;
+}
+
+// Matches the shared relevance pipeline's HIGH_CONFIDENCE_WITHOUT_DATE
+// threshold (src/booking/relevance.ts) — a venue lead has no single event
+// date by design, and only survives that filter (kept as opportunityKind
+// "actionable" instead of being rejected for "missing_date") at or above
+// this confidence.
+const VENUE_LEAD_MIN_CONFIDENCE = 0.85;
+
+/**
+ * A past confirmed/probable concert is opportunistic evidence that a venue
+ * is compatible — not itself a bookable event (it already happened). This
+ * surfaces the *venue* as a lead, restricted to France per the user's
+ * request, without re-adding the past show as an event opportunity (which
+ * the shared pipeline already excludes via opportunityKind
+ * "historical_signal" — unaffected by this).
+ */
+function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[]): BookingTarget[] {
+  const venues = new Map<string, { venue: VerifiedConcert["venue"]; genres: Set<string>; matches: VenueLeadMatch[] }>();
+
+  for (const outcome of outcomes) {
+    for (const concert of outcome.concerts) {
+      if (concert.status !== "past") {
+        continue; // upcoming concerts already produce their own actionable event opportunity
+      }
+      if (concert.verificationStatus !== "confirmed" && concert.verificationStatus !== "probable") {
+        continue;
+      }
+      if (!concert.venue.country || concert.venue.country.trim().toLowerCase() !== "france") {
+        continue;
+      }
+
+      const key = venueEvidenceKey(concert.venue.name, concert.venue.city);
+      const match: VenueLeadMatch = {
+        artistName: outcome.artist.name,
+        compatibilityScore: outcome.artist.totalRelevance,
+        date: concert.date,
+        sourceUrl: concert.sources[0]?.url ?? null
+      };
+
+      const existing = venues.get(key);
+      if (existing) {
+        existing.matches.push(match);
+        (outcome.artist.genres ?? []).forEach((genre) => existing.genres.add(genre));
+      } else {
+        venues.set(key, {
+          venue: concert.venue,
+          genres: new Set(outcome.artist.genres ?? []),
+          matches: [match]
+        });
+      }
+    }
+  }
+
+  return [...venues.values()].map(({ venue, genres, matches }) => {
+    const confidence = Math.min(0.95, VENUE_LEAD_MIN_CONFIDENCE + (matches.length - 1) * 0.03);
+    const evidence = uniqueStrings([
+      ...matches.map(
+        (match) =>
+          `Similar artist ${match.artistName} played here on ${match.date} (compatibility ${match.compatibilityScore}/100) — opportunistic evidence from a past show, not a current booking opportunity itself.`
+      ),
+      ...matches.map((match) => match.sourceUrl)
+    ]);
+
+    return {
+      name: `${venue.name} — venue with compatible programming`,
+      category: "venue",
+      city: venue.city,
+      country: venue.country,
+      description: `${matches.length} compatible similar artist${matches.length === 1 ? " has" : "s have"} played here.`,
+      sourceUrl: matches[0].sourceUrl,
+      sourceType: "event_page",
+      sourceProvider: "openai_web_search",
+      genres: [...genres],
+      venueName: venue.name,
+      lineup: [],
+      imageUrl: null,
+      ticketUrl: null,
+      eventDate: null,
+      isFutureEvent: null,
+      isPastEvent: null,
+      dateConfidence: "unclear",
+      opportunityKind: "actionable",
+      derivedFromSimilarArtist: {
+        name: matches[0].artistName,
+        popularityComparison: "unknown",
+        matchedGenres: [...genres],
+        sourceUrl: matches[0].sourceUrl
+      },
+      contacts: [],
+      confidence,
+      evidence
+    };
+  });
 }
 
 function venueEvidenceKey(name: string, city: string | null): string {

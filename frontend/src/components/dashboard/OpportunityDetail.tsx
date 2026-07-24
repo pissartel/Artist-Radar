@@ -18,6 +18,7 @@ import {
   getOpportunitySignal,
   getOpportunitySourceUrl,
   getOrganizationTypeLabel,
+  type OpportunityCardFamily,
   getPositiveMatchFactors,
   getRecommendedAction,
   getSourceEvidence,
@@ -70,6 +71,7 @@ function buildEventInfoRows(opportunity: Opportunity): { label: string; value?: 
       { label: "Venue", value: opportunity.venue },
       { label: "Venue type", value: venueTypeLabel },
       { label: "Website", value: opportunity.venueWebsite },
+      { label: "Address", value: opportunity.address },
       {
         label: "Capacity",
         value: opportunity.venueCapacity != null ? `~${opportunity.venueCapacity.toLocaleString()}` : null,
@@ -94,6 +96,29 @@ function buildEventInfoRows(opportunity: Opportunity): { label: string; value?: 
   }
 
   return [...rows, ...getAdditionalMetadata(opportunity)];
+}
+
+// A venue opportunity's source is often a listing/agenda page rather than
+// the venue's plain homepage — the outbound link should say so instead of
+// the misleading "View original event page" (there is no single event) or
+// a generic "Visit website" that undersells what the link actually shows.
+// The keyword must be the last path segment — "/event/band-a" (an
+// individual event permalink) must not be mistaken for a listing page.
+const LISTING_PAGE_PATH_PATTERN = /\/(agenda|events?|programme|programmation|calendar|concerts)\/?$/i;
+
+function isListingPageUrl(url: string): boolean {
+  try {
+    return LISTING_PAGE_PATH_PATTERN.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+}
+
+export function getSourceLinkLabel(sourceUrl: string, family: OpportunityCardFamily): string {
+  if (family === "venue" || family === "organization") {
+    return isListingPageUrl(sourceUrl) ? "View venue programme ↗" : "Visit website ↗";
+  }
+  return "View original event page ↗";
 }
 
 const SIGNAL_TONE_CLASSES: Record<OpportunitySignalKind, string> = {
@@ -465,7 +490,7 @@ export default function OpportunityDetail({
                 rel="noopener noreferrer"
                 className="inline-block mt-3 text-xs text-accent-text hover:text-foreground transition-colors"
               >
-                View original event page ↗
+                {getSourceLinkLabel(originalEventUrl, family)}
               </a>
             )}
           </div>

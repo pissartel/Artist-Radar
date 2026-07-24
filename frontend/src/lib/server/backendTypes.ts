@@ -153,6 +153,7 @@ export interface BackendOpportunity {
   dateRange?: { start: string; end: string } | null;
   genres?: string[];
   venueCapacity?: number | null;
+  address?: string | null;
   recentEvents?: string[];
   lineup?: string[];
   relatedArtist?: BackendOpportunityRelatedArtist | null;

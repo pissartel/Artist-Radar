@@ -352,6 +352,8 @@ export const OpportunitySchema = z.object({
   genres: z.array(z.string().trim().min(1)).default([]),
   // Known venue capacity, when a source reports it. Never guessed.
   venueCapacity: z.number().int().positive().nullable().optional(),
+  // Full street address, when a source reports it. Never guessed.
+  address: z.string().trim().min(1).nullable().optional(),
   // Past events/programming attributed to this target, when known.
   recentEvents: z.array(z.string().trim().min(1)).default([]),
   // Present only when this opportunity was surfaced from a similar artist's live history.

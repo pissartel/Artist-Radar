@@ -204,6 +204,7 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
     ticketUrl: opportunity.ticketUrl ?? null,
     genres: opportunity.genres ?? [],
     venueCapacity: opportunity.venueCapacity ?? null,
+    address: opportunity.address ?? undefined,
     recentEvents: opportunity.recentEvents ?? [],
     lineup: opportunity.lineup ?? [],
     relatedArtist: opportunity.relatedArtist ?? null,

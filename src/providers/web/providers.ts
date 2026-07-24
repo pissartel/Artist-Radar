@@ -222,7 +222,12 @@ export class FirecrawlExtractProvider implements WebExtractProvider {
           Authorization: `Bearer ${this.env.FIRECRAWL_API_KEY}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true })
+        // rawHtml stays fully unprocessed (head/header/footer/JSON-LD/meta
+        // tags intact) regardless of onlyMainContent — confirmed live: only
+        // `markdown` is affected by that flag, so requesting rawHtml/links
+        // alongside it is purely additive (same 1 scrape credit) and never
+        // regresses the existing clean-markdown behavior other callers rely on.
+        body: JSON.stringify({ url, formats: ["markdown", "rawHtml", "links"], onlyMainContent: true })
       },
       parseTimeout(this.env.WEB_PROVIDER_TIMEOUT_MS, options.timeoutMs ?? DEFAULT_FIRECRAWL_TIMEOUT_MS),
       this.fetchImpl
@@ -233,13 +238,17 @@ export class FirecrawlExtractProvider implements WebExtractProvider {
       return null;
     }
 
-    const data = (await response.json()) as { data?: { markdown?: string; content?: string; metadata?: { title?: string } } };
+    const data = (await response.json()) as {
+      data?: { markdown?: string; content?: string; rawHtml?: string; links?: string[]; metadata?: { title?: string } };
+    };
     const markdown = data.data?.markdown ?? data.data?.content ?? null;
     return {
       url,
       title: data.data?.metadata?.title ?? extractMarkdownTitle(markdown ?? ""),
       text: markdown,
       markdown,
+      html: data.data?.rawHtml ?? null,
+      links: data.data?.links ?? null,
       sourceProvider: this.providerName,
       statusCode: response.status
     };

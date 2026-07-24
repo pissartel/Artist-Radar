@@ -280,7 +280,7 @@ function safeExtract<T>(fn: () => T, warnings: string[], label: string): T | nul
 const JSON_LD_PATTERN = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
 const EVENT_TYPE_PATTERN = /event/i;
 
-function extractFromJsonLd(html: string): Partial<EventEnrichmentData> | null {
+function parseJsonLdBlocks(html: string): unknown[] {
   const blocks: unknown[] = [];
   let match: RegExpExecArray | null;
   JSON_LD_PATTERN.lastIndex = 0;
@@ -292,8 +292,11 @@ function extractFromJsonLd(html: string): Partial<EventEnrichmentData> | null {
       // Ignore malformed JSON-LD blocks; other tiers can still supply data.
     }
   }
+  return blocks;
+}
 
-  const candidates = blocks.flatMap((block) => flattenJsonLdGraph(block));
+function extractFromJsonLd(html: string): Partial<EventEnrichmentData> | null {
+  const candidates = parseJsonLdBlocks(html).flatMap((block) => flattenJsonLdGraph(block));
   const eventNode = candidates.find((node) => isEventLikeNode(node));
   if (!eventNode) return null;
 
@@ -338,19 +341,28 @@ function isEventLikeNode(node: unknown): boolean {
   return false;
 }
 
-function extractJsonLdAddress(location: unknown): { city: string | null; line: string | null } {
-  if (!location || typeof location !== "object") return { city: null, line: null };
+interface JsonLdAddress {
+  city: string | null;
+  postalCode: string | null;
+  country: string | null;
+  line: string | null;
+}
+
+function extractJsonLdAddress(location: unknown): JsonLdAddress {
+  if (!location || typeof location !== "object") return { city: null, postalCode: null, country: null, line: null };
   const address = (location as Record<string, unknown>).address;
-  if (typeof address === "string") return { city: null, line: address };
+  if (typeof address === "string") return { city: null, postalCode: null, country: null, line: address };
   if (address && typeof address === "object") {
     const addressRecord = address as Record<string, unknown>;
     const city = asString(addressRecord.addressLocality);
+    const postalCode = asString(addressRecord.postalCode);
+    const country = asString(addressRecord.addressCountry);
     const parts = [addressRecord.streetAddress, addressRecord.postalCode, addressRecord.addressLocality]
       .map((part) => asString(part))
       .filter((part): part is string => Boolean(part));
-    return { city, line: parts.length > 0 ? parts.join(", ") : null };
+    return { city, postalCode, country, line: parts.length > 0 ? parts.join(", ") : null };
   }
-  return { city: null, line: null };
+  return { city: null, postalCode: null, country: null, line: null };
 }
 
 function extractJsonLdPerformers(performer: unknown): string[] {
@@ -460,4 +472,506 @@ function extractFromPageContent(html: string, referenceDate: Date): Partial<Even
   if (!normalized) return null;
   const snippet = text.match(DATE_SNIPPET_PATTERN)?.[0] ?? normalized;
   return { eventDate: snippet };
+}
+
+// =============================================================================
+// Venue/organization identity extraction for generic agenda/listing pages.
+//
+// A page like quai-m.fr/agenda has an H1/<title> of "Agenda" — a page-section
+// label, not the venue's name. This section resolves the *venue's own*
+// identity (never a generic page label) and detects when a page is a
+// multi-event listing rather than one event, so a date is never leaked from
+// an unrelated event card onto the venue itself.
+// =============================================================================
+
+export const GENERIC_PAGE_TITLES = [
+  "agenda",
+  "events",
+  "event",
+  "événements",
+  "evenements",
+  "programme",
+  "programmation",
+  "calendar",
+  "concerts",
+  "accueil",
+  "home",
+  "actualités",
+  "actualites"
+];
+
+function normalizeForComparison(value: string): string {
+  return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
+}
+
+const GENERIC_PAGE_TITLE_SET = new Set(GENERIC_PAGE_TITLES.map(normalizeForComparison));
+
+export function isGenericPageTitle(value: string): boolean {
+  return GENERIC_PAGE_TITLE_SET.has(normalizeForComparison(value));
+}
+
+export type VenueNameSource = "structured_data" | "og_site_name" | "header_logo" | "footer" | "document_title" | "domain_inference";
+export type VenueImageSource = "structured_data" | "og_image" | "header_logo" | "favicon" | "hero_image";
+
+export interface RejectedVenueName {
+  value: string;
+  reason: "generic_page_title";
+}
+
+export interface ExtractedVenuePageData {
+  venueName: string | null;
+  nameSource: VenueNameSource | null;
+  rejectedNames: RejectedVenueName[];
+  isCollectionPage: boolean;
+  collectionPageReason: string | null;
+  city: string | null;
+  postalCode: string | null;
+  country: string | null;
+  address: string | null;
+  locationSource: "structured_data" | "footer" | null;
+  imageUrl: string | null;
+  imageSource: VenueImageSource | null;
+  eventDate: string | null;
+  eventDateDisplay: string | null;
+  confidence: number;
+  warnings: string[];
+}
+
+// --- JSON-LD organization/venue -------------------------------------------
+
+const ORGANIZATION_TYPE_PATTERN = /musicvenue|organization|performingartstheater|localbusiness|place/i;
+
+function isOrganizationLikeNode(node: unknown): boolean {
+  if (!node || typeof node !== "object") return false;
+  const type = (node as Record<string, unknown>)["@type"];
+  if (typeof type === "string") return ORGANIZATION_TYPE_PATTERN.test(type);
+  if (Array.isArray(type)) return type.some((t) => typeof t === "string" && ORGANIZATION_TYPE_PATTERN.test(t));
+  return false;
+}
+
+interface VenueIdentityCandidate {
+  name: string | null;
+  city: string | null;
+  postalCode: string | null;
+  country: string | null;
+  address: string | null;
+  imageUrl: string | null;
+}
+
+// Highest-priority venue-identity signal: an Event node's own `location`
+// when this page describes one event, else a standalone
+// Organization/MusicVenue/PerformingArtsTheater/LocalBusiness/Place node.
+function extractOrganizationFromJsonLd(html: string): VenueIdentityCandidate | null {
+  const candidates = parseJsonLdBlocks(html).flatMap((block) => flattenJsonLdGraph(block));
+
+  const eventNode = candidates.find((node) => isEventLikeNode(node));
+  if (eventNode) {
+    const node = eventNode as Record<string, unknown>;
+    const location = firstOf(node.location) as Record<string, unknown> | undefined;
+    const name = asString(location?.name);
+    if (location && name) {
+      const address = extractJsonLdAddress(location);
+      return {
+        name,
+        city: address.city,
+        postalCode: address.postalCode,
+        country: address.country,
+        address: address.line,
+        imageUrl: extractJsonLdImage(location.image) ?? extractJsonLdImage(node.image)
+      };
+    }
+  }
+
+  const orgNode = candidates.find((node) => isOrganizationLikeNode(node));
+  if (orgNode) {
+    const node = orgNode as Record<string, unknown>;
+    const address = extractJsonLdAddress(node);
+    return {
+      name: asString(node.name),
+      city: address.city,
+      postalCode: address.postalCode,
+      country: address.country,
+      address: address.line,
+      imageUrl: extractJsonLdImage(node.logo) ?? extractJsonLdImage(node.image)
+    };
+  }
+
+  return null;
+}
+
+// --- Open Graph site name ---------------------------------------------------
+
+function extractOgSiteName(html: string): string | null {
+  return matchMetaProperty(html, "og:site_name");
+}
+
+// --- Header branding / footer organization block ---------------------------
+
+const HEADER_BLOCK_PATTERN = /<header[^>]*>([\s\S]*?)<\/header>/i;
+const LOGO_ALT_PATTERN =
+  /<img[^>]+(?:class|id)=["'][^"']*logo[^"']*["'][^>]+alt=["']([^"']+)["']|<img[^>]+alt=["']([^"']+)["'][^>]+(?:class|id)=["'][^"']*logo[^"']*["']/i;
+const LOGO_ARIA_LABEL_PATTERN =
+  /(?:class|id)=["'][^"']*logo[^"']*["'][^>]*aria-label=["']([^"']+)["']|aria-label=["']([^"']+)["'][^>]*(?:class|id)=["'][^"']*logo[^"']*["']/i;
+const LOGO_SRC_PATTERN =
+  /<img[^>]+(?:class|id)=["'][^"']*logo[^"']*["'][^>]+src=["']([^"']+)["']|<img[^>]+src=["']([^"']+)["'][^>]+(?:class|id)=["'][^"']*logo[^"']*["']/i;
+
+function extractHeaderBranding(html: string): { name: string | null; imageUrl: string | null } {
+  const header = html.match(HEADER_BLOCK_PATTERN)?.[1] ?? html.slice(0, 4000);
+  const altMatch = header.match(LOGO_ALT_PATTERN);
+  const ariaMatch = header.match(LOGO_ARIA_LABEL_PATTERN);
+  const name = asString(altMatch?.[1] ?? altMatch?.[2]) ?? asString(ariaMatch?.[1] ?? ariaMatch?.[2]);
+  const srcMatch = header.match(LOGO_SRC_PATTERN);
+  const imageUrl = srcMatch?.[1] ?? srcMatch?.[2] ?? null;
+  return { name, imageUrl };
+}
+
+const FOOTER_BLOCK_PATTERN = /<footer[^>]*>([\s\S]*?)<\/footer>/i;
+const FOOTER_BRAND_PATTERN = /<(?:h\d|strong|b)[^>]*>([^<]{2,60})<\/(?:h\d|strong|b)>/i;
+const FRENCH_ADDRESS_PATTERN = /\b\d{1,4}[^\n,]{0,60},?\s*\d{5}\s+[A-ZÀ-Ö][\wÀ-Öø-ÿ' -]+/;
+
+function extractFooterOrganizationBlock(html: string): { name: string | null; address: string | null } {
+  const footer = html.match(FOOTER_BLOCK_PATTERN)?.[1];
+  if (!footer) return { name: null, address: null };
+
+  const addressTagMatch = footer.match(ADDRESS_TAG_PATTERN)?.[1];
+  const footerText = stripTags(footer);
+  const address = addressTagMatch ? stripTags(addressTagMatch) : (footerText.match(FRENCH_ADDRESS_PATTERN)?.[0]?.trim() ?? null);
+  const name = asString(footer.match(FOOTER_BRAND_PATTERN)?.[1]);
+  return { name, address };
+}
+
+// --- Document title cleanup -------------------------------------------------
+
+// Handles "Agenda | Quai M" -> "Quai M" and "Programmation - Le Krakatoa" ->
+// "Le Krakatoa": splits on common separators, drops any segment matching
+// GENERIC_PAGE_TITLES, and keeps the last remaining segment (brand names
+// conventionally trail the page-specific label). Returns null when every
+// segment is generic (a bare "Agenda" title with no brand at all).
+function cleanGenericTitleSegments(title: string): string | null {
+  const segments = title
+    .split(/\s*[|\-–:]\s*/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  if (segments.length === 0) return null;
+  const nonGeneric = segments.filter((segment) => !isGenericPageTitle(segment));
+  if (nonGeneric.length === 0) return null;
+  return nonGeneric[nonGeneric.length - 1];
+}
+
+// --- Domain-based fallback ---------------------------------------------------
+
+// Lowest-confidence tier: quai-m.fr -> "Quai M". Only used when every other
+// signal is unavailable or rejected as generic.
+function inferVenueNameFromDomain(hostname: string): string | null {
+  const withoutWww = hostname.replace(/^www\./i, "");
+  const withoutTld = withoutWww.replace(/\.[a-z]{2,}(?:\.[a-z]{2,})?$/i, "");
+  if (!withoutTld) return null;
+  const words = withoutTld.split(/[-.]/).filter(Boolean);
+  if (words.length === 0) return null;
+  return words.map((word) => (word.length <= 2 ? word.toUpperCase() : capitalizeWord(word))).join(" ");
+}
+
+function capitalizeWord(value: string): string {
+  return value.length > 0 ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
+}
+
+function safeHostname(url: string): string | null {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function safePathname(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return "";
+  }
+}
+
+// --- Collection (listing) page detection ------------------------------------
+
+// The keyword must be the *last* path segment (optionally with a trailing
+// slash) — a listing page's URL typically ends right there ("/agenda",
+// "/events"), while an individual event permalink has a further slug/id
+// after it ("/event/band-a"), which must not be misdetected as a listing
+// page. `URL.pathname` never includes the query string, so no `?` handling
+// is needed here.
+const COLLECTION_PATH_PATTERN = /\/(agenda|events?|programme|programmation|calendar|concerts)\/?$/i;
+const MIN_DATE_MATCHES_FOR_COLLECTION = 3;
+
+// A page whose URL path looks like a listing (/agenda, /events, ...) or that
+// contains several distinct date-shaped snippets is treated as a collection
+// of events, not one event — so a date is never resolved/leaked for it at
+// the page level (ticket: "never invent or leak a date onto a venue").
+function detectCollectionPage(html: string, sourceUrl: string | null): { isCollectionPage: boolean; reason: string | null } {
+  const pathLooksLikeListing = sourceUrl ? COLLECTION_PATH_PATTERN.test(safePathname(sourceUrl)) : false;
+  const text = stripTags(html);
+  const dateMatches = text.match(new RegExp(DATE_SNIPPET_PATTERN.source, "gi")) ?? [];
+  const hasManyDates = dateMatches.length >= MIN_DATE_MATCHES_FOR_COLLECTION;
+
+  if (pathLooksLikeListing && hasManyDates) {
+    return {
+      isCollectionPage: true,
+      reason: `URL path matches a listing pattern and ${dateMatches.length} distinct dates were found on the page`
+    };
+  }
+  if (pathLooksLikeListing) {
+    return { isCollectionPage: true, reason: "URL path matches a listing pattern (/agenda, /events, /programme, ...)" };
+  }
+  if (hasManyDates) {
+    return { isCollectionPage: true, reason: `${dateMatches.length} distinct dates were found on the page` };
+  }
+  return { isCollectionPage: false, reason: null };
+}
+
+// --- Venue identity resolution (priority chain) -----------------------------
+
+interface VenueIdentityResolution {
+  venueName: string | null;
+  nameSource: VenueNameSource | null;
+  rejectedNames: RejectedVenueName[];
+  city: string | null;
+  postalCode: string | null;
+  country: string | null;
+  address: string | null;
+  locationSource: "structured_data" | "footer" | null;
+}
+
+// Priority order (ticket §2): structured data -> og:site_name -> header
+// branding -> footer block -> cleaned document title -> domain inference.
+// Any candidate matching GENERIC_PAGE_TITLES is rejected and recorded rather
+// than used, so a page never ends up named "Agenda"/"Programme"/etc.
+function resolveVenueIdentity(html: string, sourceUrl: string | null): VenueIdentityResolution {
+  const rejectedNames: RejectedVenueName[] = [];
+  const reject = (value: string | null | undefined) => {
+    if (value && value.trim()) rejectedNames.push({ value: value.trim(), reason: "generic_page_title" });
+  };
+
+  const structured = extractOrganizationFromJsonLd(html);
+  const footer = extractFooterOrganizationBlock(html);
+  const locationFromStructured = structured?.address || structured?.city ? "structured_data" as const : null;
+  const locationSource: "structured_data" | "footer" | null = locationFromStructured ?? (footer.address ? "footer" : null);
+  const baseLocation = {
+    city: structured?.city ?? null,
+    postalCode: structured?.postalCode ?? null,
+    country: structured?.country ?? null,
+    address: structured?.address ?? footer.address ?? null,
+    locationSource
+  };
+
+  if (structured?.name) {
+    if (!isGenericPageTitle(structured.name)) {
+      return { venueName: structured.name, nameSource: "structured_data", rejectedNames, ...baseLocation };
+    }
+    reject(structured.name);
+  }
+
+  const siteName = extractOgSiteName(html);
+  if (siteName) {
+    if (!isGenericPageTitle(siteName)) {
+      return { venueName: siteName, nameSource: "og_site_name", rejectedNames, ...baseLocation };
+    }
+    reject(siteName);
+  }
+
+  const branding = extractHeaderBranding(html);
+  if (branding.name) {
+    if (!isGenericPageTitle(branding.name)) {
+      return { venueName: branding.name, nameSource: "header_logo", rejectedNames, ...baseLocation };
+    }
+    reject(branding.name);
+  }
+
+  if (footer.name) {
+    if (!isGenericPageTitle(footer.name)) {
+      return { venueName: footer.name, nameSource: "footer", rejectedNames, ...baseLocation };
+    }
+    reject(footer.name);
+  }
+
+  const documentTitle = extractHtmlTitle(html);
+  if (documentTitle) {
+    if (isGenericPageTitle(documentTitle)) {
+      reject(documentTitle);
+    } else {
+      const cleaned = cleanGenericTitleSegments(documentTitle);
+      if (cleaned) {
+        return { venueName: cleaned, nameSource: "document_title", rejectedNames, ...baseLocation };
+      }
+      reject(documentTitle);
+    }
+  }
+
+  const hostname = sourceUrl ? safeHostname(sourceUrl) : null;
+  const domainInferred = hostname ? inferVenueNameFromDomain(hostname) : null;
+  return {
+    venueName: domainInferred,
+    nameSource: domainInferred ? "domain_inference" : null,
+    rejectedNames,
+    ...baseLocation
+  };
+}
+
+// --- Venue image/logo resolution --------------------------------------------
+
+function resolveVenueImage(html: string): { imageUrl: string | null; imageSource: VenueImageSource | null } {
+  const structured = extractOrganizationFromJsonLd(html);
+  if (structured?.imageUrl) {
+    return { imageUrl: structured.imageUrl, imageSource: "structured_data" };
+  }
+
+  const ogImage = matchMetaProperty(html, "og:image");
+  if (ogImage) {
+    return { imageUrl: ogImage, imageSource: "og_image" };
+  }
+
+  const branding = extractHeaderBranding(html);
+  if (branding.imageUrl) {
+    return { imageUrl: branding.imageUrl, imageSource: "header_logo" };
+  }
+
+  const faviconMatch =
+    html.match(/<link[^>]+rel=["'](?:shortcut )?icon["'][^>]+href=["']([^"']+)["']/i) ??
+    html.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["'](?:shortcut )?icon["']/i);
+  if (faviconMatch?.[1]) {
+    return { imageUrl: faviconMatch[1], imageSource: "favicon" };
+  }
+
+  const heroMatch = html.match(POSTER_IMG_PATTERN);
+  const heroImage = heroMatch ? heroMatch[1] ?? heroMatch[2] ?? null : null;
+  if (heroImage) {
+    return { imageUrl: heroImage, imageSource: "hero_image" };
+  }
+
+  return { imageUrl: null, imageSource: null };
+}
+
+// --- Top-level venue page extraction -----------------------------------------
+
+function computeVenueConfidence(identity: VenueIdentityResolution): number {
+  if (!identity.venueName || !identity.nameSource) return 0.1;
+  const sourceWeights: Record<VenueNameSource, number> = {
+    structured_data: 1,
+    og_site_name: 0.8,
+    header_logo: 0.6,
+    footer: 0.55,
+    document_title: 0.45,
+    domain_inference: 0.25
+  };
+  const nameScore = sourceWeights[identity.nameSource];
+  const locationBonus = identity.city || identity.address ? 0.1 : 0;
+  return Math.max(0, Math.min(1, Math.round((nameScore + locationBonus) * 100) / 100));
+}
+
+/**
+ * Resolves a venue/organization's real identity from a scraped page,
+ * rejecting generic page-section labels ("Agenda", "Programme", ...), and
+ * detects whether the page is a multi-event listing so a date is never
+ * resolved/leaked for it (issue: quai-m.fr/agenda extracted as name="Agenda",
+ * date="Jun 26, 2027" — an unrelated event's date).
+ */
+export function extractVenuePageData(html: string, sourceUrl: string | null, referenceDate: Date = new Date()): ExtractedVenuePageData {
+  const warnings: string[] = [];
+  const identity = resolveVenueIdentity(html, sourceUrl);
+  const collection = detectCollectionPage(html, sourceUrl);
+  const image = resolveVenueImage(html);
+
+  let eventDate: string | null = null;
+  let eventDateDisplay: string | null = null;
+  if (!collection.isCollectionPage) {
+    const jsonLd = safeExtract(() => extractFromJsonLd(html), warnings, "JSON-LD");
+    const semanticHtml = safeExtract(() => extractFromSemanticHtml(html), warnings, "semantic HTML");
+    const pageContent = safeExtract(() => extractFromPageContent(html, referenceDate), warnings, "page content fallback");
+    const resolved = resolveEventDate(
+      [jsonLd].filter((source): source is Partial<EventEnrichmentData> => Boolean(source)),
+      [semanticHtml, pageContent].filter((source): source is Partial<EventEnrichmentData> => Boolean(source)),
+      {},
+      referenceDate
+    );
+    eventDate = resolved.eventDate;
+    eventDateDisplay = resolved.eventDateDisplay;
+  }
+
+  return {
+    venueName: identity.venueName,
+    nameSource: identity.nameSource,
+    rejectedNames: identity.rejectedNames,
+    isCollectionPage: collection.isCollectionPage,
+    collectionPageReason: collection.reason,
+    city: identity.city,
+    postalCode: identity.postalCode,
+    country: identity.country,
+    address: identity.address,
+    locationSource: identity.locationSource,
+    imageUrl: image.imageUrl,
+    imageSource: image.imageSource,
+    eventDate,
+    eventDateDisplay,
+    confidence: computeVenueConfidence(identity),
+    warnings
+  };
+}
+
+// --- Event-detail link selection (for Output B: one opportunity per event) --
+
+export function isSocialOrTicketingUrl(value: string): boolean {
+  try {
+    const hostname = new URL(value).hostname.replace(/^www\./, "");
+    return [
+      "instagram.com",
+      "facebook.com",
+      "youtube.com",
+      "youtu.be",
+      "ticketmaster.com",
+      "dice.fm",
+      "shotgun.live",
+      "eventbrite.com"
+    ].some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Selects same-origin candidate event-detail links from a listing page's own
+ * link list, excluding the listing page itself (and pagination/query
+ * variants of it), social/ticketing domains, and non-http(s) links. Bounded
+ * to maxLinks so a single search can never trigger an unbounded crawl.
+ */
+export function selectEventDetailLinks(links: string[], agendaUrl: string, maxLinks: number): string[] {
+  let origin: string;
+  let agendaPath: string;
+  try {
+    const parsed = new URL(agendaUrl);
+    origin = parsed.origin;
+    agendaPath = parsed.pathname;
+  } catch {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const selected: string[] = [];
+
+  for (const link of links) {
+    if (selected.length >= maxLinks) break;
+    let parsed: URL;
+    try {
+      parsed = new URL(link, origin);
+    } catch {
+      continue;
+    }
+    if (parsed.origin !== origin) continue;
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") continue;
+    if (parsed.pathname === agendaPath) continue;
+    if (isSocialOrTicketingUrl(parsed.href)) continue;
+    const key = `${parsed.origin}${parsed.pathname}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    selected.push(parsed.href);
+  }
+
+  return selected;
 }

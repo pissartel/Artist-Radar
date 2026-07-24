@@ -16,7 +16,11 @@ export function normalizeBookingSource(rawSource: RawBookingSource): BookingTarg
   return {
     ...target,
     sourceUrl,
-    eventDateRange: rawSource.text ? extractEventDateRange(rawSource.text) : null,
+    // Only derived when a single eventDate was already resolved — a date
+    // *range* found by scanning the raw text blob is not trustworthy on its
+    // own (this was the same class of bug as the leaked venue date: a range
+    // extracted from an unrelated event card on a listing page).
+    eventDateRange: rawSource.text && rawSource.eventDate ? extractEventDateRange(rawSource.text) : null,
     contacts: target.contacts.map((contact) => ({
       ...contact,
       sourceUrl: contact.sourceUrl ?? sourceUrl

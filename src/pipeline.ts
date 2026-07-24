@@ -218,6 +218,7 @@ function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpportunit
     dateRange: opportunity.dateRange,
     genres: opportunity.target.genres,
     venueCapacity: opportunity.target.estimatedCapacity ?? null,
+    address: opportunity.target.address ?? null,
     recentEvents: opportunity.target.pastProgramming ?? [],
     lineup: opportunity.target.lineup ?? [],
     imageUrl: opportunity.imageUrl ?? undefined,

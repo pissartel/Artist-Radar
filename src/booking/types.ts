@@ -75,6 +75,10 @@ export interface BookingTarget {
   lineup?: string[];
   /** Poster/event image URL, extracted from source page metadata. Never guessed. */
   imageUrl?: string | null;
+  /** Where imageUrl came from, when known — never used to prefer an event poster as a venue's own image. */
+  imageSource?: "structured_data" | "og_image" | "header_logo" | "favicon" | "hero_image" | null;
+  /** Full street address, when a source reports it. Never guessed. */
+  address?: string | null;
   /** Ticket/booking purchase URL, when a source reports it (e.g. schema.org Offer). Never guessed. */
   ticketUrl?: string | null;
   eventDate?: string | null;
@@ -151,6 +155,8 @@ export interface RawBookingSource {
   venueName?: string | null;
   lineup?: string[];
   imageUrl?: string | null;
+  imageSource?: "structured_data" | "og_image" | "header_logo" | "favicon" | "hero_image" | null;
+  address?: string | null;
   ticketUrl?: string | null;
 }
 

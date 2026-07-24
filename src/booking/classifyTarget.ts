@@ -24,6 +24,8 @@ export function classifyBookingTarget(rawSource: RawBookingSource): BookingTarge
     venueName: rawSource.venueName ?? null,
     lineup: rawSource.lineup ?? [],
     imageUrl: rawSource.imageUrl ?? null,
+    imageSource: rawSource.imageSource ?? null,
+    address: rawSource.address ?? null,
     ticketUrl: rawSource.ticketUrl ?? null,
     eventDate: rawSource.eventDate ?? null,
     isFutureEvent: null,

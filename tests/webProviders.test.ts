@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { consolidateArtistCandidate } from "../src/services/artistConsolidationService.js";
 import {
   buildDefaultWebExtractProvider,
-  buildDefaultWebSearchProvider
+  buildDefaultWebSearchProvider,
+  FirecrawlExtractProvider
 } from "../src/providers/web/providers.js";
 import type { WebExtractProvider } from "../src/providers/web/WebExtractProvider.js";
 import type { WebSearchProvider } from "../src/providers/web/WebSearchProvider.js";
@@ -172,5 +173,43 @@ describe("web providers", () => {
 
     expect(search).toHaveBeenCalled();
     expect(result.instagramHandle).toBe("genericproviderband");
+  });
+});
+
+describe("FirecrawlExtractProvider", () => {
+  it("requests markdown, rawHtml and links formats, and populates html/links on the result", async () => {
+    let capturedBody: unknown = null;
+    const fetchImpl = vi.fn(async (_url: unknown, init: RequestInit) => {
+      capturedBody = JSON.parse(init.body as string);
+      return new Response(
+        JSON.stringify({
+          data: {
+            markdown: "# Agenda",
+            rawHtml: "<html><head><title>Agenda | Quai M</title></head><body></body></html>",
+            links: ["https://quai-m.fr/event/band-a"],
+            metadata: { title: "Agenda" }
+          }
+        }),
+        { status: 200 }
+      );
+    });
+
+    const provider = new FirecrawlExtractProvider({ FIRECRAWL_API_KEY: "test-key" }, fetchImpl as unknown as typeof fetch);
+    const result = await provider.extract("https://quai-m.fr/agenda");
+
+    expect(capturedBody).toMatchObject({ formats: ["markdown", "rawHtml", "links"], onlyMainContent: true });
+    expect(result?.html).toBe("<html><head><title>Agenda | Quai M</title></head><body></body></html>");
+    expect(result?.links).toEqual(["https://quai-m.fr/event/band-a"]);
+    expect(result?.markdown).toBe("# Agenda");
+  });
+
+  it("returns null without calling fetch when no API key is configured", async () => {
+    const fetchImpl = vi.fn();
+    const provider = new FirecrawlExtractProvider({}, fetchImpl as unknown as typeof fetch);
+
+    const result = await provider.extract("https://quai-m.fr/agenda");
+
+    expect(result).toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

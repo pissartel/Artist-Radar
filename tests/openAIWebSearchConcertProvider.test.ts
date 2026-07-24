@@ -74,6 +74,7 @@ function concertResult(overrides: {
   venueName?: string;
   city?: string;
   country?: string;
+  venueWebsite?: string;
   sourceUrl?: string;
   sourceType?: string;
 } = {}) {
@@ -88,7 +89,7 @@ function concertResult(overrides: {
           city: overrides.city ?? "Paris",
           region: null,
           country: overrides.country ?? "France",
-          website: null
+          website: overrides.venueWebsite ?? null
         },
         lineup: ["Headliner"],
         eventType: "concert",
@@ -287,12 +288,54 @@ describe("OpenAIWebSearchConcertProvider", () => {
       const venueLead = result.targets.find((t) => t.category === "venue");
       expect(venueLead).toBeDefined();
       expect(venueLead!.venueName).toBe("Le Klub");
+      // The venue is the opportunity, not the past show that surfaced it —
+      // the title must be exactly the venue name, with no event suffix.
+      expect(venueLead!.name).toBe("Le Klub");
       expect(venueLead!.eventDate).toBeNull();
       expect(venueLead!.confidence).toBeGreaterThanOrEqual(0.82);
       // The event category target is still produced (used internally / as
       // diagnostics evidence), but it's a separate target from the venue
       // lead, never a duplicate "event opportunity" re-added for the venue.
       expect(result.targets.filter((t) => t.category === "event")).toHaveLength(1);
+    });
+
+    it("links a venue lead to the venue's own website, not the triggering event page, when known", async () => {
+      const client = clientWithFixedResult(
+        concertResult({
+          venueName: "Le Klub",
+          sourceUrl: "https://bandsintown.com/event/12345",
+          venueWebsite: "https://leklub.example/"
+        }),
+        ["https://bandsintown.com/event/12345"]
+      );
+      const provider = buildOpenAIWebSearchConcertProvider({
+        env: { ENABLE_OPENAI_CONCERT_DISCOVERY: "true", OPENAI_API_KEY: "test" },
+        client,
+        now: new Date("2026-07-24T00:00:00Z")
+      });
+
+      const result = await provider.search({ input: { ...input, similarArtists: [baseSimilarArtist()] } });
+
+      const venueLead = result.targets.find((t) => t.category === "venue")!;
+      expect(venueLead.sourceUrl).toBe("https://leklub.example/");
+      expect(venueLead.sourceUrl).not.toBe("https://bandsintown.com/event/12345");
+    });
+
+    it("falls back to the event source URL for a venue lead when no venue website is known", async () => {
+      const client = clientWithFixedResult(
+        concertResult({ venueName: "Le Klub", sourceUrl: "https://bandsintown.com/event/12345" }),
+        ["https://bandsintown.com/event/12345"]
+      );
+      const provider = buildOpenAIWebSearchConcertProvider({
+        env: { ENABLE_OPENAI_CONCERT_DISCOVERY: "true", OPENAI_API_KEY: "test" },
+        client,
+        now: new Date("2026-07-24T00:00:00Z")
+      });
+
+      const result = await provider.search({ input: { ...input, similarArtists: [baseSimilarArtist()] } });
+
+      const venueLead = result.targets.find((t) => t.category === "venue")!;
+      expect(venueLead.sourceUrl).toBe("https://bandsintown.com/event/12345");
     });
 
     it("does not create a venue lead for a venue outside France", async () => {

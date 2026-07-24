@@ -412,13 +412,16 @@ function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[]): BookingT
     ]);
 
     return {
-      name: `${venue.name} — venue with compatible programming`,
+      // The venue itself is the opportunity — not the past show that
+      // surfaced it — so the name and source link must point at the venue,
+      // never at the triggering event page.
+      name: venue.name,
       category: "venue",
       city: venue.city,
       country: venue.country,
       description: `${matches.length} compatible similar artist${matches.length === 1 ? " has" : "s have"} played here.`,
-      sourceUrl: matches[0].sourceUrl,
-      sourceType: "event_page",
+      sourceUrl: venue.website ?? matches[0].sourceUrl,
+      sourceType: venue.website ? "official_site" : "event_page",
       sourceProvider: "openai_web_search",
       genres: [...genres],
       venueName: venue.name,

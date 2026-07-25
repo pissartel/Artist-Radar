@@ -44,6 +44,12 @@ import {
   type ComputeArtistScaleForAnalysisResult
 } from "./modules/artistScaleEnrichment.js";
 import type { ArtistScale } from "./schemas.js";
+import {
+  buildDefaultBookerDiscoveryOptions,
+  discoverBookerOpportunities,
+  type DiscoverBookerOpportunitiesOptions
+} from "./bookers/discoverBookerOpportunities.js";
+import type { BookerSearchInput } from "./bookers/types.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
@@ -62,6 +68,7 @@ export interface RunOpportunitySearchOptions {
   // (empty array).
   artistConcertProviders?: ArtistConcertProvider[];
   labelDiscoveryOptions?: DiscoverLabelOpportunitiesOptions;
+  bookerDiscoveryOptions?: DiscoverBookerOpportunitiesOptions;
   // When provided, pipeline stage progress is recorded in the in-memory
   // execution store (see pipelineExecutionState.ts) so a status endpoint can
   // report it back to the caller while this call is still running.
@@ -101,6 +108,10 @@ export interface OpportunitySearchRunResult {
   // Label opportunities (issue #169), discovered and ranked independently of
   // the concert-oriented booking pipeline since labels aren't event-based.
   labelOpportunities?: GenericOpportunity[];
+  // Booker/booking-agency/promoter opportunities (issue #170), discovered and
+  // ranked independently of the concert-oriented booking pipeline for the
+  // same reason labels are: they aren't event-based.
+  bookerOpportunities?: GenericOpportunity[];
   // Chartmetric audience-enrichment result for the main artist (issue
   // #142). Always populated by runOpportunitySearch (with a "skipped"/
   // "error" status rather than an exception on any failure) so callers can
@@ -173,7 +184,7 @@ export async function runOpportunitySearch(
     });
     // Chartmetric enrichment (issue #201) must never change which similar
     // artists the live-search pipeline (concert history, booking search,
-    // label discovery) uses — this exact array, in this exact order, is the
+    // label discovery, booker discovery) uses — this exact array, in this exact order, is the
     // one and only copy those consumers see from here on. `groupedSimilarArtists`
     // below is a *separate*, additively-enriched-and-regrouped copy used only
     // for the result exposed to the frontend/commercial scoring; it must never
@@ -253,6 +264,15 @@ export async function runOpportunitySearch(
         artistProfile: profile,
         similarArtists: similarArtistsForLiveSearch
       }, options.labelDiscoveryOptions);
+      const bookerOpportunities = await runBookerDiscoverySafely({
+        artist: input.artist,
+        city: input.city,
+        genre: input.genre,
+        target: input.target,
+        limit: input.limit,
+        artistProfile: profile,
+        similarArtists: similarArtistsForLiveSearch
+      }, options.bookerDiscoveryOptions);
       track("SCORING_RESULTS");
       track("PREPARING_OVERVIEW");
 
@@ -266,6 +286,7 @@ export async function runOpportunitySearch(
         similarArtistConcerts,
         ticketmaster: buildTicketmasterEvidenceSafely(bookingSearch),
         labelOpportunities,
+        bookerOpportunities,
         chartmetric,
         artistScale
       };
@@ -439,6 +460,27 @@ function computeArtistScaleSafely(
       },
       similarArtists: groupedSimilarArtists
     };
+  }
+}
+
+// Booker discovery (issue #170) is an additive enrichment of the booking
+// pipeline; a failure here must never take down the core booking search.
+async function runBookerDiscoverySafely(
+  input: BookerSearchInput,
+  options: DiscoverBookerOpportunitiesOptions | undefined
+): Promise<GenericOpportunity[]> {
+  try {
+    const bookerDiscovery = await discoverBookerOpportunities(input, options ?? buildDefaultBookerDiscoveryOptions());
+    debugLog("pipeline", "runOpportunitySearch booker discovery summary", {
+      candidateCount: bookerDiscovery.metadata.rawCandidateCount,
+      keptOpportunities: bookerDiscovery.metadata.keptOpportunities,
+      warningsCount: bookerDiscovery.warnings.length
+    });
+    return bookerDiscovery.opportunities;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    debugLog("pipeline", "runOpportunitySearch booker discovery failed and was skipped", { message });
+    return [];
   }
 }
 

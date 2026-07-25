@@ -21,7 +21,10 @@ export interface ExportPaths {
 export interface BookingRequestOutputInput {
   artistData: OpportunitySearchRunResult["artistProfile"];
   similarArtists: OpportunitySearchRunResult["similarArtists"];
-  bookingResult: Pick<OpportunitySearchRunResult, "opportunities" | "venueCandidates" | "eventCandidates" | "bookingSearch" | "labelOpportunities" | "chartmetric">;
+  bookingResult: Pick<
+    OpportunitySearchRunResult,
+    "opportunities" | "venueCandidates" | "eventCandidates" | "bookingSearch" | "labelOpportunities" | "bookerOpportunities" | "chartmetric"
+  >;
   outputDir: string;
 }
 
@@ -36,6 +39,7 @@ export interface BookingOutputSummary {
   similarArtistsCount: number;
   bookingOpportunitiesCount: number;
   labelOpportunitiesCount: number;
+  bookerOpportunitiesCount: number;
   sourcesUsedCount: number;
   warningsCount: number;
 }
@@ -245,6 +249,9 @@ export async function writeBookingRequestOutputs({
     },
     labels: {
       opportunities: bookingResult.labelOpportunities ?? []
+    },
+    bookers: {
+      opportunities: bookingResult.bookerOpportunities ?? []
     }
   };
 
@@ -260,6 +267,7 @@ export async function writeBookingRequestOutputs({
       similarArtistsCount: flattenedSimilarArtists.length,
       bookingOpportunitiesCount: bookingOpportunities.length,
       labelOpportunitiesCount: bookingOutput.labels.opportunities.length,
+      bookerOpportunitiesCount: bookingOutput.bookers.opportunities.length,
       sourcesUsedCount: sourcesUsed.length,
       warningsCount: artistOutput.warnings.length + similarArtistsOutput.warnings.length + bookingOutput.booking.warnings.length
     }
@@ -277,6 +285,7 @@ export function formatBookingOutputLog(paths: Required<Pick<ExportPaths, "artist
     `- Similar artists: ${paths.bookingSummary.similarArtistsCount}`,
     `- Booking opportunities: ${paths.bookingSummary.bookingOpportunitiesCount}`,
     `- Label opportunities: ${paths.bookingSummary.labelOpportunitiesCount}`,
+    `- Booker/agency/promoter opportunities: ${paths.bookingSummary.bookerOpportunitiesCount}`,
     `- Sources used: ${paths.bookingSummary.sourcesUsedCount}`,
     `- Warnings: ${paths.bookingSummary.warningsCount}`
   ].join("\n");

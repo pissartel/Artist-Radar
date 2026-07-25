@@ -301,6 +301,7 @@ describe("export utilities", () => {
       similarArtistsCount: 1,
       bookingOpportunitiesCount: 1,
       labelOpportunitiesCount: 0,
+      bookerOpportunitiesCount: 0,
       sourcesUsedCount: 1,
       warningsCount: 3
     });

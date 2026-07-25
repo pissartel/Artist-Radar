@@ -59,6 +59,16 @@ export {
   scoreLiveOpportunities,
   sortScoredLiveOpportunities
 } from "./liveOpportunityRelevance.js";
+export * from "./liveMusicEntities/index.js";
+export {
+  buildOverpassBoundingBox,
+  discoverLiveMusicVenuesFromOverpass
+} from "./connectors/overpassLiveMusicConnector.js";
+export type {
+  OverpassBoundingBox,
+  OverpassConnectorOptions,
+  OverpassDiscoveryResult
+} from "./connectors/overpassLiveMusicConnector.js";
 export type {
   LiveOpportunityRelevanceContext,
   LiveOpportunityRelevanceResult,

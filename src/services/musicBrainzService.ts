@@ -32,8 +32,13 @@ interface MusicBrainzLookupResponse {
   tags?: Array<{ name?: string } | string>;
 }
 
-interface MusicBrainzEnv {
+export interface MusicBrainzEnv {
   APP_USER_AGENT?: string;
+  // Dedicated, MusicBrainz-specific override (issue #195): takes priority
+  // over the generic APP_USER_AGENT so label discovery can identify itself
+  // distinctly from other MusicBrainz callers if desired, without requiring
+  // it.
+  MUSICBRAINZ_USER_AGENT?: string;
 }
 
 type FetchLike = typeof fetch;
@@ -42,7 +47,91 @@ type MusicBrainzArtistApi = NonNullable<MusicBrainzSearchResponse["artists"]>[nu
 let musicBrainzQueue: Promise<void> = Promise.resolve();
 
 export function getMusicBrainzUserAgent(env: MusicBrainzEnv = process.env): string {
-  return env.APP_USER_AGENT?.trim() || "ArtistRadar/0.1.0 ( https://github.com/pissartel/Artist-Radar )";
+  return (
+    env.MUSICBRAINZ_USER_AGENT?.trim() ||
+    env.APP_USER_AGENT?.trim() ||
+    "ArtistRadar/0.1.0 ( https://github.com/pissartel/Artist-Radar )"
+  );
+}
+
+const DEFAULT_MUSICBRAINZ_TIMEOUT_MS = 15_000;
+const DEFAULT_MUSICBRAINZ_MAX_RETRIES = 2;
+const DEFAULT_MUSICBRAINZ_RETRY_BASE_DELAY_MS = 500;
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+
+export interface MusicBrainzRequestOptions {
+  timeoutMs?: number;
+  maxRetries?: number;
+  retryBaseDelayMs?: number;
+}
+
+/**
+ * Fetches and parses a MusicBrainz JSON endpoint with a request timeout and
+ * bounded exponential backoff retry on network errors, 429 and 5xx
+ * responses, on top of the existing 1-request/second scheduling queue
+ * (issue #195: "request throttling; retry with bounded exponential backoff;
+ * timeout handling"). Throws on final failure so callers can apply their own
+ * fault isolation (skip this artist/label/release, keep going).
+ */
+export async function fetchMusicBrainzJson<T>(
+  url: string,
+  env: MusicBrainzEnv = process.env,
+  fetchImpl: FetchLike = fetch,
+  options: MusicBrainzRequestOptions = {}
+): Promise<T> {
+  const maxRetries = options.maxRetries ?? DEFAULT_MUSICBRAINZ_MAX_RETRIES;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_MUSICBRAINZ_TIMEOUT_MS;
+  const retryBaseDelayMs = options.retryBaseDelayMs ?? DEFAULT_MUSICBRAINZ_RETRY_BASE_DELAY_MS;
+  const userAgent = getMusicBrainzUserAgent(env);
+
+  return scheduleMusicBrainzRequest(async () => {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(new Error(`MusicBrainz request timed out after ${timeoutMs}ms`)), timeoutMs);
+      try {
+        const response = await fetchImpl(url, {
+          headers: { Accept: "application/json", "User-Agent": userAgent },
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < maxRetries) {
+            debugLog("musicbrainz", "retrying request after non-ok status", { url, status: response.status, attempt });
+            await delay(retryBaseDelayMs * 2 ** attempt);
+            continue;
+          }
+          throw new MusicBrainzHttpError(response.status, url);
+        }
+
+        return (await response.json()) as T;
+      } catch (error) {
+        lastError = error;
+        const isAbort = error instanceof Error && error.name === "AbortError";
+        const isHttpError = error instanceof MusicBrainzHttpError;
+        if (!isHttpError && attempt < maxRetries) {
+          debugLog("musicbrainz", "retrying request after error", {
+            url,
+            attempt,
+            errorType: isAbort ? "timeout" : "network_error"
+          });
+          await delay(retryBaseDelayMs * 2 ** attempt);
+          continue;
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(`MusicBrainz request failed for ${url}`);
+  });
+}
+
+export class MusicBrainzHttpError extends Error {
+  constructor(public readonly status: number, url: string) {
+    super(`MusicBrainz request failed with HTTP ${status} for ${url}`);
+    this.name = "MusicBrainzHttpError";
+  }
 }
 
 export async function searchMusicBrainzArtistByName(

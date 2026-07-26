@@ -5,6 +5,7 @@ import { buildDefaultWebExtractProvider, getEnabledBookingSearchProviders, type 
 import type { WebExtractProvider } from "../providers/web/WebExtractProvider.js";
 import type { WebSearchProvider, WebSearchResult } from "../providers/web/WebSearchProvider.js";
 import type { GenericOpportunity } from "../schemas.js";
+import { mergeAndDeduplicateLabelCandidates } from "./labelCandidateMerge.js";
 import {
   buildGenreLabelQueries,
   buildGeographicLabelQueries,
@@ -20,9 +21,18 @@ import {
   findMentionedSimilarArtists,
   isInternationallyOpen
 } from "./labelSignalExtraction.js";
+import { enrichLabelCandidatesFromOfficialSources, type OfficialSourceEnrichmentEnv } from "./officialSourceEnrichment.js";
+import {
+  discoverLabelCandidatesFromMusicBrainz,
+  isMusicBrainzLabelDiscoveryEnabled,
+  type MusicBrainzLabelProviderEnv
+} from "./providers/MusicBrainzLabelProvider.js";
+import { enrichLabelCandidatesWithDiscogs, isDiscogsLabelEnrichmentEnabled, type DiscogsLabelProviderEnv } from "./providers/DiscogsLabelProvider.js";
 import { scoreLabelCompatibility } from "./scoreLabelCompatibility.js";
 import type { LabelDiscoveryStrategy, LabelGeographicRelevance, LabelSearchInput, RawLabelCandidate } from "./types.js";
 import { warnLog } from "../utils/logger.js";
+
+type StructuredCandidateResult = { candidates: RawLabelCandidate[]; warnings: string[] };
 
 export interface DiscoverLabelOpportunitiesOptions {
   webSearchProvider: WebSearchProvider | null;
@@ -32,7 +42,18 @@ export interface DiscoverLabelOpportunitiesOptions {
   maxResultsPerQuery?: number;
   maxExtractPages?: number;
   now?: Date;
+  // Issue #195: structured discovery/enrichment steps, additive on top of
+  // the PR #181 web-search flow above. Each is opt-in (undefined = skipped)
+  // so direct callers/tests that don't pass them keep the exact PR #181
+  // behaviour; buildDefaultLabelDiscoveryOptions() below is the one place
+  // that wires the real providers from environment configuration for
+  // production use.
+  discoverMusicBrainzCandidates?: (input: LabelSearchInput) => Promise<StructuredCandidateResult>;
+  enrichWithDiscogs?: (candidates: RawLabelCandidate[]) => Promise<StructuredCandidateResult>;
+  enrichFromOfficialSources?: (candidates: RawLabelCandidate[]) => Promise<StructuredCandidateResult>;
 }
+
+type LabelDiscoveryEnv = WebProviderEnv & MusicBrainzLabelProviderEnv & DiscogsLabelProviderEnv & OfficialSourceEnrichmentEnv;
 
 export interface LabelDiscoveryResult {
   opportunities: GenericOpportunity[];
@@ -51,102 +72,130 @@ export async function discoverLabelOpportunities(
   input: LabelSearchInput,
   options: DiscoverLabelOpportunitiesOptions
 ): Promise<LabelDiscoveryResult> {
-  const emptyResult: LabelDiscoveryResult = {
-    opportunities: [],
-    searchedQueries: [],
-    warnings: [],
-    metadata: {
-      rawCandidateCount: 0,
-      droppedForMissingEvidence: 0,
-      droppedForInactivity: 0,
-      keptOpportunities: 0,
-      strategyCandidateCounts: emptyStrategyCounts()
-    }
-  };
-
-  if (!options.webSearchProvider) {
-    return { ...emptyResult, warnings: ["No web search provider is enabled; label discovery was skipped."] };
-  }
-
-  const webSearchProvider = options.webSearchProvider;
   const country = input.artistProfile?.country ?? input.target ?? "";
   const maxQueriesPerStrategy = options.maxQueriesPerStrategy ?? 6;
   const similarArtists = (input.similarArtists ?? []).slice(0, options.maxSimilarArtists ?? 4);
 
-  const queriesByStrategy: Array<{ strategy: LabelDiscoveryStrategy; queries: string[] }> = [
-    { strategy: "genre_specialization", queries: buildGenreLabelQueries(input.genre, country).slice(0, maxQueriesPerStrategy) },
-    {
-      strategy: "similar_artist_release",
-      queries: similarArtists.flatMap((artist) => buildSimilarArtistLabelQueries(artist.name)).slice(0, maxQueriesPerStrategy)
-    },
-    { strategy: "geographic", queries: buildGeographicLabelQueries(input.genre, input.city, country).slice(0, maxQueriesPerStrategy) },
-    { strategy: "directory", queries: buildLabelDirectoryQueries(input.genre, country).slice(0, maxQueriesPerStrategy) }
-  ];
-
-  const rawCandidates: RawLabelCandidate[] = [];
+  let rawCandidates: RawLabelCandidate[] = [];
   const searchedQueries: string[] = [];
   const strategyCandidateCounts = emptyStrategyCounts();
   const providerWarnings: string[] = [];
   let droppedForMissingEvidence = 0;
 
-  for (const { strategy, queries } of queriesByStrategy) {
-    for (const query of queries) {
-      searchedQueries.push(query);
-      let results: WebSearchResult[];
-      try {
-        results = await webSearchProvider.search(query, {
-          limit: Math.min(options.maxResultsPerQuery ?? 4, input.limit)
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        providerWarnings.push(`${webSearchProvider.providerName} label search failed for query "${query}": ${message}.`);
-        continue;
-      }
-      for (const result of results) {
-        const candidate = webResultToLabelCandidate(result, strategy);
-        if (!candidate) {
-          droppedForMissingEvidence += 1;
+  // PR #181's web-search discovery (Tavily/Exa + Jina/Firecrawl extraction).
+  // Kept intact as the fallback described in issue #195: it always runs
+  // when a web search provider is configured, independently of whether the
+  // structured providers below are available.
+  if (options.webSearchProvider) {
+    const webSearchProvider = options.webSearchProvider;
+    const queriesByStrategy: Array<{ strategy: LabelDiscoveryStrategy; queries: string[] }> = [
+      { strategy: "genre_specialization", queries: buildGenreLabelQueries(input.genre, country).slice(0, maxQueriesPerStrategy) },
+      {
+        strategy: "similar_artist_release",
+        queries: similarArtists.flatMap((artist) => buildSimilarArtistLabelQueries(artist.name)).slice(0, maxQueriesPerStrategy)
+      },
+      { strategy: "geographic", queries: buildGeographicLabelQueries(input.genre, input.city, country).slice(0, maxQueriesPerStrategy) },
+      { strategy: "directory", queries: buildLabelDirectoryQueries(input.genre, country).slice(0, maxQueriesPerStrategy) }
+    ];
+
+    for (const { strategy, queries } of queriesByStrategy) {
+      for (const query of queries) {
+        searchedQueries.push(query);
+        let results: WebSearchResult[];
+        try {
+          results = await webSearchProvider.search(query, {
+            limit: Math.min(options.maxResultsPerQuery ?? 4, input.limit)
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          providerWarnings.push(`${webSearchProvider.providerName} label search failed for query "${query}": ${message}.`);
           continue;
         }
-        rawCandidates.push(candidate);
-        strategyCandidateCounts[strategy] += 1;
+        for (const result of results) {
+          const candidate = webResultToLabelCandidate(result, strategy);
+          if (!candidate) {
+            droppedForMissingEvidence += 1;
+            continue;
+          }
+          rawCandidates.push(candidate);
+          strategyCandidateCounts[strategy] += 1;
+        }
       }
+    }
+
+    if (options.webExtractProvider) {
+      const extractUrls = [...new Set(rawCandidates.map((candidate) => candidate.url).filter((url): url is string => Boolean(url)))]
+        .slice(0, options.maxExtractPages ?? 6);
+      for (const url of extractUrls) {
+        let extracted;
+        try {
+          extracted = await options.webExtractProvider.extract(url);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          providerWarnings.push(`${options.webExtractProvider.providerName} label extraction failed for ${url}: ${message}.`);
+          continue;
+        }
+        if (!extracted) {
+          continue;
+        }
+        const text = [extracted.title, extracted.text, extracted.markdown].filter(Boolean).join(" ");
+        if (!classifyLabelEvidence(text)) {
+          continue;
+        }
+        const existing = rawCandidates.find((candidate) => candidate.url === url);
+        rawCandidates.push({
+          name: extracted.title ?? existing?.name ?? url,
+          url,
+          sourceName: "label_discovery_extract",
+          strategy: existing?.strategy ?? "genre_specialization",
+          text,
+          links: [],
+          confidence: extracted.statusCode && extracted.statusCode >= 200 && extracted.statusCode < 300 ? 0.75 : 0.55
+        });
+      }
+    }
+  } else {
+    providerWarnings.push("No web search provider is enabled; the PR #181 web-search label discovery was skipped.");
+  }
+
+  // Structured discovery/enrichment (issue #195). Each step is additive and
+  // independently fault-isolated: a failure here can never break the
+  // web-search results already collected above, and "no candidates yet"
+  // (e.g. no similar artists) is a no-op rather than a warning.
+  if (options.discoverMusicBrainzCandidates) {
+    try {
+      const musicBrainzResult = await options.discoverMusicBrainzCandidates(input);
+      rawCandidates.push(...musicBrainzResult.candidates);
+      providerWarnings.push(...musicBrainzResult.warnings);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      providerWarnings.push(`MusicBrainz label discovery failed: ${message}.`);
     }
   }
 
-  if (options.webExtractProvider) {
-    const extractUrls = [...new Set(rawCandidates.map((candidate) => candidate.url).filter((url): url is string => Boolean(url)))]
-      .slice(0, options.maxExtractPages ?? 6);
-    for (const url of extractUrls) {
-      let extracted;
-      try {
-        extracted = await options.webExtractProvider.extract(url);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        providerWarnings.push(`${options.webExtractProvider.providerName} label extraction failed for ${url}: ${message}.`);
-        continue;
-      }
-      if (!extracted) {
-        continue;
-      }
-      const text = [extracted.title, extracted.text, extracted.markdown].filter(Boolean).join(" ");
-      if (!classifyLabelEvidence(text)) {
-        continue;
-      }
-      const existing = rawCandidates.find((candidate) => candidate.url === url);
-      rawCandidates.push({
-        name: extracted.title ?? existing?.name ?? url,
-        url,
-        sourceName: "label_discovery_extract",
-        strategy: existing?.strategy ?? "genre_specialization",
-        text,
-        links: [],
-        confidence: extracted.statusCode && extracted.statusCode >= 200 && extracted.statusCode < 300 ? 0.75 : 0.55
-      });
+  if (options.enrichWithDiscogs) {
+    try {
+      const discogsResult = await options.enrichWithDiscogs(rawCandidates);
+      rawCandidates = discogsResult.candidates;
+      providerWarnings.push(...discogsResult.warnings);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      providerWarnings.push(`Discogs enrichment failed: ${message}.`);
     }
   }
 
-  const deduped = dedupeCandidates(rawCandidates);
+  if (options.enrichFromOfficialSources) {
+    try {
+      const officialResult = await options.enrichFromOfficialSources(rawCandidates);
+      rawCandidates = officialResult.candidates;
+      providerWarnings.push(...officialResult.warnings);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      providerWarnings.push(`Official-source enrichment failed: ${message}.`);
+    }
+  }
+
+  const deduped = mergeAndDeduplicateLabelCandidates(rawCandidates);
   const now = options.now ?? new Date();
   let droppedForInactivity = 0;
   const opportunities: GenericOpportunity[] = [];
@@ -167,7 +216,7 @@ export async function discoverLabelOpportunities(
 
   const warnings = [...providerWarnings];
   if (limited.length === 0) {
-    warnings.push(`${webSearchProvider.providerName} label discovery returned no verifiable label candidates.`);
+    warnings.push("Label discovery returned no verifiable label candidates.");
   }
 
   return {
@@ -215,6 +264,14 @@ function buildLabelOpportunity(
   const contacts = extractPublicContactSignals(candidate.text, candidate.links);
   const bestEmail = contacts.find((contact) => contact.type === "email") ?? null;
   const bestContactForm = pickBestContact(contacts.filter((contact) => contact.type === "contact_form"));
+  const matchedReleaseTitles = [
+    ...new Set(
+      (candidate.evidence ?? [])
+        .filter((entry) => matchedSimilarArtists.some((artist) => artist.name === entry.similarArtistName))
+        .map((entry) => entry.releaseTitle)
+        .filter((title): title is string => Boolean(title))
+    )
+  ].slice(0, 3);
 
   const compatibility = scoreLabelCompatibility(input, {
     genres: genreMatch.matchedGenres,
@@ -224,7 +281,8 @@ function buildLabelOpportunity(
     geographicScope,
     acceptsDemos: demoPolicy.acceptsDemos,
     isActive: activity.isActive,
-    distributor
+    distributor,
+    matchedReleaseTitles
   });
 
   const isLocal = geographicScope === "local" || geographicScope === "national";
@@ -329,18 +387,6 @@ function mapGeographicScope(scope: LabelGeographicRelevance): "local" | "nationa
   return scope;
 }
 
-function dedupeCandidates(candidates: RawLabelCandidate[]): RawLabelCandidate[] {
-  const seen = new Set<string>();
-  return candidates.filter((candidate) => {
-    const key = `${candidate.url ?? ""}:${candidate.name}`;
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
-}
-
 function emptyStrategyCounts(): Record<LabelDiscoveryStrategy, number> {
   return {
     similar_artist_release: 0,
@@ -378,14 +424,31 @@ function logLabelDiscoverySummary(
   ].join("\n"));
 }
 
-export function buildDefaultLabelDiscoveryOptions(env: WebProviderEnv = process.env): DiscoverLabelOpportunitiesOptions {
+// Issue #195: this is the one place that wires the structured providers
+// (MusicBrainz enabled by default, Discogs/Bandcamp opt-in via credentials
+// and flags) into the additive discovery flow used by discoverLabelOpportunities()
+// above. Direct callers of discoverLabelOpportunities (including every
+// existing PR #181 test) that build their own options object never get
+// these unless they ask for them.
+export function buildDefaultLabelDiscoveryOptions(env: LabelDiscoveryEnv = process.env): DiscoverLabelOpportunitiesOptions {
   const webSearchProviders = getEnabledBookingSearchProviders(env);
+  const webExtractProvider = buildDefaultWebExtractProvider(env);
+
   return {
     webSearchProvider: webSearchProviders[0] ?? null,
-    webExtractProvider: buildDefaultWebExtractProvider(env),
+    webExtractProvider,
     maxQueriesPerStrategy: 6,
     maxSimilarArtists: 4,
     maxResultsPerQuery: 4,
-    maxExtractPages: 6
+    maxExtractPages: 6,
+    discoverMusicBrainzCandidates: isMusicBrainzLabelDiscoveryEnabled(env)
+      ? (input) => discoverLabelCandidatesFromMusicBrainz(input, { env })
+      : undefined,
+    enrichWithDiscogs: isDiscogsLabelEnrichmentEnabled(env)
+      ? (candidates) => enrichLabelCandidatesWithDiscogs(candidates, { env })
+      : undefined,
+    enrichFromOfficialSources: webExtractProvider
+      ? (candidates) => enrichLabelCandidatesFromOfficialSources(candidates, { env, webExtractProvider })
+      : undefined
   };
 }

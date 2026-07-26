@@ -33,6 +33,11 @@ export interface LabelCandidateSignals {
   acceptsDemos: boolean | null;
   isActive: boolean | null;
   distributor: string | null;
+  // Issue #195: release titles evidenced by a structured provider
+  // (MusicBrainz) as actually released on this label by a matched similar
+  // artist — only ever populated from stored provenance, never guessed, so
+  // the explanation can name concrete releases alongside artists.
+  matchedReleaseTitles?: string[];
 }
 
 export interface LabelCompatibilityResult {
@@ -66,7 +71,8 @@ export function scoreLabelCompatibility(input: LabelSearchInput, signals: LabelC
       geographicScope: signals.geographicScope,
       acceptsDemos: signals.acceptsDemos,
       isActive: signals.isActive,
-      distributor: signals.distributor
+      distributor: signals.distributor,
+      matchedReleaseTitles: signals.matchedReleaseTitles
     })
   };
 }
@@ -121,6 +127,7 @@ function buildExplanation(details: {
   acceptsDemos: boolean | null;
   isActive: boolean | null;
   distributor: string | null;
+  matchedReleaseTitles?: string[];
 }): string {
   const parts: string[] = [];
 
@@ -135,6 +142,10 @@ function buildExplanation(details: {
       ? `Connected to similar artist(s): ${details.matchedSimilarArtists.map((artist) => artist.name).join(", ")}.`
       : "No confirmed similar-artist connection found."
   );
+
+  if (details.matchedReleaseTitles && details.matchedReleaseTitles.length > 0) {
+    parts.push(`Evidenced by release(s): ${details.matchedReleaseTitles.join(", ")}.`);
+  }
 
   parts.push(`Geographic relevance: ${describeGeographicScope(details.geographicScope)}.`);
 

@@ -606,6 +606,23 @@ export const ConcertOpportunityDetailsSchema = z.object({
   applicationDeadline: z.string().trim().min(1).nullable().optional()
 });
 
+// Issue #197: the same provenance record used internally by label discovery
+// (src/labels/types.ts LabelEvidence), reused rather than duplicated so the
+// frontend's supporting-releases and sources sections cite exactly what
+// backed the compatibility result — never a fabricated release/provider.
+export const LabelEvidenceSchema = z.object({
+  provider: z.enum(["musicbrainz", "discogs", "official_website", "bandcamp", "web_search"]),
+  sourceUrl: z.string().trim().url().nullable(),
+  similarArtistName: z.string().trim().min(1).nullable().optional(),
+  releaseTitle: z.string().trim().min(1).nullable().optional(),
+  confidence: ConfidenceScoreSchema
+});
+
+export const LabelExternalIdsSchema = z.object({
+  musicBrainzId: z.string().trim().min(1).optional(),
+  discogsId: z.number().int().optional()
+});
+
 export const LabelOpportunityDetailsSchema = z.object({
   signedArtists: z.array(z.string().trim().min(1)).default([]),
   labelGenres: z.array(z.string().trim().min(1)).default([]),
@@ -616,7 +633,15 @@ export const LabelOpportunityDetailsSchema = z.object({
   // Whether the label shows evidence of current activity (recent releases,
   // no closure/hiatus language). null means uncertain, per AGENTS.md — never
   // defaulted to true/false without textual evidence.
-  isActive: z.boolean().nullable().optional()
+  isActive: z.boolean().nullable().optional(),
+  // Issue #197: stable provider IDs (used to build MusicBrainz/Discogs
+  // evidence links) and the official Bandcamp page, when structured
+  // discovery/enrichment (issue #195) found one.
+  externalIds: LabelExternalIdsSchema.nullable().optional(),
+  bandcampUrl: OptionalUrlSchema,
+  // Provenance trail (MusicBrainz release credits, Discogs releases, official
+  // site/Bandcamp pages) supporting this label's compatibility explanation.
+  evidence: z.array(LabelEvidenceSchema).default([])
 });
 
 export const PlaylistOpportunityDetailsSchema = z.object({
@@ -767,6 +792,8 @@ export type OpportunityStatus = z.infer<typeof OpportunityStatusSchema>;
 export type OpportunitySourceReference = z.infer<typeof OpportunitySourceReferenceSchema>;
 export type OpportunitySocialLinks = z.infer<typeof OpportunitySocialLinksSchema>;
 export type ConcertOpportunityDetails = z.infer<typeof ConcertOpportunityDetailsSchema>;
+export type LabelEvidence = z.infer<typeof LabelEvidenceSchema>;
+export type LabelExternalIds = z.infer<typeof LabelExternalIdsSchema>;
 export type LabelOpportunityDetails = z.infer<typeof LabelOpportunityDetailsSchema>;
 export type PlaylistOpportunityDetails = z.infer<typeof PlaylistOpportunityDetailsSchema>;
 export type ProducerOrStudioOpportunityDetails = z.infer<typeof ProducerOrStudioOpportunityDetailsSchema>;

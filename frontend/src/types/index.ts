@@ -88,15 +88,14 @@ export interface SimilarArtist {
   relatedVenues?: string[];
 }
 
-// V1 scope: booking opportunities only.
+// V1 scope: booking opportunities plus labels (issue #197).
 // Future opportunity categories (not yet exposed in the UI):
 // | "playlist"
-// | "label"
 // | "blog"
 // | "creative_provider"
 // | "mixing_engineer"
 // | "video_director"
-export type OpportunityType = "venue" | "concert" | "opening_slot" | "festival" | "organization";
+export type OpportunityType = "venue" | "concert" | "opening_slot" | "festival" | "organization" | "label";
 
 // Reliable booking category inferred by the backend mapper from opportunity
 // type, source metadata, and title. Used by frontend filters (booking tabs,
@@ -107,6 +106,7 @@ export type OpportunityCategory =
   | "festival"
   | "opening_slot"
   | "organization"
+  | "label"
   | "contact"
   | "unknown";
 
@@ -203,6 +203,56 @@ export interface OpportunitySourceEvidence {
   title?: string;
   // What was retrieved from this source (e.g. "Event date and lineup").
   retrievedInfo?: string;
+}
+
+// Label-specific vocabulary (issue #197). A label is not an event: it has no
+// concert date, venue capacity, or lineup, so its own data lives in a
+// namespaced `labelDetails` group instead of overloading the generic event
+// fields below (`date`, `venue`, `venueCapacity`, `lineup`, ...) with
+// label meaning.
+export type LabelGeographicScope = "local" | "national" | "international" | "remote_compatible" | "unknown";
+
+export type LabelDemoPolicy = "open" | "closed" | "invite_only" | "unknown";
+
+export type LabelEvidenceProvider = "musicbrainz" | "discogs" | "official_website" | "bandcamp" | "web_search";
+
+export interface LabelEvidence {
+  provider: LabelEvidenceProvider;
+  sourceUrl: string | null;
+  similarArtistName?: string | null;
+  releaseTitle?: string | null;
+  confidence: number;
+}
+
+export interface LabelSourceReference {
+  name: string;
+  url: string | null;
+}
+
+export interface LabelOpportunityDetails {
+  genres: string[];
+  geographicScope: LabelGeographicScope;
+  territory: string | null;
+  isActive: boolean | null;
+  // Reuses ArtistTier's underlying "small" | "medium" | "large" | "unknown"
+  // vocabulary (see BackendArtistTier) rather than a separate scale.
+  audienceLevel: "small" | "medium" | "large" | "unknown";
+  // Similar artists whose releases on this label were actually matched in
+  // the source evidence — the compatibility explanation's own roster.
+  supportingSimilarArtists: string[];
+  demoPolicy: LabelDemoPolicy;
+  demoSubmissionUrl: string | null;
+  publicContactEmail: string | null;
+  contactUrl: string | null;
+  distributor: string | null;
+  websiteUrl: string | null;
+  bandcampUrl: string | null;
+  // Deterministically selected per issue #197 (official site > demo page >
+  // Bandcamp > social > MusicBrainz/Discogs evidence > discovery source).
+  primaryUrl: string | null;
+  externalIds?: { musicBrainzId?: string; discogsId?: number };
+  evidence: LabelEvidence[];
+  sources: LabelSourceReference[];
 }
 
 // Generic entity covering booking opportunities today and future artist

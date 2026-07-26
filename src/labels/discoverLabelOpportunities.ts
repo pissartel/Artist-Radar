@@ -333,9 +333,19 @@ function buildLabelOpportunity(
       acceptsDemos: demoPolicy.acceptsDemos,
       demoSubmissionUrl: demoPolicy.demoSubmissionUrl,
       distributor,
-      isActive: activity.isActive
+      isActive: activity.isActive,
+      externalIds: candidate.externalIds ?? null,
+      bandcampUrl: findBandcampEvidenceUrl(candidate.evidence),
+      evidence: candidate.evidence ?? []
     }
   };
+}
+
+// Bandcamp evidence is only ever added by official-source enrichment (issue
+// #195) once a page has been confirmed to actually be the label's own
+// Bandcamp profile — never guessed from a bare link.
+function findBandcampEvidenceUrl(evidence: RawLabelCandidate["evidence"]): string | null {
+  return evidence?.find((entry) => entry.provider === "bandcamp")?.sourceUrl ?? null;
 }
 
 // Only common country names are checked here; anything not on the list is

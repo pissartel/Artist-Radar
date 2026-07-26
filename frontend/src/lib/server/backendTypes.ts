@@ -163,6 +163,55 @@ export interface BackendOpportunity {
   supportSlotPotential?: BackendSupportSlotPotential | null;
 }
 
+export type BackendLabelEvidenceProvider = "musicbrainz" | "discogs" | "official_website" | "bandcamp" | "web_search";
+
+export interface BackendLabelEvidence {
+  provider: BackendLabelEvidenceProvider;
+  sourceUrl: string | null;
+  similarArtistName?: string | null;
+  releaseTitle?: string | null;
+  confidence: number;
+}
+
+export interface BackendLabelOpportunityDetails {
+  signedArtists: string[];
+  labelGenres: string[];
+  territory: string | null;
+  acceptsDemos: boolean | null;
+  demoSubmissionUrl: string | null;
+  distributor: string | null;
+  isActive: boolean | null;
+  externalIds?: { musicBrainzId?: string; discogsId?: number } | null;
+  bandcampUrl?: string | null;
+  evidence: BackendLabelEvidence[];
+}
+
+// Mirrors the subset of src/schemas.ts GenericOpportunitySchema that this
+// integration actually consumes for opportunityType: "label" (issue #197 —
+// reuses PR #181/#195's real discovery output, never a parallel model).
+export interface BackendLabelOpportunity {
+  id: string;
+  name: string;
+  opportunityType: "label";
+  shortDescription?: string | null;
+  city?: string | null;
+  country?: string | null;
+  geographicScope: "local" | "regional" | "national" | "international" | "online" | "unknown";
+  websiteUrl?: string | null;
+  sourceUrl?: string | null;
+  contactPageUrl?: string | null;
+  publicEmail?: string | null;
+  associatedArtists: string[];
+  associatedGenres: string[];
+  audienceLevel: BackendArtistTier;
+  status: "open" | "closed" | "invite_only" | "unknown";
+  applicationUrl?: string | null;
+  sources: { name: string; url: string | null; confidence?: number }[];
+  compatibilityScore?: number | null;
+  compatibilityExplanation?: string | null;
+  label?: BackendLabelOpportunityDetails | null;
+}
+
 export interface BackendBookingSourceMetadata {
   providerName: string;
   sourceProvider: string;
@@ -184,4 +233,8 @@ export interface BackendPipelineResult {
   similarArtists: BackendSimilarArtistsByTier;
   opportunities: BackendOpportunity[];
   bookingSearch?: BackendBookingSearchResult;
+  // Label opportunities (issue #169/#195), discovered and ranked
+  // independently of the concert-oriented booking pipeline since labels
+  // aren't event-based (see src/pipeline.ts OpportunitySearchRunResult).
+  labelOpportunities?: BackendLabelOpportunity[];
 }

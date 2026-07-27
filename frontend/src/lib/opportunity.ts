@@ -30,6 +30,7 @@ export const CATEGORY_LABELS: Record<OpportunityCategory, string> = {
   festival: "Festival",
   opening_slot: "Opening Slot",
   organization: "Organization",
+  label: "Label",
   contact: "Contact",
   unknown: "Unknown",
 };

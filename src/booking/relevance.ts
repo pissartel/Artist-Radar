@@ -57,6 +57,16 @@ export function isEvergreenOrganizationCategory(category: BookingTargetCategory)
   return EVERGREEN_ORGANIZATION_CATEGORIES.has(category);
 }
 
+// A concert individually verified by the OpenAI web-search provider is
+// direct proof the artist/venue pairing already happened, not a generic
+// date-only feed entry. A recent past show from this provider should still
+// surface as its own "event" opportunity (alongside the venue lead derived
+// from it), rather than being silently downgraded to a hidden historical
+// signal the way a generic scraped listing would be.
+function isVerifiedConcertProviderTarget(target: BookingTarget): boolean {
+  return target.sourceProvider === "openai_web_search" && (target.category === "event" || target.category === "festival");
+}
+
 export function getRecentEventMonths(env: BookingRelevanceEnv = process.env): number {
   const parsed = Number.parseInt(env.BOOKING_RECENT_EVENT_MONTHS ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_RECENT_EVENT_MONTHS;
@@ -288,6 +298,13 @@ function computeBookingDateStatus(target: BookingTarget, recentMonths: number, n
       opportunityKind: "actionable",
       rejectReason: null,
       evidence: `${status.evidence} Kept as an evergreen venue/organization opportunity despite the old event reference.`
+    };
+  }
+  if (status.rejectReason === "past_event" && isVerifiedConcertProviderTarget(target)) {
+    return {
+      ...status,
+      opportunityKind: "actionable",
+      evidence: `${status.evidence} Kept as an actionable event opportunity from a directly verified concert detection.`
     };
   }
   return status;

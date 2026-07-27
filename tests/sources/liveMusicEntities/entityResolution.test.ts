@@ -111,4 +111,48 @@ describe("mergeLiveMusicEntityCandidates", () => {
     const merged = mergeLiveMusicEntityCandidates([a, b]);
     expect(merged).toHaveLength(1);
   });
+
+  it("never drops a known field just because the higher-reliability canonical candidate lacks it", () => {
+    const official = candidate({
+      externalIds: { official: "1" },
+      name: "Le Krakatoa",
+      city: "Mérignac",
+      websiteUrl: undefined,
+      phone: undefined,
+      sourceRecords: [
+        {
+          sourceType: "official_open_data",
+          sourceName: "Official dataset",
+          sourceUrl: "https://www.data.gouv.fr/datasets/example",
+          retrievedAt: "2026-07-01T00:00:00.000Z",
+          reliabilityScore: 0.95
+        }
+      ]
+    });
+    const webEnriched = candidate({
+      externalIds: { web: "2" },
+      name: "Krakatoa",
+      city: "Mérignac",
+      websiteUrl: "https://krakatoa.org",
+      phone: "+33556241233",
+      sourceRecords: [
+        {
+          sourceType: "web_discovery",
+          sourceName: "Web discovery",
+          sourceUrl: "https://krakatoa.org/about",
+          retrievedAt: "2026-07-02T00:00:00.000Z",
+          reliabilityScore: 0.5
+        }
+      ]
+    });
+
+    const merged = mergeLiveMusicEntityCandidates([official, webEnriched]);
+    expect(merged).toHaveLength(1);
+    // The official (higher-reliability) record wins identity fields...
+    expect(merged[0].name).toBe("Le Krakatoa");
+    // ...but the enriched website/phone from the lower-reliability duplicate
+    // must still survive rather than being silently dropped.
+    expect(merged[0].websiteUrl).toBe("https://krakatoa.org");
+    expect(merged[0].phone).toBe("+33556241233");
+  });
 });

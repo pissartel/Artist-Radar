@@ -64,7 +64,12 @@ export const LiveMusicSourceTypeSchema = z.enum([
   "musicbrainz",
   "trusted_directory",
   "web_discovery",
-  "next_stage"
+  "next_stage",
+  // An authoritative government/institutional open-data publication (e.g. the
+  // French Ministry of Culture's subsidized-structures dataset) — kept
+  // generic so any future official-dataset connector can reuse it, rather
+  // than adding a source-specific enum value per dataset.
+  "official_open_data"
 ]);
 export type LiveMusicSourceType = z.infer<typeof LiveMusicSourceTypeSchema>;
 

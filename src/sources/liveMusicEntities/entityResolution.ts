@@ -91,23 +91,52 @@ function candidatesShareCoordinates(a: LiveMusicEntityCandidate, b: LiveMusicEnt
   );
 }
 
+// Scalar fields that must never be silently dropped by a merge just because
+// the highest-reliability candidate happens to lack them (e.g. an official
+// dataset record with no website merging with a web-discovered duplicate
+// that has one) — every one of these is unioned across the group instead of
+// only ever coming from the single canonical candidate.
+const MERGEABLE_SCALAR_FIELDS = [
+  "city",
+  "country",
+  "latitude",
+  "longitude",
+  "address",
+  "phone",
+  "websiteUrl",
+  "programmeUrl"
+] as const satisfies ReadonlyArray<keyof LiveMusicEntityCandidate>;
+
 function mergeCandidateGroup(group: LiveMusicEntityCandidate[]): LiveMusicEntityCandidate {
-  const primary = pickCanonicalCandidate(group);
+  const orderedByReliability = orderByReliabilityDesc(group);
+  const primary = orderedByReliability[0];
 
   const externalIds = Object.assign({}, ...group.map((candidate) => candidate.externalIds));
   const sourceRecords = dedupeBySourceUrl(group.flatMap((candidate) => candidate.sourceRecords));
   const activityEvidence = dedupeEvidence(group.flatMap((candidate) => candidate.activityEvidence));
 
-  return {
+  const merged: LiveMusicEntityCandidate = {
     ...primary,
     externalIds,
     sourceRecords,
     activityEvidence
   };
+
+  for (const field of MERGEABLE_SCALAR_FIELDS) {
+    if (merged[field] !== undefined && merged[field] !== null) {
+      continue;
+    }
+    const fallback = orderedByReliability.find((candidate) => candidate[field] !== undefined && candidate[field] !== null);
+    if (fallback) {
+      (merged as Record<string, unknown>)[field] = fallback[field];
+    }
+  }
+
+  return merged;
 }
 
-function pickCanonicalCandidate(group: LiveMusicEntityCandidate[]): LiveMusicEntityCandidate {
-  return [...group].sort((a, b) => bestReliability(b) - bestReliability(a))[0];
+function orderByReliabilityDesc(group: LiveMusicEntityCandidate[]): LiveMusicEntityCandidate[] {
+  return [...group].sort((a, b) => bestReliability(b) - bestReliability(a));
 }
 
 function bestReliability(candidate: LiveMusicEntityCandidate): number {

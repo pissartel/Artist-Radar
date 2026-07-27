@@ -69,6 +69,33 @@ export type {
   OverpassConnectorOptions,
   OverpassDiscoveryResult
 } from "./connectors/overpassLiveMusicConnector.js";
+export {
+  SMAC_DATASET_ID,
+  SMAC_DATASET_JSON_URL,
+  SMAC_DATASET_PAGE_URL,
+  SMAC_DATASET_RESOURCE_ID,
+  classifySmacStatus,
+  discoverSmacVenuesFromMinistryOfCultureDataset,
+  filterSmacCandidatesByLocation,
+  isSmacDiscoveryEnabled,
+  resetSmacDatasetCache
+} from "./connectors/smacDatasetConnector.js";
+export type {
+  LocationFilteredSmacCandidate,
+  RawSmacRecord,
+  SmacDatasetConnectorEnv,
+  SmacDatasetConnectorOptions,
+  SmacDiscoveryResult,
+  SmacLocationFilterResult,
+  SmacLocationMatchMode,
+  SmacStatus
+} from "./connectors/smacDatasetConnector.js";
+export {
+  isNationwideFranceLocationText,
+  resolveCountryCodeFromLocationText,
+  resolveSearchLocationCoordinates,
+  FRENCH_CITY_COORDINATES
+} from "./connectors/frenchLocationResolution.js";
 export type {
   LiveOpportunityRelevanceContext,
   LiveOpportunityRelevanceResult,

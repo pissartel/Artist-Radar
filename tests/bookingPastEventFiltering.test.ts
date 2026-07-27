@@ -87,6 +87,45 @@ describe("searchBookingOpportunities past-event filtering", () => {
     expect(result.targets.some((target) => target.name === "Past Pop Punk Show" && target.opportunityKind === "historical_signal")).toBe(true);
     expect(result.rejectedByReason.pastEvent).toBeGreaterThanOrEqual(1);
   });
+
+  it("keeps a recent past concert detected by the OpenAI web-search provider as an actionable event, alongside its derived venue lead", async () => {
+    const provider: BookingSourceProvider = {
+      providerName: "qa_openai_web_search",
+      async search() {
+        const targets: BookingTarget[] = [
+          baseTarget({
+            name: "The Slugz at La Maroquinerie",
+            category: "event",
+            eventDate: "2025-05-24",
+            sourceUrl: "https://example.test/the-slugz-maroquinerie",
+            sourceProvider: "openai_web_search"
+          }),
+          baseTarget({
+            name: "La Maroquinerie",
+            category: "venue",
+            eventDate: null,
+            sourceUrl: "https://example.test/la-maroquinerie",
+            sourceProvider: "openai_web_search"
+          })
+        ];
+        return {
+          sourceProvider: "qa_openai_web_search",
+          searchedQueries: [],
+          warnings: [],
+          metadata: {},
+          targets
+        };
+      }
+    };
+
+    const result = await searchBookingOpportunities(input, { providers: [provider], now: NOW });
+
+    expect(result.opportunities.map((opportunity) => opportunity.name)).toEqual(
+      expect.arrayContaining(["The Slugz at La Maroquinerie", "La Maroquinerie"])
+    );
+    const eventOpportunity = result.opportunities.find((opportunity) => opportunity.name === "The Slugz at La Maroquinerie");
+    expect(eventOpportunity?.opportunityKind).toBe("actionable");
+  });
 });
 
 function baseTarget(overrides: Partial<BookingTarget> = {}): BookingTarget {

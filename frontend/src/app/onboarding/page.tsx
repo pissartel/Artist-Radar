@@ -9,6 +9,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import { LANDING_ROUTE } from "@/lib/navigation";
+import { productFeatures } from "@/lib/productFeatures";
 
 const MAIN_GOAL_OPTIONS: { value: MainGoal; label: string }[] = [
   { value: "booking_opportunities", label: "Find booking opportunities" },
@@ -29,6 +30,7 @@ const INITIAL_FORM_DATA: OnboardingFormData = {
   secondaryGenres: "",
   targetLocation: "",
   mainGoal: "booking_opportunities",
+  useChartmetricEnrichment: false,
 };
 
 type FormErrors = Partial<Record<"artistName" | "countryOfOrigin" | "mainGenre", string>>;
@@ -227,6 +229,19 @@ export default function OnboardingPage() {
             ))}
           </Select>
         </FormField>
+
+        {productFeatures.chartmetricToggle && (
+          <label htmlFor="useChartmetricEnrichment" className="flex items-center gap-2 text-sm text-foreground-secondary">
+            <input
+              id="useChartmetricEnrichment"
+              type="checkbox"
+              checked={formData.useChartmetricEnrichment}
+              onChange={(e) => updateField("useChartmetricEnrichment", e.target.checked)}
+              className="h-4 w-4 rounded border-border"
+            />
+            Use Chartmetric enrichment
+          </label>
+        )}
 
         <Button type="submit" variant="gradient" className="mt-1 w-full">
           Analyze artist

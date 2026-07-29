@@ -13,6 +13,14 @@ export interface ArtistRadarRequest {
   // Optional client-generated id used to poll GET /api/artist-radar/status/[executionId]
   // for real-time pipeline stage progress while this request is in flight.
   executionId?: string;
+  // Explicit, per-request feature toggles (issue #142). Currently only the
+  // Chartmetric audience-enrichment preview toggle, only ever shown/settable
+  // in preview and development (see productFeatures.chartmetricToggle) — the
+  // backend server-side flag/kill switch always applies on top and is the
+  // only thing that matters in production.
+  features?: {
+    chartmetricArtistEnrichment?: boolean;
+  };
 }
 
 // Normalized response returned by POST /api/artist-radar.

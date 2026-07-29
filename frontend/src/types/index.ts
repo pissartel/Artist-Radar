@@ -358,6 +358,10 @@ export interface OnboardingFormData {
   secondaryGenres: string;
   targetLocation: string;
   mainGoal: MainGoal;
+  // Preview/development-only toggle (issue #142); only ever read/rendered
+  // when productFeatures.chartmetricToggle is enabled. Left `false` by
+  // default so it's a no-op everywhere else.
+  useChartmetricEnrichment: boolean;
 }
 
 export interface DashboardData {

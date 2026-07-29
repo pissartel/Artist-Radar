@@ -1,3 +1,4 @@
+import { productFeatures } from "@/lib/productFeatures";
 import type { ArtistRadarRequest } from "@/types/artistRadar";
 import type { OnboardingFormData } from "@/types";
 
@@ -31,6 +32,10 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
   }
 
   const spotifyUrl = onboarding.spotifyUrl?.trim();
+  // Only ever sent when the preview/dev-only toggle is both rendered and
+  // checked (issue #142) — in production productFeatures.chartmetricToggle
+  // is always false, so this stays omitted regardless of stored form data.
+  const chartmetricArtistEnrichment = productFeatures.chartmetricToggle && onboarding.useChartmetricEnrichment === true;
 
   return {
     artistName,
@@ -38,5 +43,6 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
     location,
     enableBooking: onboarding.mainGoal !== "similar_artists",
     ...(spotifyUrl ? { spotifyUrl } : {}),
+    ...(chartmetricArtistEnrichment ? { features: { chartmetricArtistEnrichment: true } } : {}),
   };
 }

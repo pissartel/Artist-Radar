@@ -185,4 +185,39 @@ describe("POST /api/artist-radar", () => {
 
     expect(runOpportunitySearch).toHaveBeenCalledWith(expect.anything(), undefined);
   });
+
+  it("forwards a valid features.chartmetricArtistEnrichment toggle to the pipeline (issue #142)", async () => {
+    runOpportunitySearch.mockResolvedValueOnce({
+      artistProfile: {
+        artistName: "Tuesday Fall",
+        city: "Bordeaux",
+        country: "France",
+        genres: ["pop punk"],
+        socialLinks: {},
+        platformStats: {},
+      },
+      similarArtists: {},
+      opportunities: [],
+    });
+    const { POST } = await import("@/app/api/artist-radar/route");
+
+    const response = await POST(jsonRequest({ ...VALID_BODY, features: { chartmetricArtistEnrichment: true } }));
+
+    expect(response.status).toBe(200);
+    expect(runOpportunitySearch).toHaveBeenCalledWith(
+      expect.anything(),
+      { features: { chartmetricArtistEnrichment: true } },
+    );
+  });
+
+  it("rejects a request with a malformed features field with a structured 400", async () => {
+    const { POST } = await import("@/app/api/artist-radar/route");
+
+    const response = await POST(jsonRequest({ ...VALID_BODY, features: { chartmetricArtistEnrichment: "yes" } }));
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.error.code).toBe("INVALID_REQUEST");
+    expect(runOpportunitySearch).not.toHaveBeenCalled();
+  });
 });

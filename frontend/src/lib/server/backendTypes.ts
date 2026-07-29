@@ -34,6 +34,11 @@ export interface BackendRunOpportunitySearchOptions {
   // it can be read back via getPipelineExecutionState (see
   // pipelineExecutionState.ts in the backend package, issue #134).
   executionId?: string;
+  // Mirrors RunOpportunitySearchOptions["features"] in src/pipeline.ts
+  // (issue #142).
+  features?: {
+    chartmetricArtistEnrichment?: boolean;
+  };
 }
 
 // Mirrors src/schemas.ts PipelineStageSchema.

@@ -9,6 +9,7 @@ interface RawRequestBody {
   enableBooking?: unknown;
   spotifyUrl?: unknown;
   executionId?: unknown;
+  features?: unknown;
 }
 
 const MAX_EXECUTION_ID_LENGTH = 200;
@@ -28,7 +29,7 @@ function errorResponse(status: number, code: ErrorCode, message: string): Respon
 }
 
 function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | null {
-  const { artistName, genre, location, enableBooking, spotifyUrl, executionId } = body;
+  const { artistName, genre, location, enableBooking, spotifyUrl, executionId, features } = body;
 
   if (
     typeof artistName !== "string" || !artistName.trim() ||
@@ -53,6 +54,11 @@ function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | nul
     return null;
   }
 
+  const chartmetricArtistEnrichment = parseChartmetricToggle(features);
+  if (chartmetricArtistEnrichment === INVALID_FEATURES) {
+    return null;
+  }
+
   return {
     artistName: artistName.trim(),
     genre: genre.trim(),
@@ -60,7 +66,33 @@ function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | nul
     enableBooking,
     ...(spotifyUrl?.trim() ? { spotifyUrl: spotifyUrl.trim() } : {}),
     ...(executionId?.trim() ? { executionId: executionId.trim() } : {}),
+    ...(chartmetricArtistEnrichment !== undefined ? { features: { chartmetricArtistEnrichment } } : {}),
   };
+}
+
+const INVALID_FEATURES = Symbol("invalid-features");
+
+// `features` is optional; when present it must be a plain object whose only
+// recognized key is a boolean `chartmetricArtistEnrichment` (issue #142
+// section 4). The server never trusts this value alone — see
+// resolveChartmetricFeatureFlag in the backend, which ANDs it with the
+// server-side flag outside of production and ignores it entirely in
+// production.
+function parseChartmetricToggle(features: unknown): boolean | undefined | typeof INVALID_FEATURES {
+  if (features === undefined) {
+    return undefined;
+  }
+  if (typeof features !== "object" || features === null) {
+    return INVALID_FEATURES;
+  }
+  const value = (features as Record<string, unknown>).chartmetricArtistEnrichment;
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "boolean") {
+    return INVALID_FEATURES;
+  }
+  return value;
 }
 
 function isValidHttpUrl(value: string | undefined): value is string {
@@ -136,9 +168,13 @@ export async function POST(request: Request): Promise<Response> {
       spotifyUrl: isValidHttpUrl(artistRadarRequest.spotifyUrl) ? artistRadarRequest.spotifyUrl : undefined,
     });
 
+    const searchOptions = {
+      ...(artistRadarRequest.executionId ? { executionId: artistRadarRequest.executionId } : {}),
+      ...(artistRadarRequest.features ? { features: artistRadarRequest.features } : {}),
+    };
     const result = await runOpportunitySearch(
       input,
-      artistRadarRequest.executionId ? { executionId: artistRadarRequest.executionId } : undefined
+      Object.keys(searchOptions).length > 0 ? searchOptions : undefined
     );
     const response = mapPipelineResultToArtistRadarResponse(result, artistRadarRequest);
 

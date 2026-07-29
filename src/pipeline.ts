@@ -29,6 +29,12 @@ import {
   type DiscoverLabelOpportunitiesOptions
 } from "./labels/discoverLabelOpportunities.js";
 import type { LabelSearchInput } from "./labels/types.js";
+import { ChartmetricArtistEnrichmentProvider } from "./features/artist-enrichment/chartmetric/chartmetric.service.js";
+import type {
+  ArtistEnrichmentInput,
+  ArtistEnrichmentProvider,
+  ArtistEnrichmentResult
+} from "./features/artist-enrichment/chartmetric/chartmetric.types.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
@@ -51,6 +57,16 @@ export interface RunOpportunitySearchOptions {
   // execution store (see pipelineExecutionState.ts) so a status endpoint can
   // report it back to the caller while this call is still running.
   executionId?: string;
+  // Optional feature toggles sent explicitly by the caller for this
+  // request. Currently only the Chartmetric audience-enrichment preview
+  // toggle (issue #142); the server-side flag/kill switch always applies on
+  // top of this and cannot be overridden by the client.
+  features?: {
+    chartmetricArtistEnrichment?: boolean;
+  };
+  // Test/DI seam for the Chartmetric provider; defaults to a real
+  // ChartmetricArtistEnrichmentProvider bound to this request's toggle.
+  chartmetricProvider?: ArtistEnrichmentProvider;
 }
 
 export interface OpportunitySearchRunResult {
@@ -72,6 +88,12 @@ export interface OpportunitySearchRunResult {
   // Label opportunities (issue #169), discovered and ranked independently of
   // the concert-oriented booking pipeline since labels aren't event-based.
   labelOpportunities?: GenericOpportunity[];
+  // Chartmetric audience-enrichment result for the main artist (issue
+  // #142). Always populated by runOpportunitySearch (with a "skipped"/
+  // "error" status rather than an exception on any failure) so callers can
+  // distinguish "unavailable" from "not attempted" — a normalized
+  // ArtistEnrichmentResult, never a raw Chartmetric response.
+  chartmetric?: ArtistEnrichmentResult;
 }
 
 export async function runOpportunitySearch(
@@ -99,6 +121,18 @@ export async function runOpportunitySearch(
     });
     track("FETCHING_ARTIST_DATA");
     const profile = await collectArtistProfile(input);
+    const chartmetric = await runChartmetricEnrichmentSafely(
+      {
+        artistName: input.artist,
+        spotifyArtistId: profile.spotify?.id ?? null,
+        spotifyUrl: profile.socialLinks.spotifyUrl ?? null,
+        genres: profile.genres,
+        city: profile.city ?? null,
+        country: profile.country ?? null
+      },
+      options.chartmetricProvider,
+      options.features?.chartmetricArtistEnrichment
+    );
     track("FINDING_SIMILAR_ARTISTS");
     const similarArtists = await findSimilarArtists({
       profile,
@@ -169,7 +203,8 @@ export async function runOpportunitySearch(
         bookingSearch,
         similarArtistConcerts,
         ticketmaster: buildTicketmasterEvidenceSafely(bookingSearch),
-        labelOpportunities
+        labelOpportunities,
+        chartmetric
       };
       track("COMPLETED");
       if (executionId) {
@@ -207,7 +242,8 @@ export async function runOpportunitySearch(
       venueCandidates,
       eventCandidates,
       opportunities: validated.opportunities.slice(0, input.limit),
-      similarArtistConcerts
+      similarArtistConcerts,
+      chartmetric
     };
     track("COMPLETED");
     if (executionId) {
@@ -240,6 +276,28 @@ async function runLabelDiscoverySafely(
     const message = error instanceof Error ? error.message : String(error);
     debugLog("pipeline", "runOpportunitySearch label discovery failed and was skipped", { message });
     return [];
+  }
+}
+
+// Chartmetric audience enrichment (issue #142) is an additive, best-effort
+// step: a disabled/unconfigured provider, an unmatched artist, a timeout or
+// any other provider-side failure must never take down artist analysis.
+// ChartmetricArtistEnrichmentProvider.enrichArtist() already guarantees it
+// never throws; this wrapper is a second line of defense against a
+// misbehaving injected test/DI provider doing the same.
+async function runChartmetricEnrichmentSafely(
+  input: ArtistEnrichmentInput,
+  provider: ArtistEnrichmentProvider | undefined,
+  requestToggleEnabled: boolean | undefined
+): Promise<ArtistEnrichmentResult> {
+  try {
+    const activeProvider = provider ?? new ChartmetricArtistEnrichmentProvider({ requestToggleEnabled });
+    return await activeProvider.enrichArtist(input);
+  } catch (error) {
+    debugLog("enrichment", "chartmetric enrichArtist threw unexpectedly and was skipped", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+    return { provider: "chartmetric", status: "error", reason: "unexpected_error" };
   }
 }
 

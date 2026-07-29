@@ -1,4 +1,4 @@
-export type DebugScope = "spotify" | "lastfm" | "musicbrainz" | "wikidata" | "firecrawl" | "web-search" | "artist-verification" | "artist-consolidation" | "similar-artists" | "seeds" | "profile" | "youtube" | "events" | "pipeline" | "booking" | "genre" | "sources" | "enrichment" | "concert-history" | "ticketmaster" | "openai-concerts" | "labels";
+export type DebugScope = "spotify" | "lastfm" | "musicbrainz" | "wikidata" | "firecrawl" | "web-search" | "artist-verification" | "artist-consolidation" | "similar-artists" | "seeds" | "profile" | "youtube" | "events" | "pipeline" | "booking" | "genre" | "sources" | "enrichment" | "concert-history" | "ticketmaster" | "openai-concerts" | "labels" | "chartmetric";
 
 const DEBUG_FLAG_BY_SCOPE: Record<DebugScope, string> = {
   spotify: "DEBUG_SPOTIFY",
@@ -22,7 +22,8 @@ const DEBUG_FLAG_BY_SCOPE: Record<DebugScope, string> = {
   "concert-history": "DEBUG_ARTIST_CONCERTS",
   ticketmaster: "DEBUG_TICKETMASTER_CONCERTS",
   "openai-concerts": "DEBUG_OPENAI_CONCERTS",
-  labels: "DEBUG_LABELS"
+  labels: "DEBUG_LABELS",
+  chartmetric: "DEBUG_CHARTMETRIC"
 };
 
 export function isDebugEnabled(scope: DebugScope): boolean {

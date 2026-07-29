@@ -18,7 +18,8 @@
   "rag:ingest:booking": "tsx scripts/ragIngestBooking.ts",
   "eval:rag:booking": "tsx scripts/ragBookingSmokeTest.ts",
   "import:organizations": "tsx scripts/importOrganizations.ts",
-  "rag:index:organizations": "tsx scripts/ragIndexOrganizations.ts"
+  "rag:index:organizations": "tsx scripts/ragIndexOrganizations.ts",
+  "validate:chartmetric": "tsx scripts/chartmetricValidationReport.ts"
   },
   "keywords": [],
   "author": "",

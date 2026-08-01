@@ -35,6 +35,10 @@ import type {
   ArtistEnrichmentProvider,
   ArtistEnrichmentResult
 } from "./features/artist-enrichment/chartmetric/chartmetric.types.js";
+import {
+  enrichSimilarArtistsWithChartmetric,
+  type SimilarArtistCandidateEnrichmentProvider
+} from "./modules/similarArtistCommercialEnrichment.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
@@ -67,6 +71,10 @@ export interface RunOpportunitySearchOptions {
   // Test/DI seam for the Chartmetric provider; defaults to a real
   // ChartmetricArtistEnrichmentProvider bound to this request's toggle.
   chartmetricProvider?: ArtistEnrichmentProvider;
+  // Test/DI seam for the similar-artist-candidate Chartmetric batch
+  // enrichment (issue #201); defaults to a real
+  // ChartmetricSimilarArtistEnrichmentService bound to the same toggle.
+  chartmetricSimilarArtistProvider?: SimilarArtistCandidateEnrichmentProvider;
 }
 
 export interface OpportunitySearchRunResult {
@@ -149,7 +157,13 @@ export async function runOpportunitySearch(
       musicBrainzSearch: options.musicBrainzSearch,
       seedCandidates: options.seedCandidates
     });
-    const groupedSimilarArtists = groupSimilarArtistsByTier(similarArtists);
+    const groupedSimilarArtists = await enrichSimilarArtistsWithChartmetricSafely(
+      groupSimilarArtistsByTier(similarArtists),
+      profile,
+      chartmetric,
+      options.chartmetricSimilarArtistProvider,
+      options.features?.chartmetricArtistEnrichment
+    );
     const similarArtistConcerts = await findSimilarArtistConcertsSafely(
       flattenSimilarArtists(groupedSimilarArtists),
       options.artistConcertProviders
@@ -298,6 +312,35 @@ async function runChartmetricEnrichmentSafely(
       message: error instanceof Error ? error.message : String(error)
     });
     return { provider: "chartmetric", status: "error", reason: "unexpected_error" };
+  }
+}
+
+// Similar-artist-candidate Chartmetric enrichment (issue #201) is an
+// additive, best-effort reranking step: ChartmetricSimilarArtistEnrichmentService
+// already guarantees enrichCandidates() never throws, but a misbehaving
+// injected test/DI provider (or a bug in the reranking/regrouping logic
+// itself) must still never take down the existing similar-artist discovery
+// output — on any failure this degrades to the original, unenriched groups.
+async function enrichSimilarArtistsWithChartmetricSafely(
+  groupedSimilarArtists: SimilarArtistsByTier,
+  profile: ArtistProfile,
+  mainArtistChartmetric: ArtistEnrichmentResult,
+  provider: SimilarArtistCandidateEnrichmentProvider | undefined,
+  requestToggleEnabled: boolean | undefined
+): Promise<SimilarArtistsByTier> {
+  try {
+    return await enrichSimilarArtistsWithChartmetric({
+      profile,
+      similarArtists: groupedSimilarArtists,
+      mainArtistChartmetric,
+      requestToggleEnabled,
+      provider
+    });
+  } catch (error) {
+    warnLog("chartmetric", "similar-artist candidate enrichment failed and was skipped", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+    return groupedSimilarArtists;
   }
 }
 

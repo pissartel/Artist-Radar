@@ -10,6 +10,7 @@
 // same key, which covers "avoid duplicate requests during one pipeline
 // execution" without any extra bookkeeping.
 import { TtlCache } from "../../../utils/ttlCache.js";
+import type { ChartmetricArtistScoreAndSocialRaw, ChartmetricPlaylistReachRaw } from "./chartmetric.client.js";
 import type { ArtistMatchConfidence, ArtistMatchMethod, ChartmetricAudienceMetrics, ChartmetricHistoryPoint } from "./chartmetric.types.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -32,6 +33,19 @@ export type ChartmetricIdentityCacheEntry =
 export type ChartmetricIdentityCache = TtlCache<string, ChartmetricIdentityCacheEntry>;
 export type ChartmetricMetricsCache = TtlCache<string, ChartmetricAudienceMetrics | null>;
 export type ChartmetricHistoryCache = TtlCache<string, ChartmetricHistoryPoint[] | null>;
+// Issue #201: the extra similar-artist-candidate signals beyond the phase-1
+// audience snapshot (score, social audience, playlist reach, trailing-window
+// growth) change at roughly the same cadence, so they share the same 7-day
+// TTL — but live in their own cache, kept separate from the 90-day identity
+// cache per the issue's cost-control requirement ("cache identity data
+// separately from frequently changing metrics").
+export interface ChartmetricCandidateDetailCacheEntry {
+  scoreAndSocial: ChartmetricArtistScoreAndSocialRaw | null;
+  playlistReach: ChartmetricPlaylistReachRaw | null;
+  listenerGrowthPercent?: number;
+  followerGrowthPercent?: number;
+}
+export type ChartmetricCandidateMetricsCache = TtlCache<string, ChartmetricCandidateDetailCacheEntry>;
 
 export function createChartmetricIdentityCache(): ChartmetricIdentityCache {
   return new TtlCache(90 * DAY_MS);
@@ -45,17 +59,23 @@ export function createChartmetricHistoryCache(): ChartmetricHistoryCache {
   return new TtlCache(30 * DAY_MS);
 }
 
+export function createChartmetricCandidateMetricsCache(): ChartmetricCandidateMetricsCache {
+  return new TtlCache(7 * DAY_MS);
+}
+
 // Module-level singletons shared by the default provider instance so that
 // caching/dedup works across separate analysis requests within the same
 // running process, not just within one pipeline call.
 export const defaultChartmetricIdentityCache: ChartmetricIdentityCache = createChartmetricIdentityCache();
 export const defaultChartmetricMetricsCache: ChartmetricMetricsCache = createChartmetricMetricsCache();
 export const defaultChartmetricHistoryCache: ChartmetricHistoryCache = createChartmetricHistoryCache();
+export const defaultChartmetricCandidateMetricsCache: ChartmetricCandidateMetricsCache = createChartmetricCandidateMetricsCache();
 
 export function resetDefaultChartmetricCaches(): void {
   defaultChartmetricIdentityCache.clear();
   defaultChartmetricMetricsCache.clear();
   defaultChartmetricHistoryCache.clear();
+  defaultChartmetricCandidateMetricsCache.clear();
 }
 
 // Stable cache key for an artist identity lookup: prefers the strongest

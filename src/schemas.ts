@@ -52,6 +52,41 @@ export const SimilarArtistPossibleUseSchema = z.enum([
   "long_term_reference",
   "unknown"
 ]);
+// Issue #201: Chartmetric candidate-enrichment result shape exposed on
+// SimilarArtist. Mirrors (but doesn't import, to keep this file dependency-
+// free) the equivalent TS unions in
+// src/features/artist-enrichment/chartmetric/chartmetric.types.ts — keep the
+// literal values in sync if that file's unions change.
+export const ChartmetricMatchConfidenceSchema = z.enum(["exact", "high", "medium", "low"]);
+export const ChartmetricMatchMethodSchema = z.enum([
+  "spotify_id",
+  "spotify_url",
+  "external_id",
+  "name_with_platform_links",
+  "name_with_genre_location"
+]);
+export const ChartmetricEnrichmentStatusSchema = z.enum([
+  "success",
+  "partial",
+  "skipped",
+  "not_found",
+  "ambiguous",
+  "timeout",
+  "rate_limited",
+  "budget_limited",
+  "error"
+]);
+// Explicit commercial-scale tiers (issue #201) — distinct from
+// BookingCategorySchema above, which reflects booking-relationship/musical
+// fit rather than audience-size compatibility.
+export const SimilarArtistCommercialTierSchema = z.enum([
+  "same_level",
+  "slightly_larger",
+  "aspirational",
+  "major_reference",
+  "local_compatible_artist"
+]);
+
 export const ConfidenceScoreSchema = z.number().min(0).max(1);
 export const ImageSourceSchema = z.enum([
   "spotify",
@@ -213,6 +248,54 @@ export const VenueCandidateSchema = z.object({
   confidence: ConfidenceScoreSchema
 });
 
+// Issue #201: fields Chartmetric doesn't report stay unset (never coerced to
+// 0) — every metric here is optional so "unavailable" is representable.
+export const ChartmetricSocialAudienceSchema = z.object({
+  instagramFollowers: z.number().nonnegative().optional(),
+  tiktokFollowers: z.number().nonnegative().optional(),
+  youtubeSubscribers: z.number().nonnegative().optional(),
+  facebookFollowers: z.number().nonnegative().optional(),
+  twitterFollowers: z.number().nonnegative().optional()
+});
+
+export const ChartmetricCandidateMetricsSchema = z.object({
+  chartmetricArtistId: z.string().trim().min(1),
+  spotifyArtistId: z.string().trim().min(1).optional(),
+  spotifyMonthlyListeners: z.number().nonnegative().optional(),
+  spotifyFollowers: z.number().nonnegative().optional(),
+  measuredAt: z.string().trim().min(1).optional(),
+  fetchedAt: z.string().trim().min(1),
+  matchConfidence: ChartmetricMatchConfidenceSchema,
+  source: z.literal("chartmetric"),
+  chartmetricArtistScore: z.number().optional(),
+  listenerGrowthPercent: z.number().optional(),
+  followerGrowthPercent: z.number().optional(),
+  socialAudience: ChartmetricSocialAudienceSchema.optional(),
+  playlistReachScore: z.number().optional(),
+  totalCurrentPlaylists: z.number().nonnegative().optional(),
+  neighbouringArtistScore: z.number().optional()
+});
+
+// Never exposes raw Chartmetric error text — `reason` is one of the
+// internal machine-readable ChartmetricSkipReason codes (or an unforeseen
+// free-form one), never a provider error message.
+export const SimilarArtistChartmetricResultSchema = z.object({
+  status: ChartmetricEnrichmentStatusSchema,
+  reason: z.string().trim().min(1).optional(),
+  matchMethod: ChartmetricMatchMethodSchema.optional(),
+  matchConfidence: ChartmetricMatchConfidenceSchema.optional(),
+  metrics: ChartmetricCandidateMetricsSchema.optional()
+});
+
+export const SimilarArtistCommercialScoreComponentsSchema = z.object({
+  genreCompatibility: z.number().int().min(0).max(100),
+  audienceSimilarity: z.number().int().min(0).max(100),
+  careerStageSimilarity: z.number().int().min(0).max(100),
+  geographicRelevance: z.number().int().min(0).max(100),
+  recentActivity: z.number().int().min(0).max(100),
+  crossPlatformEvidence: z.number().int().min(0).max(100)
+});
+
 export const SimilarArtistSchema = z.object({
   name: z.string().trim().min(1),
   url: z.string().trim().url().nullable(),
@@ -267,7 +350,18 @@ export const SimilarArtistSchema = z.object({
   spotify: SpotifyMetadataSchema.nullable().default(null),
   imageUrl: z.string().trim().url().nullable().default(null),
   imageSource: ImageSourceSchema.default(null),
-  imageConfidence: ConfidenceScoreSchema.nullable().default(null)
+  imageConfidence: ConfidenceScoreSchema.nullable().default(null),
+  // Issue #201: additive Chartmetric audience/career-stage enrichment and
+  // commercial-scale ranking, layered on top of (never replacing) the
+  // musical/booking relevance fields above. All optional — an artist without
+  // a high-confidence Chartmetric match, or one outside this run's enriched
+  // top-N, simply omits `chartmetric` while still getting a `commercialTier`
+  // derived from existing discovery signals.
+  chartmetric: SimilarArtistChartmetricResultSchema.optional(),
+  commercialTier: SimilarArtistCommercialTierSchema.optional(),
+  commercialScore: z.number().int().min(0).max(100).optional(),
+  commercialScoreBreakdown: SimilarArtistCommercialScoreComponentsSchema.optional(),
+  commercialScoreExplanation: z.string().trim().min(1).optional()
 });
 
 export const OpportunityInternalReviewSchema = z.object({
@@ -772,6 +866,10 @@ export type ArtistInput = z.infer<typeof ArtistInputSchema>;
 export type EventCandidate = z.infer<typeof EventCandidateSchema>;
 export type VenueCandidate = z.infer<typeof VenueCandidateSchema>;
 export type SimilarArtist = z.infer<typeof SimilarArtistSchema>;
+export type SimilarArtistCommercialTier = z.infer<typeof SimilarArtistCommercialTierSchema>;
+export type SimilarArtistCommercialScoreComponents = z.infer<typeof SimilarArtistCommercialScoreComponentsSchema>;
+export type SimilarArtistChartmetricResult = z.infer<typeof SimilarArtistChartmetricResultSchema>;
+export type ChartmetricCandidateMetrics = z.infer<typeof ChartmetricCandidateMetricsSchema>;
 export type Opportunity = z.infer<typeof OpportunitySchema>;
 export type OpportunityInternalReview = z.infer<typeof OpportunityInternalReviewSchema>;
 export type OpportunityDateRange = z.infer<typeof OpportunityDateRangeSchema>;

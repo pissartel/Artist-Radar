@@ -15,9 +15,10 @@ export interface ArtistRadarRequest {
   executionId?: string;
   // Explicit, per-request feature toggles (issue #142). Currently only the
   // Chartmetric audience-enrichment preview toggle, only ever shown/settable
-  // in preview and development (see productFeatures.chartmetricToggle) — the
+  // in preview and development (see lib/server/chartmetricToggle.ts) — the
   // backend server-side flag/kill switch always applies on top and is the
-  // only thing that matters in production.
+  // only thing that matters in production; the backend ignores this field
+  // entirely there regardless of what a client sends.
   features?: {
     chartmetricArtistEnrichment?: boolean;
   };

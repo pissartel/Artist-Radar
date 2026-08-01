@@ -111,13 +111,43 @@ export async function enrichSimilarArtistsWithChartmetric(
           }
         : {}),
       commercialTier: scoreResult.tier,
+      commercialAbsoluteScale: scoreResult.absoluteScale,
       commercialScore: scoreResult.score,
+      commercialScoreCoverage: scoreResult.coverage,
+      commercialScoreConfidence: scoreResult.confidence,
       commercialScoreBreakdown: scoreResult.components,
-      commercialScoreExplanation: scoreResult.explanation
+      commercialScoreExplanation: scoreResult.explanation,
+      chartmetricDiagnostics: buildDiagnostics(artist, chartmetricResult, scoreResult)
     };
   });
 
   return groupSimilarArtistsByTier(enriched);
+}
+
+function buildDiagnostics(
+  artist: SimilarArtist,
+  chartmetricResult: SimilarArtistCandidateEnrichmentResult | undefined,
+  scoreResult: ReturnType<typeof scoreSimilarArtistCommercialCompatibility>
+): SimilarArtist["chartmetricDiagnostics"] {
+  const notSelected = chartmetricResult?.reason === "not_selected_for_enrichment";
+  const lookupAttempted = Boolean(chartmetricResult) && chartmetricResult!.status !== "skipped" && chartmetricResult!.status !== "budget_limited";
+
+  return {
+    selectedForEnrichment: !notSelected,
+    spotifyIdPresent: Boolean(artist.spotifyId ?? artist.spotify?.id),
+    spotifyUrlPresent: Boolean(artist.spotifyUrl ?? artist.spotify?.url),
+    lookupAttempted,
+    ...(chartmetricResult?.status ? { status: chartmetricResult.status } : {}),
+    ...(chartmetricResult?.reason ? { skipReason: chartmetricResult.reason } : {}),
+    ...(chartmetricResult?.matchMethod ? { matchMethod: chartmetricResult.matchMethod } : {}),
+    ...(chartmetricResult?.matchConfidence ? { matchConfidence: chartmetricResult.matchConfidence } : {}),
+    metricsReturned: Boolean(chartmetricResult?.metrics),
+    ...(chartmetricResult?.cacheHit !== undefined ? { cacheHit: chartmetricResult.cacheHit } : {}),
+    finalAudienceRatio: scoreResult.audienceRatio,
+    finalCommercialTier: scoreResult.tier,
+    scoreCoverage: scoreResult.coverage,
+    scoreConfidence: scoreResult.confidence
+  };
 }
 
 function countEvidenceSignals(artist: SimilarArtist): number {

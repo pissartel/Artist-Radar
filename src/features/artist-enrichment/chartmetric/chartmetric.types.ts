@@ -172,4 +172,9 @@ export interface SimilarArtistCandidateEnrichmentResult {
   matchMethod?: ArtistMatchMethod;
   matchConfidence?: ArtistMatchConfidence;
   metrics?: ChartmetricCandidateMetrics;
+  // Issue #201 diagnostics: whether the identity match was served from
+  // ChartmetricIdentityCache instead of a fresh API call. Undefined when the
+  // candidate never reached the identity-lookup step at all (e.g. skipped
+  // before enrichment was attempted).
+  cacheHit?: boolean;
 }

@@ -139,4 +139,60 @@ describe("enrichSimilarArtistsWithChartmetric", () => {
     expect(enriched?.chartmetric).toBeUndefined();
     expect(enriched?.commercialTier).toBeDefined();
   });
+
+  it("attaches scale_unknown, a null score, and coverage/confidence instead of a fabricated result when Chartmetric found nothing", async () => {
+    const artist = buildArtist({ name: "Unresolved Reference", bookingCategory: "reference", estimatedFollowers: null, artistTier: "unknown" });
+    const grouped = groupSimilarArtistsByTier([artist]);
+    const provider = fakeProvider([{ provider: "chartmetric", candidateName: "Unresolved Reference", status: "not_found" }]);
+
+    const result = await enrichSimilarArtistsWithChartmetric({ profile: { ...PROFILE, spotify: null }, similarArtists: grouped, provider });
+    const enriched = result.reference[0];
+
+    expect(enriched?.commercialTier).toBe("scale_unknown");
+    expect(enriched?.commercialScore).toBeNull();
+    expect(enriched?.commercialScoreCoverage).toBeDefined();
+    expect(enriched?.commercialScoreConfidence).toBeDefined();
+    expect(enriched?.commercialAbsoluteScale).toBeDefined();
+  });
+
+  it("attaches development-only chartmetricDiagnostics reflecting selection, identity presence, and the provider's own result", async () => {
+    const selected = buildArtist({ name: "Selected Candidate", totalRelevance: 90, spotifyId: "abc123" });
+    const notSelected = buildArtist({ name: "Not Selected Candidate", totalRelevance: 10 });
+    const grouped = groupSimilarArtistsByTier([selected, notSelected]);
+    const provider = fakeProvider([
+      {
+        provider: "chartmetric",
+        candidateName: "Selected Candidate",
+        status: "success",
+        matchMethod: "spotify_id",
+        matchConfidence: "exact",
+        cacheHit: false,
+        metrics: {
+          chartmetricArtistId: "1",
+          spotifyMonthlyListeners: 6000,
+          fetchedAt: "2026-01-01T00:00:00.000Z",
+          matchConfidence: "exact",
+          source: "chartmetric"
+        }
+      },
+      { provider: "chartmetric", candidateName: "Not Selected Candidate", status: "skipped", reason: "not_selected_for_enrichment" }
+    ]);
+
+    const result = await enrichSimilarArtistsWithChartmetric({ profile: PROFILE, similarArtists: grouped, provider });
+    const selectedResult = result.local_peer.find((a) => a.name === "Selected Candidate");
+    const notSelectedResult = result.local_peer.find((a) => a.name === "Not Selected Candidate");
+
+    expect(selectedResult?.chartmetricDiagnostics?.selectedForEnrichment).toBe(true);
+    expect(selectedResult?.chartmetricDiagnostics?.spotifyIdPresent).toBe(true);
+    expect(selectedResult?.chartmetricDiagnostics?.lookupAttempted).toBe(true);
+    expect(selectedResult?.chartmetricDiagnostics?.status).toBe("success");
+    expect(selectedResult?.chartmetricDiagnostics?.matchMethod).toBe("spotify_id");
+    expect(selectedResult?.chartmetricDiagnostics?.metricsReturned).toBe(true);
+    expect(selectedResult?.chartmetricDiagnostics?.cacheHit).toBe(false);
+
+    expect(notSelectedResult?.chartmetricDiagnostics?.selectedForEnrichment).toBe(false);
+    expect(notSelectedResult?.chartmetricDiagnostics?.spotifyIdPresent).toBe(false);
+    expect(notSelectedResult?.chartmetricDiagnostics?.lookupAttempted).toBe(false);
+    expect(notSelectedResult?.chartmetricDiagnostics?.skipReason).toBe("not_selected_for_enrichment");
+  });
 });

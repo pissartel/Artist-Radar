@@ -39,6 +39,8 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
             artistTier: "small",
             totalRelevance: 78,
             estimatedFollowers: 4200,
+            genreRelevance: 85,
+            sceneRelevance: 60,
           },
         ],
       },
@@ -76,6 +78,132 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     expect(response.sources).toEqual([
       { id: "native-fetch-scene-agendas", name: "native_fetch_scene_agendas", type: "native_fetch_scene_agendas", opportunityCount: 1 },
     ]);
+  });
+
+  it("maps the new Chartmetric commercial-scale fields through (issue #201), keeping musical match/scale/overall relevance distinct", () => {
+    const result = buildResult({
+      similarArtists: {
+        reference: [
+          {
+            name: "blink-182",
+            genres: ["pop punk", "punk rock"],
+            city: null,
+            country: null,
+            reason: "Major reference in the genre.",
+            artistTier: "large",
+            totalRelevance: 46,
+            estimatedFollowers: 9_800_000,
+            genreRelevance: 82,
+            sceneRelevance: 10,
+            spotifyId: "6FBDaR13swtiWwGhX1WQsP",
+            spotifyUrl: "https://open.spotify.com/artist/6FBDaR13swtiWwGhX1WQsP",
+            commercialTier: "major_reference",
+            commercialAbsoluteScale: "major",
+            commercialScore: 58,
+            commercialScoreCoverage: 1,
+            commercialScoreConfidence: "high",
+            commercialScoreBreakdown: {
+              genreCompatibility: 82,
+              audienceSimilarity: 10,
+              careerStageSimilarity: 0,
+              geographicRelevance: 10,
+              recentActivity: 55,
+              crossPlatformEvidence: 60,
+            },
+            commercialScoreExplanation: "Commercial-scale compatibility score: 58/100 (tier: major_reference).",
+            chartmetricDiagnostics: {
+              selectedForEnrichment: true,
+              spotifyIdPresent: true,
+              spotifyUrlPresent: true,
+              lookupAttempted: true,
+              status: "success",
+              matchMethod: "spotify_id",
+              matchConfidence: "exact",
+              metricsReturned: true,
+              cacheHit: false,
+              finalAudienceRatio: 1225,
+              finalCommercialTier: "major_reference",
+              scoreCoverage: 1,
+              scoreConfidence: "high",
+            },
+          },
+        ],
+      },
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const blink182 = response.similarArtists[0];
+
+    expect(blink182?.name).toBe("blink-182");
+    // Overall/booking relevance stays as its own, clearly-separate field —
+    // never conflated with the commercial-scale match.
+    expect(blink182?.matchScore).toBe(46);
+    expect(blink182?.musicalMatchScore).toBe(82);
+    expect(blink182?.commercialTier).toBe("major_reference");
+    expect(blink182?.commercialAbsoluteScale).toBe("major");
+    expect(blink182?.commercialScore).toBe(58);
+    expect(blink182?.commercialScoreCoverage).toBe(1);
+    expect(blink182?.commercialScoreConfidence).toBe("high");
+    expect(blink182?.chartmetricDiagnostics?.selectedForEnrichment).toBe(true);
+    expect(blink182?.chartmetricDiagnostics?.matchMethod).toBe("spotify_id");
+  });
+
+  it("never maps an unresolved backend artistTier of 'unknown' onto the frontend Emerging label (issue #201 root cause)", () => {
+    const result = buildResult({
+      similarArtists: {
+        reference: [
+          {
+            name: "blink-182",
+            genres: [],
+            city: null,
+            country: null,
+            reason: "Sparse discovery data.",
+            artistTier: "unknown",
+            totalRelevance: 46,
+            estimatedFollowers: null,
+            genreRelevance: 20,
+            sceneRelevance: 0,
+          },
+        ],
+      },
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const blink182 = response.similarArtists[0];
+
+    expect(blink182?.artistTier).toBeUndefined();
+  });
+
+  it("keeps musical similarity visible even when commercial-scale data is entirely unavailable", () => {
+    const result = buildResult({
+      similarArtists: {
+        reference: [
+          {
+            name: "Some Unresolved Reference Artist",
+            genres: ["pop punk"],
+            city: null,
+            country: null,
+            reason: "Strong genre match, no audience data.",
+            artistTier: "unknown",
+            totalRelevance: 46,
+            estimatedFollowers: null,
+            genreRelevance: 75,
+            sceneRelevance: 0,
+            commercialTier: "scale_unknown",
+            commercialScore: null,
+            // commercialScoreCoverage/confidence intentionally omitted, as a
+            // provider that never even attempted enrichment would do.
+          },
+        ],
+      },
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const artist = response.similarArtists[0];
+
+    expect(artist?.musicalMatchScore).toBe(75);
+    expect(artist?.commercialTier).toBe("scale_unknown");
+    expect(artist?.commercialScore).toBeNull();
   });
 
   it("maps artist metrics only from fields the backend actually provides", () => {
@@ -387,6 +515,8 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
             artistTier: "small",
             totalRelevance: 78,
             estimatedFollowers: 4200,
+            genreRelevance: 85,
+            sceneRelevance: 60,
             spotify: {
               id: "def456",
               url: "https://open.spotify.com/artist/def456",
@@ -437,6 +567,8 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
             artistTier: "small",
             totalRelevance: 78,
             estimatedFollowers: 4200,
+            genreRelevance: 85,
+            sceneRelevance: 60,
             spotify: null,
             imageUrl: null,
             imageSource: null,

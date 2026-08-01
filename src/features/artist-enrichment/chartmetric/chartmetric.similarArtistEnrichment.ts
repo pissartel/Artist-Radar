@@ -251,6 +251,7 @@ export class ChartmetricSimilarArtistEnrichmentService {
     }
 
     const identityCacheKey = buildIdentityCacheKey(candidate);
+    const cacheHit = this.identityCache.has(identityCacheKey);
     let entry;
     try {
       entry = await this.identityCache.getOrCreate(identityCacheKey, async () => {
@@ -266,7 +267,7 @@ export class ChartmetricSimilarArtistEnrichmentService {
         return { matched: false as const, status: matchOutcome.status };
       });
     } catch (error) {
-      return this.mapClientError(candidate.artistName, error, "match");
+      return { ...this.mapClientError(candidate.artistName, error, "match"), cacheHit };
     } finally {
       this.creditBudget.record(ESTIMATED_CREDITS_PER_ENDPOINT.identity);
     }
@@ -276,12 +277,12 @@ export class ChartmetricSimilarArtistEnrichmentService {
       // branch below — ambiguous/low-confidence candidates are never merged
       // (issue #201 acceptance criterion), mirroring chartmetric.service.ts.
       if (entry.status === "ambiguous") {
-        return { provider: "chartmetric", candidateName: candidate.artistName, status: "ambiguous", reason: "ambiguous_candidates" };
+        return { provider: "chartmetric", candidateName: candidate.artistName, status: "ambiguous", reason: "ambiguous_candidates", cacheHit };
       }
       if (entry.status === "low_confidence") {
-        return { provider: "chartmetric", candidateName: candidate.artistName, status: "ambiguous", reason: "low_confidence_match" };
+        return { provider: "chartmetric", candidateName: candidate.artistName, status: "ambiguous", reason: "low_confidence_match", cacheHit };
       }
-      return { provider: "chartmetric", candidateName: candidate.artistName, status: "not_found" };
+      return { provider: "chartmetric", candidateName: candidate.artistName, status: "not_found", cacheHit };
     }
 
     const identity: ChartmetricIdentityMatch = {
@@ -290,13 +291,14 @@ export class ChartmetricSimilarArtistEnrichmentService {
       matchConfidence: entry.matchConfidence
     };
 
-    return this.fetchCandidateMetrics(candidate, identity, mainArtistChartmetricId);
+    return this.fetchCandidateMetrics(candidate, identity, mainArtistChartmetricId, cacheHit);
   }
 
   private async fetchCandidateMetrics(
     candidate: SimilarArtistCandidateInput,
     identity: ChartmetricIdentityMatch,
-    mainArtistChartmetricId: string | null
+    mainArtistChartmetricId: string | null,
+    cacheHit: boolean
   ): Promise<SimilarArtistCandidateEnrichmentResult> {
     let baseMetrics;
     try {
@@ -310,11 +312,11 @@ export class ChartmetricSimilarArtistEnrichmentService {
               return mapToAudienceMetrics(identity.chartmetricArtistId, candidate.spotifyArtistId ?? null, outcome.data, identity.matchConfidence);
             });
     } catch (error) {
-      return this.mapClientError(candidate.artistName, error, "stats");
+      return { ...this.mapClientError(candidate.artistName, error, "stats"), cacheHit };
     }
 
     if (!baseMetrics) {
-      return { provider: "chartmetric", candidateName: candidate.artistName, status: "error", reason: "malformed_response" };
+      return { provider: "chartmetric", candidateName: candidate.artistName, status: "error", reason: "malformed_response", cacheHit };
     }
 
     // Score/social, playlist reach and the neighbouring-artist check are all
@@ -341,7 +343,8 @@ export class ChartmetricSimilarArtistEnrichmentService {
       status: hasUsableMetrics(baseMetrics) ? "success" : "partial",
       matchMethod: identity.matchMethod,
       matchConfidence: identity.matchConfidence,
-      metrics
+      metrics,
+      cacheHit
     };
   }
 

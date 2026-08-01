@@ -243,6 +243,117 @@ describe("findSimilarArtists", () => {
     expect(groupSimilarArtistsByTier(artists).reference).toHaveLength(1);
   });
 
+  // Issue #201 follow-up: a major reference artist (blink-182/Green Day)
+  // discovered via Spotify search must keep its Spotify identity — id, url,
+  // image, followers, genres — through discovery/consolidation, not lose it
+  // to name-only identity. Regression coverage for the bug where
+  // scoreDiscoveryCandidate() never populated `spotify`/`imageUrl` at all,
+  // leaving every candidate entirely dependent on the later, credentials-
+  // gated enrichSimilarArtistsWithSpotify() backfill.
+  it("preserves full Spotify identity for well-known candidates even when the later Spotify batch-enrichment step is unavailable (no credentials)", async () => {
+    const BLINK_182_SPOTIFY_ID = "6FBDaR13swtiWwGhX1WQsP";
+    const GREEN_DAY_SPOTIFY_ID = "7oPftvlwr6VrsViSDV7fJY";
+
+    const artists = await findSimilarArtists({
+      profile,
+      target: "France",
+      genre: "pop punk",
+      city: "Paris",
+      seedCandidates: [],
+      // No SPOTIFY_CLIENT_ID/SECRET: the internal default provider used by
+      // enrichSimilarArtistsWithSpotify's batch backfill would be
+      // unavailable in production too — this test only injects the
+      // discovery-time spotifySearch DI function, exactly like a real
+      // request would inject a credentialed provider there while the
+      // separate batch-lookup step still has nothing to work with.
+      env: { MOCK_AI: "false" },
+      spotifyRelatedArtists: async () => [],
+      spotifySearch: async () => [
+        {
+          id: BLINK_182_SPOTIFY_ID,
+          name: "blink-182",
+          followers: 9_800_000,
+          popularity: 84,
+          genres: ["pop punk", "punk rock", "alternative rock"],
+          spotifyUrl: `https://open.spotify.com/artist/${BLINK_182_SPOTIFY_ID}`,
+          images: ["https://image.example/blink-182.jpg"]
+        },
+        {
+          id: GREEN_DAY_SPOTIFY_ID,
+          name: "Green Day",
+          followers: 11_200_000,
+          popularity: 82,
+          genres: ["punk", "pop punk"],
+          spotifyUrl: `https://open.spotify.com/artist/${GREEN_DAY_SPOTIFY_ID}`,
+          images: ["https://image.example/green-day.jpg"]
+        }
+      ]
+    });
+
+    expect(artists).toHaveLength(2);
+    const blink182 = artists.find((artist) => artist.name === "blink-182");
+    const greenDay = artists.find((artist) => artist.name === "Green Day");
+    expect(blink182).toBeDefined();
+    expect(greenDay).toBeDefined();
+
+    for (const [artist, expectedId, expectedImage] of [
+      [blink182!, BLINK_182_SPOTIFY_ID, "https://image.example/blink-182.jpg"],
+      [greenDay!, GREEN_DAY_SPOTIFY_ID, "https://image.example/green-day.jpg"]
+    ] as const) {
+      expect(artist.spotifyId).toBe(expectedId);
+      expect(artist.spotifyUrl).toBe(`https://open.spotify.com/artist/${expectedId}`);
+      expect(artist.spotify?.id).toBe(expectedId);
+      expect(artist.spotify?.url).toBe(`https://open.spotify.com/artist/${expectedId}`);
+      expect(artist.spotify?.genres.length).toBeGreaterThan(0);
+      expect(artist.imageUrl).toBe(expectedImage);
+      expect(artist.imageSource).toBe("spotify");
+      expect(artist.genres.length).toBeGreaterThan(0);
+      expect(artist.artistTier).not.toBe("unknown");
+      // No platform-link/identity loss: never silently downgraded to
+      // needs_verification/unverified for a candidate with a real Spotify ID.
+      expect(artist.verificationStatus).toBe("verified");
+    }
+  });
+
+  it("preserves Spotify identity attached via the later name-based batch-enrichment step for a non-Spotify-sourced (Last.fm) candidate", async () => {
+    const artists = await findSimilarArtists({
+      profile,
+      target: "France",
+      genre: "pop punk",
+      city: "Paris",
+      seedCandidates: [],
+      env: {
+        MOCK_AI: "false",
+        LASTFM_API_KEY: "key",
+        SPOTIFY_CLIENT_ID: "test-client-id",
+        SPOTIFY_CLIENT_SECRET: "test-client-secret"
+      },
+      lastfmSimilarArtists: async () => [{ name: "Broad Peak", url: null, match: 0.9 }],
+      musicBrainzSearch: async () => null,
+      spotifySearch: async () => [],
+      spotifySearchByName: async (name) => {
+        if (name !== "Broad Peak") {
+          return null;
+        }
+        return {
+          id: "broad-peak-spotify-id",
+          name: "Broad Peak",
+          followers: 42_000,
+          popularity: 45,
+          genres: ["pop punk"],
+          spotifyUrl: "https://open.spotify.com/artist/broad-peak-spotify-id",
+          images: ["https://image.example/broad-peak.jpg"]
+        };
+      }
+    });
+
+    const broadPeak = artists.find((artist) => artist.name === "Broad Peak");
+    expect(broadPeak).toBeDefined();
+    expect(broadPeak?.spotifyId).toBe("broad-peak-spotify-id");
+    expect(broadPeak?.spotify?.followers).toBe(42_000);
+    expect(broadPeak?.imageUrl).toBe("https://image.example/broad-peak.jpg");
+  });
+
   it("uses top track popularity as a fallback size signal when artist popularity and followers are missing", async () => {
     const artists = await findSimilarArtists({
       profile,

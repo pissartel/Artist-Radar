@@ -85,6 +85,49 @@ export interface BackendArtistProfile {
 
 export type BackendArtistTier = "small" | "medium" | "large" | "unknown";
 
+// Issue #201: relationship (to the analyzed artist) vs. absolute (the
+// candidate's own) commercial-scale vocabularies — deliberately separate
+// concepts, see src/scoring/similarArtistCommercialScore.ts.
+export type BackendCommercialTier =
+  | "same_level"
+  | "slightly_larger"
+  | "aspirational"
+  | "major_reference"
+  | "local_compatible_artist"
+  | "scale_unknown";
+export type BackendCommercialAbsoluteScale = "emerging" | "developing" | "established" | "major" | "unknown";
+export type BackendCommercialScoreConfidence = "high" | "medium" | "low" | "unavailable";
+
+export interface BackendCommercialScoreBreakdown {
+  genreCompatibility: number;
+  audienceSimilarity: number | null;
+  careerStageSimilarity: number | null;
+  geographicRelevance: number;
+  recentActivity: number | null;
+  crossPlatformEvidence: number;
+}
+
+// Dev-only diagnostics (issue #201 "Verify Chartmetric execution") — never
+// rendered in standard production UI. See
+// frontend/src/components/dashboard/SimilarArtistDetail.tsx's existing
+// productFeatures.rawJson-gated debug panel, the only place this may render.
+export interface BackendChartmetricDiagnostics {
+  selectedForEnrichment: boolean;
+  spotifyIdPresent: boolean;
+  spotifyUrlPresent: boolean;
+  lookupAttempted: boolean;
+  status?: string;
+  skipReason?: string;
+  matchMethod?: string;
+  matchConfidence?: string;
+  metricsReturned: boolean;
+  cacheHit?: boolean;
+  finalAudienceRatio: number | null;
+  finalCommercialTier?: BackendCommercialTier;
+  scoreCoverage?: number;
+  scoreConfidence?: BackendCommercialScoreConfidence;
+}
+
 export interface BackendSimilarArtist {
   name: string;
   genres: string[];
@@ -94,10 +137,26 @@ export interface BackendSimilarArtist {
   artistTier: BackendArtistTier;
   totalRelevance: number;
   estimatedFollowers: number | null;
+  spotifyId?: string | null;
+  spotifyUrl?: string | null;
   spotify?: BackendSpotifyMetadata | null;
   imageUrl?: string | null;
   imageSource?: BackendImageSource;
   imageConfidence?: number | null;
+  // Musical/genre and scene-relevance signals (issue #48/#201) — the "musical
+  // match" dimension, kept independently visible from the commercial-scale
+  // fields below rather than folded into a single ambiguous percentage.
+  genreRelevance: number;
+  sceneRelevance: number;
+  // Issue #201: additive Chartmetric-informed commercial-scale fields.
+  commercialTier?: BackendCommercialTier;
+  commercialAbsoluteScale?: BackendCommercialAbsoluteScale;
+  commercialScore?: number | null;
+  commercialScoreCoverage?: number;
+  commercialScoreConfidence?: BackendCommercialScoreConfidence;
+  commercialScoreBreakdown?: BackendCommercialScoreBreakdown;
+  commercialScoreExplanation?: string;
+  chartmetricDiagnostics?: BackendChartmetricDiagnostics;
 }
 
 export interface BackendOpportunityRelatedArtist {

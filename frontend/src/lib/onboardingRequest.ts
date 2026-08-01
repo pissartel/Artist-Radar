@@ -1,4 +1,3 @@
-import { productFeatures } from "@/lib/productFeatures";
 import type { ArtistRadarRequest } from "@/types/artistRadar";
 import type { OnboardingFormData } from "@/types";
 
@@ -32,10 +31,14 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
   }
 
   const spotifyUrl = onboarding.spotifyUrl?.trim();
-  // Only ever sent when the preview/dev-only toggle is both rendered and
-  // checked (issue #142) — in production productFeatures.chartmetricToggle
-  // is always false, so this stays omitted regardless of stored form data.
-  const chartmetricArtistEnrichment = productFeatures.chartmetricToggle && onboarding.useChartmetricEnrichment === true;
+  // Only ever sent when the checkbox was both server-verified visible for
+  // this request AND checked (issue #142 follow-up). `chartmetricToggleVisible`
+  // is a snapshot of the server-derived `showChartmetricToggle` prop
+  // recorded at form-render time (see lib/server/chartmetricToggle.ts) — in
+  // production it is always false, so this stays omitted regardless of
+  // stored form data, even if `useChartmetricEnrichment` were somehow true.
+  const chartmetricArtistEnrichment =
+    onboarding.chartmetricToggleVisible === true && onboarding.useChartmetricEnrichment === true;
 
   return {
     artistName,

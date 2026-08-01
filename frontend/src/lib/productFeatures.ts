@@ -16,23 +16,20 @@
  */
 const debugUIEnabled = process.env.NEXT_PUBLIC_ENABLE_DEBUG_UI === "true";
 
-// Issue #142: the Chartmetric audience-enrichment preview toggle must only
-// ever be shown in preview/development, never to standard production
-// users — same "explicit opt-in env var, safe-hidden default" shape as
-// debugUIEnabled above, kept as its own flag since a environment may want
-// debug UI without Chartmetric (or vice versa).
-const chartmetricToggleEnabled = process.env.NEXT_PUBLIC_ENABLE_CHARTMETRIC_TOGGLE === "true";
+// Issue #142 follow-up: the Chartmetric audience-enrichment preview toggle's
+// visibility is NOT computed here. A plain `NEXT_PUBLIC_ENABLE_CHARTMETRIC_TOGGLE
+// === "true"` check would let a stray/misconfigured env var show the
+// checkbox in production, since this module is bundled into client code and
+// has no way to robustly tell production apart from preview/development at
+// runtime in the browser. Use `isChartmetricToggleVisible()` from
+// `lib/server/chartmetricToggle.ts` instead, from a Server Component, and
+// pass the result down as a prop — see that file for the full rationale.
 
 export const productFeatures = {
   // Debug/diagnostic surfaces — developer-facing raw data, hidden from
   // production users.
   rawJson: debugUIEnabled,
   debugWarnings: debugUIEnabled,
-
-  // Preview/development-only toggle letting a tester opt this one request
-  // into Chartmetric audience enrichment (issue #142). Never set this env
-  // var in production.
-  chartmetricToggle: chartmetricToggleEnabled,
 
   // Product surfaces that exist in the codebase but aren't finished —
   // hidden regardless of debug mode until they have real functionality.

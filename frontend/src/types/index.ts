@@ -358,10 +358,18 @@ export interface OnboardingFormData {
   secondaryGenres: string;
   targetLocation: string;
   mainGoal: MainGoal;
-  // Preview/development-only toggle (issue #142); only ever read/rendered
-  // when productFeatures.chartmetricToggle is enabled. Left `false` by
+  // Preview/development-only toggle (issue #142); the checkbox that sets
+  // this only ever renders when the server-derived `showChartmetricToggle`
+  // prop is true (see lib/server/chartmetricToggle.ts). Left `false` by
   // default so it's a no-op everywhere else.
   useChartmetricEnrichment: boolean;
+  // Snapshot of that same server-derived visibility, recorded at form-render
+  // time and replayed by onboardingRequest.ts. Lets the later, purely
+  // client-side request-construction step confirm this request was
+  // genuinely eligible to show the checkbox before including the
+  // Chartmetric feature field, instead of re-deriving (and potentially
+  // getting wrong) an environment check in the browser.
+  chartmetricToggleVisible: boolean;
 }
 
 export interface DashboardData {

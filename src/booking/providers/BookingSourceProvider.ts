@@ -30,6 +30,11 @@ import {
   getNativeFetchSceneAgendaStatus,
   type NativeFetchSceneAgendaEnv
 } from "./NativeFetchSceneAgendaProvider.js";
+import {
+  buildConcerts50BookingSourceProvider,
+  getConcerts50ProviderStatus,
+  type Concerts50BookingSourceProviderEnv
+} from "./Concerts50BookingSourceProvider.js";
 import { buildSimilarArtistLiveHistoryBookingSourceProvider } from "./SimilarArtistLiveHistoryBookingSourceProvider.js";
 import { buildVenueDiscoveryBookingSourceProvider } from "./VenueDiscoveryBookingSourceProvider.js";
 import { buildWebSearchBookingSourceProvider } from "./WebSearchBookingSourceProvider.js";
@@ -71,6 +76,7 @@ export interface DefaultBookingProviderEnv extends
   MusicBrainzArtistEventHistoryProviderEnv,
   SceneAgendaProviderEnv,
   NativeFetchSceneAgendaEnv,
+  Concerts50BookingSourceProviderEnv,
   FirecrawlBookingEnv,
   TicketmasterBookingProviderEnv,
   OpenAIWebSearchConcertProviderEnv {
@@ -152,6 +158,13 @@ export function buildDefaultBookingSourceProviders(
     providers.push(buildNativeFetchSceneAgendaProvider({ env, fetchImpl }));
   }
 
+  // Concerts50 (issue #210): builds its own listing URL from country/city/
+  // genre and fetches natively, so it also runs regardless of web search
+  // provider availability. Off by default (ENABLE_CONCERTS50).
+  if (getConcerts50ProviderStatus(env).enabled) {
+    providers.push(buildConcerts50BookingSourceProvider({ env, fetchImpl }));
+  }
+
   providers.push(
     buildOpenAgendaBookingSourceProvider({ env, fetchImpl }),
     buildFirecrawlBookingSourceProvider(env, fetchImpl)
@@ -186,6 +199,7 @@ function logBookingProviderStartup(env: DefaultBookingProviderEnv): void {
   const sceneAgendas = getSceneAgendaProviderStatus(env);
   const sceneSources = getSceneAgendaSourceStatuses(env);
   const nativeFetch = getNativeFetchSceneAgendaStatus(env);
+  const concerts50 = getConcerts50ProviderStatus(env);
   const tavily = getTavilyBookingStatus(env);
   const exa = getExaBookingStatus(env);
   const jina = getJinaReaderStatus(env);
@@ -201,6 +215,7 @@ function logBookingProviderStartup(env: DefaultBookingProviderEnv): void {
     `- SceneAgendas: ${sceneAgendas.enabled ? "enabled" : "disabled"} (${sceneAgendas.reason})`,
     ...sceneSources.map((status) => `- ${status.label}: ${status.enabled ? "enabled" : "disabled"} (${status.reason})`),
     `- NativeFetchAgendas: ${nativeFetch.enabled ? "enabled" : "disabled"} (${nativeFetch.reason})`,
+    `- Concerts50: ${concerts50.enabled ? "enabled" : "disabled"} (${concerts50.reason})`,
     `- Tavily: ${tavily.enabled ? "enabled" : "disabled"} (${tavily.reason})`,
     `- Exa: ${exa.enabled ? "enabled" : "disabled"} (${exa.reason})`,
     `- JinaReader: ${jina.enabled ? "enabled" : "disabled"} (${jina.reason})`,

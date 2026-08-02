@@ -35,6 +35,10 @@ import type {
   ArtistEnrichmentProvider,
   ArtistEnrichmentResult
 } from "./features/artist-enrichment/chartmetric/chartmetric.types.js";
+import {
+  enrichSimilarArtistsWithChartmetric,
+  type SimilarArtistCandidateEnrichmentProvider
+} from "./modules/similarArtistCommercialEnrichment.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
@@ -67,6 +71,10 @@ export interface RunOpportunitySearchOptions {
   // Test/DI seam for the Chartmetric provider; defaults to a real
   // ChartmetricArtistEnrichmentProvider bound to this request's toggle.
   chartmetricProvider?: ArtistEnrichmentProvider;
+  // Test/DI seam for the similar-artist-candidate Chartmetric batch
+  // enrichment (issue #201); defaults to a real
+  // ChartmetricSimilarArtistEnrichmentService bound to the same toggle.
+  chartmetricSimilarArtistProvider?: SimilarArtistCandidateEnrichmentProvider;
 }
 
 export interface OpportunitySearchRunResult {
@@ -149,9 +157,30 @@ export async function runOpportunitySearch(
       musicBrainzSearch: options.musicBrainzSearch,
       seedCandidates: options.seedCandidates
     });
-    const groupedSimilarArtists = groupSimilarArtistsByTier(similarArtists);
+    // Chartmetric enrichment (issue #201) must never change which similar
+    // artists the live-search pipeline (concert history, booking search,
+    // label discovery) uses — this exact array, in this exact order, is the
+    // one and only copy those consumers see from here on. `groupedSimilarArtists`
+    // below is a *separate*, additively-enriched-and-regrouped copy used only
+    // for the result exposed to the frontend/commercial scoring; it must never
+    // be flattened back and fed into live discovery in its place.
+    const similarArtistsForLiveSearch = similarArtists;
+    debugLog("chartmetric", "similar artists before enrichment", summarizeSimilarArtistOrdering(similarArtists));
+    const groupedSimilarArtists = await enrichSimilarArtistsWithChartmetricSafely(
+      groupSimilarArtistsByTier(similarArtists),
+      profile,
+      chartmetric,
+      options.chartmetricSimilarArtistProvider,
+      options.features?.chartmetricArtistEnrichment
+    );
+    debugLog(
+      "chartmetric",
+      "similar artists after enrichment (UI/commercial-scoring copy only — not used for live discovery)",
+      summarizeSimilarArtistOrdering(flattenSimilarArtists(groupedSimilarArtists))
+    );
+    debugLog("chartmetric", "artists passed to live discovery (concert history, booking search, label discovery)", summarizeSimilarArtistOrdering(similarArtistsForLiveSearch));
     const similarArtistConcerts = await findSimilarArtistConcertsSafely(
-      flattenSimilarArtists(groupedSimilarArtists),
+      similarArtistsForLiveSearch,
       options.artistConcertProviders
     );
     track("SEARCHING_OPPORTUNITIES");
@@ -164,7 +193,6 @@ export async function runOpportunitySearch(
     await gatherSearchContext(input);
 
     if (input.mode === "booking") {
-      const flattenedSimilarArtists = flattenSimilarArtists(groupedSimilarArtists);
       const bookingSearch = await searchBookingOpportunities({
         artist: input.artist,
         city: input.city,
@@ -173,11 +201,21 @@ export async function runOpportunitySearch(
         links: input.links,
         limit: input.limit,
         artistProfile: profile,
-        similarArtists: flattenedSimilarArtists
+        similarArtists: similarArtistsForLiveSearch
       }, options.bookingSearchOptions);
       debugLog("pipeline", "runOpportunitySearch booking provider summary", {
         providerCount: bookingSearch.sourceMetadata.length,
+        // Result count by provider (issue #201 follow-up diagnostics) —
+        // targetCount is each provider's raw, pre-validation candidate count;
+        // compare against the final opportunitiesCount below to see how much
+        // was filtered/deduped/scored away overall.
+        targetCountByProvider: bookingSearch.sourceMetadata.map((source) => ({
+          provider: source.sourceProvider,
+          targetCount: source.targetCount
+        })),
         targetsCount: bookingSearch.targets.length,
+        opportunitiesBeforeValidation: bookingSearch.targets.length,
+        opportunitiesAfterValidation: bookingSearch.opportunities.length,
         opportunitiesCount: bookingSearch.opportunities.length,
         warningsCount: bookingSearch.warnings.length
       });
@@ -189,7 +227,7 @@ export async function runOpportunitySearch(
         target: input.target,
         limit: input.limit,
         artistProfile: profile,
-        similarArtists: flattenedSimilarArtists
+        similarArtists: similarArtistsForLiveSearch
       }, options.labelDiscoveryOptions);
       track("SCORING_RESULTS");
       track("PREPARING_OVERVIEW");
@@ -301,6 +339,35 @@ async function runChartmetricEnrichmentSafely(
   }
 }
 
+// Similar-artist-candidate Chartmetric enrichment (issue #201) is an
+// additive, best-effort reranking step: ChartmetricSimilarArtistEnrichmentService
+// already guarantees enrichCandidates() never throws, but a misbehaving
+// injected test/DI provider (or a bug in the reranking/regrouping logic
+// itself) must still never take down the existing similar-artist discovery
+// output — on any failure this degrades to the original, unenriched groups.
+async function enrichSimilarArtistsWithChartmetricSafely(
+  groupedSimilarArtists: SimilarArtistsByTier,
+  profile: ArtistProfile,
+  mainArtistChartmetric: ArtistEnrichmentResult,
+  provider: SimilarArtistCandidateEnrichmentProvider | undefined,
+  requestToggleEnabled: boolean | undefined
+): Promise<SimilarArtistsByTier> {
+  try {
+    return await enrichSimilarArtistsWithChartmetric({
+      profile,
+      similarArtists: groupedSimilarArtists,
+      mainArtistChartmetric,
+      requestToggleEnabled,
+      provider
+    });
+  } catch (error) {
+    warnLog("chartmetric", "similar-artist candidate enrichment failed and was skipped", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+    return groupedSimilarArtists;
+  }
+}
+
 function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpportunity): Opportunity {
   return {
     name: opportunity.name,
@@ -350,6 +417,16 @@ export function flattenSimilarArtists(groups: SimilarArtistsByTier): SimilarArti
     ...groups.to_verify,
     ...groups.unknown
   ];
+}
+
+// Dev-only diagnostics (issue #201 follow-up: "make it possible to compare
+// Chartmetric enabled versus disabled"). Lists count/order/identity, never
+// the full artist payload.
+function summarizeSimilarArtistOrdering(artists: SimilarArtist[]): { count: number; order: Array<{ name: string; spotifyId: string | null }> } {
+  return {
+    count: artists.length,
+    order: artists.map((artist) => ({ name: artist.name, spotifyId: artist.spotifyId }))
+  };
 }
 
 // A failure enriching similar artists with concert history must never fail

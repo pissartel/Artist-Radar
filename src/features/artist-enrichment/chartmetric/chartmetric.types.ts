@@ -52,6 +52,9 @@ export type ChartmetricSkipReason =
   | "authentication_error"
   | "malformed_response"
   | "unexpected_error"
+  // Issue #201: candidate ranked outside the configurable top-N enriched
+  // this analysis run — a cost control, not a match/data failure.
+  | "not_selected_for_enrichment"
   | (string & {});
 
 // Minimum audience data required to later compute
@@ -119,4 +122,59 @@ export interface ArtistEnrichmentResult {
 // later without changing call sites.
 export interface ArtistEnrichmentProvider {
   enrichArtist(input: ArtistEnrichmentInput): Promise<ArtistEnrichmentResult>;
+}
+
+// Issue #201: similar-artist candidates get a wider (still best-effort)
+// slice of Chartmetric data than the phase-1 main-artist enrichment above —
+// used to separate musical similarity (existing genre/scene scoring) from
+// commercial-scale similarity. Every field here follows the same rule as
+// ChartmetricAudienceMetrics: absent/unreported means "unavailable", never
+// coerced to 0.
+export interface ChartmetricSocialAudienceMetrics {
+  instagramFollowers?: number;
+  tiktokFollowers?: number;
+  youtubeSubscribers?: number;
+  facebookFollowers?: number;
+  twitterFollowers?: number;
+}
+
+export interface ChartmetricCandidateMetrics extends ChartmetricAudienceMetrics {
+  // Chartmetric's own composite popularity score for the artist (cm_artist_score),
+  // when the API reports one.
+  chartmetricArtistScore?: number;
+  // Percent change in Spotify monthly listeners over the trailing window
+  // (see CANDIDATE_GROWTH_WINDOW_DAYS in chartmetric.mapper.ts), positive for growth.
+  listenerGrowthPercent?: number;
+  // Percent change in Spotify followers over the same trailing window.
+  followerGrowthPercent?: number;
+  socialAudience?: ChartmetricSocialAudienceMetrics;
+  // Discovery-surface signal: how much current playlist placement is driving
+  // exposure for this artist. Chartmetric-specific composite, left undefined
+  // when the API doesn't report it rather than guessed at.
+  playlistReachScore?: number;
+  totalCurrentPlaylists?: number;
+  // Chartmetric's own artist-to-artist relationship score between this
+  // candidate and the main analyzed artist, only populated when Chartmetric's
+  // similar-artists endpoint reports the main artist among this candidate's
+  // (or vice versa) neighbours.
+  neighbouringArtistScore?: number;
+}
+
+// One candidate's end-to-end Chartmetric enrichment outcome. Mirrors
+// ArtistEnrichmentResult's shape/guarantees (never thrown, always one of
+// these statuses) but is keyed to a specific similar-artist candidate rather
+// than the single main-artist call.
+export interface SimilarArtistCandidateEnrichmentResult {
+  provider: "chartmetric";
+  candidateName: string;
+  status: ChartmetricEnrichmentStatus;
+  reason?: ChartmetricSkipReason;
+  matchMethod?: ArtistMatchMethod;
+  matchConfidence?: ArtistMatchConfidence;
+  metrics?: ChartmetricCandidateMetrics;
+  // Issue #201 diagnostics: whether the identity match was served from
+  // ChartmetricIdentityCache instead of a fresh API call. Undefined when the
+  // candidate never reached the identity-lookup step at all (e.g. skipped
+  // before enrichment was attempted).
+  cacheHit?: boolean;
 }

@@ -67,12 +67,74 @@ export interface KpiMetric {
 
 export type ArtistTier = "emerging" | "rising" | "established" | "headliner";
 
+// Issue #201: the candidate's commercial-scale *relationship* to the
+// analyzed artist — deliberately distinct from its own absolute career
+// stage (CommercialAbsoluteScale below). "scale_unknown" is the required,
+// honest outcome whenever no reliable audience-size comparison exists; it
+// must never be displayed as if it were a known relationship.
+export type CommercialTier =
+  | "same_level"
+  | "slightly_larger"
+  | "aspirational"
+  | "major_reference"
+  | "local_compatible_artist"
+  | "scale_unknown";
+
+// The candidate's own absolute career stage/scale, independent of how it
+// compares to the analyzed artist. "major" is only ever assigned from real
+// audience numbers (Chartmetric or Spotify), never guessed.
+export type CommercialAbsoluteScale = "emerging" | "developing" | "established" | "major" | "unknown";
+
+export type CommercialScoreConfidence = "high" | "medium" | "low" | "unavailable";
+
+// Dev-only diagnostics (issue #201 "Verify Chartmetric execution") — only
+// ever rendered behind useProductFeatures().debugUIVisible (see
+// components/dashboard/SimilarArtistDetail.tsx's existing debug panel),
+// never shown to standard production users and never branded/worded as a
+// specific provider outside that debug surface.
+export interface ChartmetricDiagnostics {
+  selectedForEnrichment: boolean;
+  spotifyIdPresent: boolean;
+  spotifyUrlPresent: boolean;
+  lookupAttempted: boolean;
+  status?: string;
+  skipReason?: string;
+  matchMethod?: string;
+  matchConfidence?: string;
+  metricsReturned: boolean;
+  cacheHit?: boolean;
+  finalAudienceRatio: number | null;
+  finalCommercialTier?: CommercialTier;
+  scoreCoverage?: number;
+  scoreConfidence?: CommercialScoreConfidence;
+}
+
+// Each field is null when its underlying audience-size/Chartmetric data is
+// unavailable — never coerced to a neutral 50, which is what produced
+// identical-looking scores for different, genuinely under-resolved artists.
+export interface CommercialScoreBreakdown {
+  genreCompatibility: number;
+  audienceSimilarity: number | null;
+  careerStageSimilarity: number | null;
+  geographicRelevance: number;
+  recentActivity: number | null;
+  crossPlatformEvidence: number;
+}
+
 export interface SimilarArtist {
   id: string;
   name: string;
   genres: string[];
   location: string;
+  // Overall/booking relevance score (existing issue #48 musical+scene+size
+  // signal, unrelated to Chartmetric). Kept for backward compatibility —
+  // UI surfaces must label this "Overall relevance", never present it as
+  // the Chartmetric commercial-scale match.
   matchScore: number;
+  // Musical-genre-compatibility percentage (issue #201: "musical match"),
+  // independent of and always visible regardless of commercial-scale data
+  // availability.
+  musicalMatchScore?: number;
   reason?: string;
   artistTier?: ArtistTier;
   platforms?: Platform[];
@@ -81,6 +143,15 @@ export interface SimilarArtist {
   imageConfidence?: number | null;
   monthlyListeners?: number;
   spotify?: SpotifyMetadata;
+  // Issue #201: additive Chartmetric-informed commercial-scale fields.
+  commercialTier?: CommercialTier;
+  commercialAbsoluteScale?: CommercialAbsoluteScale;
+  commercialScore?: number | null;
+  commercialScoreCoverage?: number;
+  commercialScoreConfidence?: CommercialScoreConfidence;
+  commercialScoreBreakdown?: CommercialScoreBreakdown;
+  commercialScoreExplanation?: string;
+  chartmetricDiagnostics?: ChartmetricDiagnostics;
   // Future fields expected from the similar-artist pipeline (not yet populated in V1):
   matchReasons?: string[];
   sharedGenres?: string[];

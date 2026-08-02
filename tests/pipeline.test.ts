@@ -452,6 +452,56 @@ describe("runOpportunitySearch", () => {
     expect(finalState?.percentage).toBe(100);
   });
 
+  // Issue #201 follow-up regression: a real event's image/poster and
+  // readable title must survive end to end through the full backend
+  // pipeline (booking-search normalization -> legacy Opportunity mapping),
+  // not just at the frontend mapping boundary.
+  it("preserves an event opportunity's imageUrl and readable title through the complete backend pipeline", async () => {
+    const provider = {
+      providerName: "test_image_title_provider",
+      async search() {
+        return {
+          sourceProvider: "test_image_title_provider",
+          searchedQueries: [],
+          warnings: [],
+          metadata: {},
+          targets: [
+            {
+              name: "The Slugz at La Maroquinerie",
+              category: "event" as const,
+              city: "Paris",
+              country: "France",
+              description: "Live show.",
+              sourceUrl: "https://example.test/the-slugz-maroquinerie",
+              sourceType: "event_page" as const,
+              genres: ["metalcore"],
+              estimatedCapacity: null,
+              estimatedArtistTier: null,
+              venueName: "La Maroquinerie",
+              imageUrl: "https://images.example.test/the-slugz-poster.jpg",
+              eventDate: "2026-09-12",
+              contacts: [],
+              confidence: 0.8,
+              evidence: []
+            }
+          ]
+        };
+      }
+    };
+
+    const result = await runOpportunitySearch(input, {
+      generator: generatorReturning(validResult),
+      seedCandidates: [],
+      bookingSearchOptions: { providers: [provider] }
+    });
+
+    const opportunity = result.opportunities.find((o) => o.source_url === "https://example.test/the-slugz-maroquinerie");
+    expect(opportunity).toBeDefined();
+    expect(opportunity!.imageUrl).toBe("https://images.example.test/the-slugz-poster.jpg");
+    expect(opportunity!.name).toBe("The Slugz at La Maroquinerie");
+    expect(opportunity!.name).not.toMatch(/concerts in|music events|gigs.*tickets/i);
+  });
+
   it("exposes a recoverable failed stage when the pipeline throws, without leaving the state stuck mid-run", async () => {
     const executionId = `fail-${crypto.randomUUID()}`;
     const generator: OpportunityGenerator = {

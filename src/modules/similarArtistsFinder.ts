@@ -382,10 +382,29 @@ async function enrichSimilarArtistsWithSpotify(
       }
     }
 
-    const spotifyMetadata = profile ? toSpotifyMetadata(profile) : null;
+    if (!profile) {
+      // Never overwrite an already-known identity/image (e.g. populated at
+      // discovery time from a Spotify search/related-artists result, or
+      // survived consolidation) with null just because this particular
+      // backfill lookup found nothing new — issue #201 follow-up: "never
+      // overwrite a non-empty value with null, undefined or an empty value."
+      enriched.push(artist);
+      continue;
+    }
+
+    const spotifyMetadata = toSpotifyMetadata(profile);
     const resolvedImage = resolveArtistImage({ spotify: spotifyMetadata });
     enriched.push({
       ...artist,
+      // Keep the top-level spotifyId/spotifyUrl scalar fields in sync with
+      // the nested `spotify` object — a candidate discovered without a
+      // Spotify identity (e.g. Last.fm-only) that this backfill successfully
+      // resolves by name must not end up with spotify.id set but the
+      // top-level spotifyId still null (issue #201 follow-up: preserve
+      // Spotify identity consistently, not just in one of two
+      // representations).
+      spotifyId: artist.spotifyId ?? spotifyMetadata.id,
+      spotifyUrl: artist.spotifyUrl ?? spotifyMetadata.url,
       spotify: spotifyMetadata,
       imageUrl: resolvedImage.imageUrl,
       imageSource: resolvedImage.imageSource,
@@ -396,7 +415,7 @@ async function enrichSimilarArtistsWithSpotify(
   return enriched;
 }
 
-function toSpotifyMetadata(profile: SpotifyArtistProfile): SimilarArtist["spotify"] {
+function toSpotifyMetadata(profile: SpotifyArtistProfile): NonNullable<SimilarArtist["spotify"]> {
   return {
     id: profile.id,
     url: profile.spotifyUrl,
@@ -744,10 +763,28 @@ function scoreDiscoveryCandidate(
     clampScore(sourceConfidence + evidenceBoost)
   );
   const possibleUse = possibleUseForBookingCategory(bookingCategory, artistTier, sceneRelevance);
+  // Preserve the Spotify identity/image already captured at discovery time
+  // (issue #201 follow-up) instead of relying solely on the later,
+  // credentials-gated, capped enrichSimilarArtistsWithSpotify() backfill —
+  // a candidate whose spotifyId/images survived consolidation must not lose
+  // its `spotify` object or image just because that backfill step fails,
+  // skips (missing credentials), or hits MAX_SPOTIFY_NAME_SEARCH_LOOKUPS.
+  const resolvedSpotifyUrl = candidate.spotifyUrl ?? (candidate.source.startsWith("spotify") ? candidate.url : null);
+  const spotifyMetadata = candidate.spotifyId
+    ? {
+        id: candidate.spotifyId,
+        url: resolvedSpotifyUrl,
+        imageUrl: candidate.images?.[0] ?? null,
+        followers: candidate.followersCount ?? null,
+        popularity: candidate.popularity ?? null,
+        genres: candidate.genres
+      }
+    : null;
+  const resolvedImage = resolveArtistImage({ spotify: spotifyMetadata });
   const artist = SimilarArtistSchema.parse({
     name: candidate.name,
     url: candidate.url ?? candidate.spotifyUrl ?? candidate.instagramUrl ?? candidate.youtubeUrl ?? null,
-    spotifyUrl: candidate.spotifyUrl ?? (candidate.source.startsWith("spotify") ? candidate.url : null),
+    spotifyUrl: resolvedSpotifyUrl,
     spotifyId: candidate.spotifyId ?? null,
     instagramUrl: candidate.instagramUrl ?? null,
     instagramHandle: candidate.instagramHandle ?? null,
@@ -789,7 +826,11 @@ function scoreDiscoveryCandidate(
     popularity: buildPopularitySummary(candidate, artistTier),
     discardedTags,
     matchedQuery: candidate.matchedQuery ?? null,
-    searchRelevanceBoost: candidate.source === "spotify_search" && candidate.matchedQuery ? 20 : 0
+    searchRelevanceBoost: candidate.source === "spotify_search" && candidate.matchedQuery ? 20 : 0,
+    spotify: spotifyMetadata,
+    imageUrl: resolvedImage.imageUrl,
+    imageSource: resolvedImage.imageSource,
+    imageConfidence: resolvedImage.imageConfidence
   });
 
   const rejectionReason = determineDiscoveryRejectionReason(

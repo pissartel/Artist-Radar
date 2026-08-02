@@ -1,15 +1,8 @@
 import Link from "next/link";
 import type { SimilarArtist } from "@/types";
-import { formatGenrePreview, formatMonthlyListeners } from "@/lib/similarArtist";
+import { formatGenrePreview, formatMonthlyListeners, getCommercialTierLabel, getScaleFitLabel } from "@/lib/similarArtist";
 import MatchScoreBadge from "@/components/common/MatchScoreBadge";
 import Card, { cardClassName } from "@/components/ui/Card";
-
-export const TIER_LABELS: Record<string, string> = {
-  emerging: "Emerging",
-  rising: "Rising",
-  established: "Established",
-  headliner: "Headliner",
-};
 
 export const PLATFORM_LABELS: Record<string, string> = {
   spotify: "Spotify",
@@ -115,7 +108,7 @@ export default function SimilarArtistCard({
             </p>
           </div>
         </div>
-        <MatchScoreBadge score={artist.matchScore} className="flex-shrink-0" />
+        <MatchScoreBadge score={artist.matchScore} label="overall" className="flex-shrink-0" />
       </div>
 
       <div className="flex flex-wrap gap-1" title={artist.genres.join(", ")}>
@@ -132,12 +125,34 @@ export default function SimilarArtistCard({
             +{hiddenGenreCount}
           </span>
         )}
-        {artist.artistTier && (
-          <span className="text-[10px] text-accent-text bg-accent-tint border border-accent-tint px-1.5 py-0.5 rounded-md">
-            {TIER_LABELS[artist.artistTier] ?? artist.artistTier}
-          </span>
-        )}
+        {/* Commercial-scale *relationship* to the analyzed artist (issue
+            #201) — always rendered, including "Scale unknown", rather than
+            the old artistTier badge which silently mislabeled missing data
+            as "Emerging". */}
+        <span className="text-[10px] text-accent-text bg-accent-tint border border-accent-tint px-1.5 py-0.5 rounded-md">
+          {getCommercialTierLabel(artist.commercialTier)}
+        </span>
       </div>
+
+      {/* Musical similarity, commercial scale fit, and overall/booking
+          relevance are three distinct signals (issue #201) — never
+          collapsed into one ambiguous percentage. */}
+      <dl className="grid grid-cols-3 gap-2 text-center">
+        <div>
+          <dt className="text-[9px] uppercase tracking-widest text-foreground-muted">Musical match</dt>
+          <dd className="text-xs font-semibold text-foreground mt-0.5">
+            {artist.musicalMatchScore !== undefined ? `${artist.musicalMatchScore}%` : "—"}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[9px] uppercase tracking-widest text-foreground-muted">Scale fit</dt>
+          <dd className="text-xs font-semibold text-foreground mt-0.5">{getScaleFitLabel(artist.commercialTier)}</dd>
+        </div>
+        <div>
+          <dt className="text-[9px] uppercase tracking-widest text-foreground-muted">Overall relevance</dt>
+          <dd className="text-xs font-semibold text-foreground mt-0.5">{artist.matchScore}%</dd>
+        </div>
+      </dl>
 
       {artist.reason && (
         <p className="text-xs text-foreground-secondary leading-relaxed">{artist.reason}</p>

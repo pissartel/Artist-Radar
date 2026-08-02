@@ -52,6 +52,32 @@ export interface ChartmetricArtistStatsRaw {
   history: ChartmetricArtistStatPoint[];
 }
 
+// Issue #201: best-effort fields beyond phase-1's Spotify-only scope.
+// Chartmetric's artist-metadata response shape for score/social follower
+// counts isn't exercised against a live account in this codebase, so
+// parsing below is deliberately defensive — any field it can't confidently
+// read is left undefined (never guessed at) rather than risk attaching the
+// wrong number to an artist.
+export interface ChartmetricArtistScoreAndSocialRaw {
+  chartmetricArtistScore?: number;
+  instagramFollowers?: number;
+  tiktokFollowers?: number;
+  youtubeSubscribers?: number;
+  facebookFollowers?: number;
+  twitterFollowers?: number;
+}
+
+export interface ChartmetricPlaylistReachRaw {
+  playlistReachScore?: number;
+  totalCurrentPlaylists?: number;
+}
+
+export interface ChartmetricSimilarArtistRaw {
+  id: number;
+  name: string;
+  score?: number;
+}
+
 export interface ChartmetricRequestOutcome<T> {
   data: T;
   // Credits Chartmetric reported spending on this call, when the API
@@ -96,6 +122,32 @@ export class ChartmetricClient {
     const query = sinceDays > 0 ? `?since=${sinceDays}d` : "";
     return this.request(`/api/artist/${encodeURIComponent(chartmetricArtistId)}/stat/spotify${query}`, (payload) =>
       parseArtistStats(payload)
+    );
+  }
+
+  // Issue #201 scope item: Chartmetric artist score + available social
+  // audience metrics. Best-effort — a missing/unparseable field here should
+  // never fail the caller, so every field of the parsed result is optional.
+  async getArtistScoreAndSocial(chartmetricArtistId: string): Promise<ChartmetricRequestOutcome<ChartmetricArtistScoreAndSocialRaw>> {
+    return this.request(`/api/artist/${encodeURIComponent(chartmetricArtistId)}`, (payload) =>
+      parseArtistScoreAndSocial(payload)
+    );
+  }
+
+  // Issue #201 scope item: playlist reach / discovery-surface signal.
+  async getArtistPlaylistReach(chartmetricArtistId: string): Promise<ChartmetricRequestOutcome<ChartmetricPlaylistReachRaw>> {
+    return this.request(`/api/artist/${encodeURIComponent(chartmetricArtistId)}/playlists/current/stats`, (payload) =>
+      parsePlaylistReach(payload)
+    );
+  }
+
+  // Issue #201 scope item: "neighbouring-artist relationship or score, if
+  // available through the API." Not guaranteed to exist for every artist;
+  // callers must treat an empty/missing result as unavailable, not as "no
+  // relationship."
+  async getSimilarArtists(chartmetricArtistId: string): Promise<ChartmetricRequestOutcome<ChartmetricSimilarArtistRaw[]>> {
+    return this.request(`/api/artist/${encodeURIComponent(chartmetricArtistId)}/similar-artists`, (payload) =>
+      parseSimilarArtists(payload)
     );
   }
 
@@ -303,6 +355,68 @@ function parseStatPoint(entry: unknown): ChartmetricArtistStatPoint | null {
 
 function toFiniteNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+// Chartmetric's artist-metadata payload reports social follower counts under
+// per-platform keys that vary by API version; check the known aliases and
+// take the first finite number found, leaving the field undefined otherwise.
+function firstFiniteField(record: Record<string, unknown>, keys: string[]): number | undefined {
+  for (const key of keys) {
+    const value = toFiniteNumber(record[key]);
+    if (value !== undefined) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function parseArtistScoreAndSocial(payload: unknown): ChartmetricArtistScoreAndSocialRaw {
+  const obj = extractObj(payload) as Record<string, unknown> | null;
+  if (!obj) {
+    return {};
+  }
+  return {
+    chartmetricArtistScore: firstFiniteField(obj, ["cm_artist_score", "cmArtistScore", "chartmetric_score"]),
+    instagramFollowers: firstFiniteField(obj, ["ins_followers", "instagram_followers", "instagramFollowers"]),
+    tiktokFollowers: firstFiniteField(obj, ["tiktok_followers", "tiktokFollowers"]),
+    youtubeSubscribers: firstFiniteField(obj, ["youtube_subscribers", "youtubeSubscribers"]),
+    facebookFollowers: firstFiniteField(obj, ["facebook_followers", "facebookFollowers"]),
+    twitterFollowers: firstFiniteField(obj, ["twitter_followers", "twitterFollowers"])
+  };
+}
+
+function parsePlaylistReach(payload: unknown): ChartmetricPlaylistReachRaw {
+  const obj = extractObj(payload) as Record<string, unknown> | null;
+  if (!obj) {
+    return {};
+  }
+  return {
+    playlistReachScore: firstFiniteField(obj, ["playlist_reach_score", "playlistReachScore", "reach_score"]),
+    totalCurrentPlaylists: firstFiniteField(obj, ["num_playlists", "total_playlists", "totalCurrentPlaylists"])
+  };
+}
+
+function parseSimilarArtists(payload: unknown): ChartmetricSimilarArtistRaw[] {
+  if (typeof payload !== "object" || payload === null) {
+    return [];
+  }
+  const objRecord = payload as Record<string, unknown>;
+  const list = Array.isArray(objRecord.obj) ? objRecord.obj : [];
+  return list
+    .map((entry) => {
+      if (typeof entry !== "object" || entry === null) {
+        return null;
+      }
+      const record = entry as Record<string, unknown>;
+      const id = record.id;
+      const name = record.name;
+      if (typeof id !== "number" || typeof name !== "string") {
+        return null;
+      }
+      const score = toFiniteNumber(record.score ?? record.similarity ?? record.weight);
+      return { id, name, ...(score !== undefined ? { score } : {}) };
+    })
+    .filter((entry): entry is ChartmetricSimilarArtistRaw => entry !== null);
 }
 
 function extractObj(payload: unknown): { id?: unknown; name?: unknown; code2?: unknown } | null {

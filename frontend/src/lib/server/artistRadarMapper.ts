@@ -19,11 +19,16 @@ import type {
   BackendSimilarArtist,
 } from "./backendTypes";
 
-const ARTIST_TIER_MAP: Record<BackendArtistTier, ArtistTier> = {
+// "unknown" is intentionally absent: an unresolved tier must never be
+// displayed as if it were the smallest known tier (issue #201 root cause —
+// this exact mapping was why blink-182, whose size signals were sparse,
+// rendered as "Emerging" instead of showing no scale claim at all). See
+// mapSimilarArtist below, which omits `artistTier` entirely when the
+// backend value is "unknown" rather than falling back into this map.
+const ARTIST_TIER_MAP: Record<Exclude<BackendArtistTier, "unknown">, ArtistTier> = {
   small: "emerging",
   medium: "rising",
   large: "established",
-  unknown: "emerging",
 };
 
 const OPPORTUNITY_TYPE_MAP: Record<string, OpportunityType> = {
@@ -109,7 +114,7 @@ function mapArtistMetrics(profile: BackendArtistProfile, genres: string[]): Arti
 }
 
 function mapSimilarArtist(artist: BackendSimilarArtist): SimilarArtist {
-  const spotifyUrl = artist.spotify?.url ?? undefined;
+  const spotifyUrl = artist.spotify?.url ?? artist.spotifyUrl ?? undefined;
   const platforms: SimilarArtist["platforms"] = spotifyUrl ? [{ type: "spotify", url: spotifyUrl }] : [];
 
   return {
@@ -117,15 +122,29 @@ function mapSimilarArtist(artist: BackendSimilarArtist): SimilarArtist {
     name: artist.name,
     genres: artist.genres,
     location: joinLocation(artist.city, artist.country),
+    // Overall/booking relevance (issue #48) — must always be labeled
+    // "Overall relevance" wherever shown, never presented as the Chartmetric
+    // commercial-scale match (issue #201).
     matchScore: artist.totalRelevance,
+    musicalMatchScore: artist.genreRelevance,
     reason: artist.reason,
-    artistTier: ARTIST_TIER_MAP[artist.artistTier],
+    // "unknown" intentionally has no entry in ARTIST_TIER_MAP — omit the
+    // field entirely rather than mislabel an unresolved tier.
+    artistTier: artist.artistTier === "unknown" ? undefined : ARTIST_TIER_MAP[artist.artistTier],
     platforms,
     imageUrl: artist.imageUrl ?? undefined,
     imageSource: artist.imageSource ?? null,
     imageConfidence: artist.imageConfidence ?? null,
     monthlyListeners: artist.spotify?.followers ?? artist.estimatedFollowers ?? undefined,
     spotify: artist.spotify ?? undefined,
+    commercialTier: artist.commercialTier,
+    commercialAbsoluteScale: artist.commercialAbsoluteScale,
+    commercialScore: artist.commercialScore,
+    commercialScoreCoverage: artist.commercialScoreCoverage,
+    commercialScoreConfidence: artist.commercialScoreConfidence,
+    commercialScoreBreakdown: artist.commercialScoreBreakdown,
+    commercialScoreExplanation: artist.commercialScoreExplanation,
+    chartmetricDiagnostics: artist.chartmetricDiagnostics,
   };
 }
 

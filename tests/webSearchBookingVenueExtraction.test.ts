@@ -201,4 +201,70 @@ describe("WebSearchBookingSourceProvider — venue identity extraction (quai-m.f
     const result = await provider.search({ input, maxResults: 10 });
     expect(result.targets.some((t) => t.sourceUrl === "https://example.test/pop-punk-venue" && t.name === "Pop Punk Venue")).toBe(true);
   });
+
+  // Issue #201 follow-up regression: a Concerts50-style genre/city directory
+  // page must never itself become a venue, single-event, or support-slot
+  // opportunity — kept only as source evidence for its own individual
+  // event-detail links (Output B), which must still work normally.
+  it("never emits a listing/aggregator page itself as a venue or event opportunity, but still extracts its individual event-detail links", async () => {
+    const LISTING_URL = "https://concerts50.com/france/paris/g/punk";
+    const LISTING_HTML = `<!DOCTYPE html><html><head>
+  <title>Emo / Hardcore / Punk Concerts in Paris 2026-2027 | Music Events, Gigs & Tickets</title>
+</head><body>
+<header><img class="logo" src="/logo.png" alt="Concerts50"></header>
+<main>
+  <div class="event-card"><a href="https://concerts50.com/event/band-a">Band A</a><time datetime="2026-09-12">12 Sep 2026</time></div>
+  <div class="event-card"><a href="https://concerts50.com/event/band-b">Band B</a><time datetime="2026-10-03">3 Oct 2026</time></div>
+  <div class="event-card"><a href="https://concerts50.com/event/band-c">Band C</a><time datetime="2026-11-20">20 Nov 2026</time></div>
+</main>
+</body></html>`;
+
+    const extractProvider: WebExtractProvider = {
+      providerName: "test-extract",
+      async extract(url) {
+        if (url === LISTING_URL) {
+          return {
+            url,
+            title: "Emo / Hardcore / Punk Concerts in Paris 2026-2027 | Music Events, Gigs & Tickets",
+            text: null,
+            markdown: null,
+            html: LISTING_HTML,
+            links: ["https://concerts50.com/event/band-a"],
+            sourceProvider: "test-extract",
+            statusCode: 200
+          };
+        }
+        if (url === "https://concerts50.com/event/band-a") {
+          return { url, title: "Band A", text: null, markdown: null, html: eventHtml("Band A", "2026-09-12"), links: [], sourceProvider: "test-extract", statusCode: 200 };
+        }
+        return null;
+      }
+    };
+
+    const provider = buildWebSearchBookingSourceProvider({
+      webSearchProvider: buildSearchProvider(LISTING_URL),
+      webExtractProvider: extractProvider,
+      maxExtractPages: 1
+    });
+
+    const result = await provider.search({ input, maxResults: 10 });
+
+    // The listing page's *scraped page content* (sourceType "official_site",
+    // built from extractVenuePageData's resolved identity) must never become
+    // a venue opportunity — this is the web-extract-derived path this fix
+    // covers. (A generic, unclassified "search_result"-tier raw source for
+    // the same URL may still exist from the raw search-result step upstream
+    // of any extraction — that generic search_result -> "venue" default
+    // fallback is a separate, pre-existing classifyCategory() behavior
+    // applying to every unclassified booking source across the whole
+    // pipeline, not something this fix changes.)
+    const scrapedPageTargets = result.targets.filter((t) => t.sourceUrl === LISTING_URL && t.sourceType === "official_site");
+    expect(scrapedPageTargets).toHaveLength(0);
+
+    // Its own individual event-detail link is still extracted normally.
+    const eventTarget = result.targets.find((t) => t.sourceUrl === "https://concerts50.com/event/band-a");
+    expect(eventTarget).toBeDefined();
+    expect(eventTarget!.category).toBe("event");
+    expect(eventTarget!.eventDate).toBe("2026-09-12");
+  });
 });

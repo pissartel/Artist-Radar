@@ -1,12 +1,20 @@
+"use client";
+
 import Link from "next/link";
 import type { Opportunity, SimilarArtist } from "@/types";
-import { PLATFORM_LABELS, TIER_LABELS } from "./SimilarArtistCard";
+import { PLATFORM_LABELS } from "./SimilarArtistCard";
 import MatchReasonsList from "./MatchReasonsList";
 import MatchScoreBadge from "@/components/common/MatchScoreBadge";
 import { formatOpportunityDate, getUrlHostname } from "@/lib/opportunity";
-import { formatMonthlyListeners, getSharedGenres } from "@/lib/similarArtist";
+import {
+  formatMonthlyListeners,
+  getCommercialExplanation,
+  getCommercialTierLabel,
+  getScaleFitLabel,
+  getSharedGenres,
+} from "@/lib/similarArtist";
 import { cardClassName as buildCardClassName } from "@/components/ui/Card";
-import { productFeatures } from "@/lib/productFeatures";
+import { useProductFeatures } from "@/components/providers/ProductFeaturesProvider";
 
 interface SimilarArtistDetailProps {
   artist: SimilarArtist;
@@ -29,6 +37,7 @@ export default function SimilarArtistDetail({
   referenceArtistGenres,
   relatedOpportunities,
 }: SimilarArtistDetailProps) {
+  const { debugUIVisible } = useProductFeatures();
   const reasons = artist.matchReasons ?? (artist.reason ? [artist.reason] : []);
   const sharedGenres = getSharedGenres(artist, referenceArtistGenres);
   const listeners = formatMonthlyListeners(artist.monthlyListeners);
@@ -66,11 +75,13 @@ export default function SimilarArtistDetail({
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold text-foreground">{artist.name}</h1>
-              {artist.artistTier && (
-                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md border text-accent-text bg-accent-tint border-accent-tint whitespace-nowrap">
-                  {TIER_LABELS[artist.artistTier] ?? artist.artistTier}
-                </span>
-              )}
+              {/* Commercial-scale *relationship* to the analyzed artist
+                  (issue #201) — always shown, including "Scale unknown",
+                  replacing the old artistTier badge that mislabeled missing
+                  data as "Emerging". */}
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md border text-accent-text bg-accent-tint border-accent-tint whitespace-nowrap">
+                {getCommercialTierLabel(artist.commercialTier)}
+              </span>
             </div>
             <p className="text-sm text-foreground-muted mt-1">
               {artist.location}
@@ -81,12 +92,35 @@ export default function SimilarArtistDetail({
         <MatchScoreBadge
           score={artist.matchScore}
           size="md"
-          label="match"
+          label="overall relevance"
           className="flex-shrink-0"
         />
       </div>
 
       <div className="mt-6 flex flex-col gap-4">
+        <div className={cardClassName}>
+          <SectionTitle>Musical match vs. commercial scale</SectionTitle>
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-foreground-muted">Musical match</p>
+              <p className="text-base font-semibold text-foreground mt-1">
+                {artist.musicalMatchScore !== undefined ? `${artist.musicalMatchScore}%` : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-foreground-muted">Scale fit</p>
+              <p className="text-base font-semibold text-foreground mt-1">{getScaleFitLabel(artist.commercialTier)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-foreground-muted">Overall relevance</p>
+              <p className="text-base font-semibold text-foreground mt-1">{artist.matchScore}%</p>
+            </div>
+          </div>
+          <p className="text-xs text-foreground-secondary leading-relaxed mt-4">
+            {getCommercialExplanation(artist)}
+          </p>
+        </div>
+
         {artist.genres.length > 0 && (
           <div className={cardClassName}>
             <SectionTitle>Genres</SectionTitle>
@@ -209,7 +243,7 @@ export default function SimilarArtistDetail({
             no actions exist for a similar artist today beyond the platform
             links above. */}
 
-        {productFeatures.rawJson && (
+        {debugUIVisible && (
           <details className={cardClassName}>
             <summary className="text-[10px] font-semibold text-foreground-muted uppercase tracking-widest cursor-pointer">
               Raw data (debug)

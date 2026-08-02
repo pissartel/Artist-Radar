@@ -62,6 +62,14 @@ export interface EventPageExtractionOptions {
 
 export interface ExtractedEventPageData {
   title: string | null;
+  /**
+   * The raw title as originally reported by the page (JSON-LD/OG/meta/
+   * document <title>) before any generic/SEO-listing rejection or
+   * structured-title building — last-resort debug field only, never used
+   * as the opportunity's display name (issue #201 follow-up: "Use the
+   * source title only as a last-resort debug field").
+   */
+  sourceTitle: string | null;
   description: string | null;
   /** Normalized event date (YYYY-MM-DD), or null if none could be resolved. */
   eventDate: string | null;
@@ -157,7 +165,29 @@ export function extractEventPageData(
     return resolved.value;
   }
 
-  const title = pick("title", null) ?? buildGenericTitle(options, fieldSources);
+  // Resolved before title so a structured "Artist A + Artist B at Venue"
+  // title can be built from them (issue #201 follow-up: "Never use the HTML
+  // <title> or SEO title directly when a structured event title can be
+  // built" / "Reject or downgrade titles containing generic patterns").
+  const headliners = pick("headliners", []);
+  const lineup = pick("lineup", []);
+  const venueName = pick("venueName", null);
+  const rawPickedTitle = pick("title", null);
+  let title: string;
+  if (rawPickedTitle && !isGenericOrSeoTitle(rawPickedTitle)) {
+    // A real, specific title was already found (e.g. JSON-LD's own event
+    // `name`) — never replace a genuinely good title with a rebuilt one.
+    title = rawPickedTitle;
+  } else {
+    const structuredTitle = buildStructuredEventTitle(headliners, lineup, venueName);
+    if (structuredTitle) {
+      title = structuredTitle;
+      fieldSources.title = fieldSources.headliners ?? fieldSources.lineup ?? fieldSources.venueName ?? "structured_metadata";
+    } else {
+      title = buildGenericTitle(options, fieldSources);
+    }
+  }
+
   const eventDateResolution = resolveEventDate(structuredSources, contentSources, options, referenceDate);
   if (eventDateResolution.tier) {
     fieldSources.eventDate = eventDateResolution.tier;
@@ -165,15 +195,16 @@ export function extractEventPageData(
 
   const extracted: ExtractedEventPageData = {
     title,
+    sourceTitle: rawPickedTitle,
     description: pick("description", null),
     eventDate: eventDateResolution.eventDate,
     eventDateDisplay: eventDateResolution.eventDateDisplay,
     doorsTime: pick("doorsTime", null),
-    venueName: pick("venueName", null),
+    venueName,
     city: pick("city", null),
     address: pick("address", null),
-    headliners: pick("headliners", []),
-    lineup: pick("lineup", []),
+    headliners,
+    lineup,
     organizerName: pick("organizerName", null),
     promoterName: pick("promoterName", null),
     posterImageUrl: pick("posterImageUrl", null),
@@ -239,6 +270,20 @@ function buildGenericTitle(
 ): string {
   fieldSources.title = "generic_fallback";
   return options.genericTitleFallbackLabel ?? "Event";
+}
+
+// Preferred title format (issue #201 follow-up): "Artist A + Artist B at
+// Venue Name", or "Artist A + Artist B" / "Artist A at Venue Name" when only
+// one side is available. Returns null (never a partial/empty string) when
+// there isn't at least one performer to build from — callers fall back to
+// the raw page title (if not generic/SEO-looking) or a generic label.
+function buildStructuredEventTitle(headliners: string[], lineup: string[], venueName: string | null): string | null {
+  const artists = headliners.length > 0 ? headliners : lineup;
+  if (artists.length === 0) {
+    return null;
+  }
+  const artistsText = artists.join(" + ");
+  return venueName ? `${artistsText} at ${venueName}` : artistsText;
 }
 
 function computeOverallConfidence(fieldSources: ExtractedEventPageData["fieldSources"]): number {
@@ -510,6 +555,84 @@ export function isGenericPageTitle(value: string): boolean {
   return GENERIC_PAGE_TITLE_SET.has(normalizeForComparison(value));
 }
 
+// Broader, pattern-based SEO/listing-title detection (issue #201 follow-up
+// regression: "Emo / Hardcore / Punk Concerts in Paris 2026-2027 | Music
+// Events, Gigs & Tickets" was accepted outright as a venue/event name/title
+// because it never exact-matches the short GENERIC_PAGE_TITLES set above).
+// Applied to the *whole* raw title, before any segment-splitting, so a
+// SEO-style aggregator title is rejected even when cleanGenericTitleSegments
+// would otherwise keep a trailing segment of it.
+const SEO_LISTING_TITLE_PATTERNS: RegExp[] = [
+  /\bconcerts?\s+in\s+[a-z][a-z\s'-]*\b/i, // "Concerts in Paris"
+  /\bmusic\s+events?\b.*\b(gigs?|tickets?)\b/i, // "Music Events, Gigs & Tickets"
+  /\bgigs?\s*(&|and|,)\s*tickets?\b/i,
+  /\b(19|20)\d{2}\s*[-–—]\s*(19|20)\d{2}\b/, // year range, e.g. "2026-2027"
+  /\bupcoming\s+events?\b/i,
+  /\bbest\s+concerts?\b/i,
+  /\bwhat'?s\s+on\b/i,
+  /\ball\s+concerts?\b/i,
+  /\bevents?\s+calendar\b/i,
+  /\bgigs?\s+in\s+[a-z]/i, // "Gigs in Paris", "Poppunk Gigs in Paris"
+  /\blineups?\s*(&|and)\s*tickets?\b/i, // "Lineups & Tickets"
+  /\bclubbing\b.*\bdj\s+sets?\b/i, // "clubbing & DJ sets" nightlife-guide wording
+  /\bsubculture\b/i, // encyclopedia/blog-style topic pages ("Punk subculture")
+  /\bthe\s+art\s+of\s+\w+/i, // "The Art of Punk" article-style titles
+  /[a-z][a-z0-9-]*\.(paris|fr|com|net|live|io)\s*$/i // trailing bare domain, e.g. "— concerts.paris"
+];
+
+// Real listing/ticketing sites often append their own brand as the final
+// "| Brand" / "· Brand" title segment (e.g. "Poppunk Gigs in Paris | DICE",
+// "Emo Night: Brokencyde + Dot Dot Curve, Paris · Shotgun Tickets"). Strip
+// only that trailing brand segment before pattern-checking, so a genuinely
+// good title isn't rejected outright just because a ticketing platform's
+// name happens to be appended to it.
+const TICKETING_PLATFORM_BRAND_SET = new Set(
+  ["dice", "shotgun", "shotgun tickets", "mood", "songkick", "bandsintown", "eventbrite", "festicket", "resident advisor", "ra.co", "ra"].map(
+    normalizeForComparison
+  )
+);
+
+function stripTrailingTicketingBrand(title: string): string {
+  const segments = title.split(/\s*[|·]\s*/).map((segment) => segment.trim()).filter(Boolean);
+  if (segments.length <= 1) {
+    return title;
+  }
+  const last = segments[segments.length - 1]!;
+  if (TICKETING_PLATFORM_BRAND_SET.has(normalizeForComparison(last))) {
+    return segments.slice(0, -1).join(" | ");
+  }
+  return title;
+}
+
+export function isSeoListingTitle(value: string): boolean {
+  const trimmed = stripTrailingTicketingBrand(value.trim());
+  if (!trimmed) return false;
+  return SEO_LISTING_TITLE_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+// Strips a trailing ticketing-platform brand segment and rejects the result
+// outright if it still looks like an SEO/listing title — the single entry
+// point a caller with only a raw search-result title (no page HTML to run
+// the full structured extraction on) should use before accepting that title
+// as a venue/event name (issue #201 follow-up).
+export function sanitizeRawTitle(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const cleaned = stripTrailingTicketingBrand(trimmed);
+  if (isGenericOrSeoTitle(cleaned)) {
+    return null;
+  }
+  return cleaned;
+}
+
+// Combines the short exact-match generic-label check with the broader
+// pattern-based SEO/listing-title check — the single entry point callers
+// should use to decide "is this string usable as a real venue/event name?".
+export function isGenericOrSeoTitle(value: string): boolean {
+  return isGenericPageTitle(value) || isSeoListingTitle(value);
+}
+
 export type VenueNameSource = "structured_data" | "og_site_name" | "header_logo" | "footer" | "document_title" | "domain_inference";
 export type VenueImageSource = "structured_data" | "og_image" | "header_logo" | "favicon" | "hero_image";
 
@@ -517,6 +640,24 @@ export interface RejectedVenueName {
   value: string;
   reason: "generic_page_title";
 }
+
+// Issue #201 follow-up: distinguishes a specific venue's own page (which may
+// legitimately also list many dates, e.g. quai-m.fr/agenda) from a
+// third-party listing/directory/aggregator page that covers many different
+// venues across a whole city or genre (e.g. concerts50.com/france/paris/g/punk)
+// and represents no single venue at all. Only the former may ever become a
+// "venue" opportunity; the latter must never become a venue, a single event,
+// or a support-slot opportunity — it is kept only as source evidence unless a
+// dedicated provider extracts its individual event entries (see Output B in
+// WebSearchBookingSourceProvider.ts, which is unaffected by this distinction).
+export type SourcePageType =
+  | "single_event"
+  | "venue"
+  | "festival"
+  | "event_listing"
+  | "search_results"
+  | "article"
+  | "unknown";
 
 export interface ExtractedVenuePageData {
   venueName: string | null;
@@ -535,6 +676,10 @@ export interface ExtractedVenuePageData {
   eventDateDisplay: string | null;
   confidence: number;
   warnings: string[];
+  pageType: SourcePageType;
+  isSingleEvent: boolean;
+  isVenue: boolean;
+  pageTypeReason: string;
 }
 
 // --- JSON-LD organization/venue -------------------------------------------
@@ -653,7 +798,7 @@ function cleanGenericTitleSegments(title: string): string | null {
     .map((segment) => segment.trim())
     .filter(Boolean);
   if (segments.length === 0) return null;
-  const nonGeneric = segments.filter((segment) => !isGenericPageTitle(segment));
+  const nonGeneric = segments.filter((segment) => !isGenericOrSeoTitle(segment));
   if (nonGeneric.length === 0) return null;
   return nonGeneric[nonGeneric.length - 1];
 }
@@ -763,7 +908,7 @@ function resolveVenueIdentity(html: string, sourceUrl: string | null): VenueIden
   };
 
   if (structured?.name) {
-    if (!isGenericPageTitle(structured.name)) {
+    if (!isGenericOrSeoTitle(structured.name)) {
       return { venueName: structured.name, nameSource: "structured_data", rejectedNames, ...baseLocation };
     }
     reject(structured.name);
@@ -771,7 +916,7 @@ function resolveVenueIdentity(html: string, sourceUrl: string | null): VenueIden
 
   const siteName = extractOgSiteName(html);
   if (siteName) {
-    if (!isGenericPageTitle(siteName)) {
+    if (!isGenericOrSeoTitle(siteName)) {
       return { venueName: siteName, nameSource: "og_site_name", rejectedNames, ...baseLocation };
     }
     reject(siteName);
@@ -779,14 +924,14 @@ function resolveVenueIdentity(html: string, sourceUrl: string | null): VenueIden
 
   const branding = extractHeaderBranding(html);
   if (branding.name) {
-    if (!isGenericPageTitle(branding.name)) {
+    if (!isGenericOrSeoTitle(branding.name)) {
       return { venueName: branding.name, nameSource: "header_logo", rejectedNames, ...baseLocation };
     }
     reject(branding.name);
   }
 
   if (footer.name) {
-    if (!isGenericPageTitle(footer.name)) {
+    if (!isGenericOrSeoTitle(footer.name)) {
       return { venueName: footer.name, nameSource: "footer", rejectedNames, ...baseLocation };
     }
     reject(footer.name);
@@ -794,7 +939,7 @@ function resolveVenueIdentity(html: string, sourceUrl: string | null): VenueIden
 
   const documentTitle = extractHtmlTitle(html);
   if (documentTitle) {
-    if (isGenericPageTitle(documentTitle)) {
+    if (isGenericOrSeoTitle(documentTitle)) {
       reject(documentTitle);
     } else {
       const cleaned = cleanGenericTitleSegments(documentTitle);
@@ -866,6 +1011,79 @@ function computeVenueConfidence(identity: VenueIdentityResolution): number {
   return Math.max(0, Math.min(1, Math.round((nameScore + locationBonus) * 100) / 100));
 }
 
+const LISTING_STRUCTURED_TYPE_PATTERN = /itemlist|collectionpage|searchresultspage/i;
+
+function hasListingStructuredData(html: string): boolean {
+  const nodes = parseJsonLdBlocks(html).flatMap((block) => flattenJsonLdGraph(block));
+  return nodes.some((node) => {
+    if (!node || typeof node !== "object") return false;
+    const type = (node as Record<string, unknown>)["@type"];
+    const types = Array.isArray(type) ? type : [type];
+    return types.some((t) => typeof t === "string" && LISTING_STRUCTURED_TYPE_PATTERN.test(t));
+  });
+}
+
+function countEventLikeJsonLdNodes(html: string): number {
+  const nodes = parseJsonLdBlocks(html).flatMap((block) => flattenJsonLdGraph(block));
+  return nodes.filter((node) => isEventLikeNode(node)).length;
+}
+
+interface SourcePageClassification {
+  pageType: SourcePageType;
+  isSingleEvent: boolean;
+  isVenue: boolean;
+  reason: string;
+}
+
+// Classifies what kind of page this source actually is, distinguishing a
+// single event/venue/festival page from a listing/directory/aggregator page
+// that must never become an opportunity itself (issue #201 follow-up).
+function classifySourcePageType(html: string, identity: VenueIdentityResolution): SourcePageClassification {
+  const documentTitle = extractHtmlTitle(html);
+  const titleLooksLikeListing = documentTitle ? isSeoListingTitle(documentTitle) : false;
+  const listingStructuredData = hasListingStructuredData(html);
+  const eventNodeCount = countEventLikeJsonLdNodes(html);
+
+  // Strongest, most unambiguous signal: a whole-title SEO/listing phrase
+  // (e.g. "Emo / Hardcore / Punk Concerts in Paris 2026-2027 | Music Events,
+  // Gigs & Tickets"), schema.org's own ItemList/CollectionPage/
+  // SearchResultsPage typing, or multiple distinct Event nodes on one page —
+  // none of these describe a single event or one specific venue, regardless
+  // of anything else found. Deliberately does *not* key off nameSource/
+  // isCollectionPage alone: many genuine small-venue sites (quai-m.fr/agenda)
+  // list several dates and only resolve a name via header branding rather
+  // than full Organization JSON-LD, and must still classify as "venue".
+  if (titleLooksLikeListing || listingStructuredData || eventNodeCount > 1) {
+    return {
+      pageType: "event_listing",
+      isSingleEvent: false,
+      isVenue: false,
+      reason: titleLooksLikeListing
+        ? "Page title matches an SEO/listing pattern (e.g. \"Concerts in [city]\", \"Music Events, Gigs & Tickets\")."
+        : listingStructuredData
+          ? "Structured data declares an ItemList/CollectionPage/SearchResultsPage type."
+          : `${eventNodeCount} distinct Event/MusicEvent nodes found on one page.`
+    };
+  }
+
+  if (eventNodeCount === 1) {
+    return { pageType: "single_event", isSingleEvent: true, isVenue: false, reason: "Exactly one Event/MusicEvent JSON-LD node found." };
+  }
+
+  if (identity.venueName) {
+    return {
+      pageType: "venue",
+      isSingleEvent: false,
+      isVenue: true,
+      reason: identity.nameSource === "structured_data"
+        ? "Structured Organization/MusicVenue/Place data identifies a specific venue."
+        : "Resolved a specific venue/organization identity with no listing/aggregator signal found."
+    };
+  }
+
+  return { pageType: "unknown", isSingleEvent: false, isVenue: false, reason: "No structured event, venue, or listing signal was found." };
+}
+
 /**
  * Resolves a venue/organization's real identity from a scraped page,
  * rejecting generic page-section labels ("Agenda", "Programme", ...), and
@@ -878,6 +1096,7 @@ export function extractVenuePageData(html: string, sourceUrl: string | null, ref
   const identity = resolveVenueIdentity(html, sourceUrl);
   const collection = detectCollectionPage(html, sourceUrl);
   const image = resolveVenueImage(html);
+  const pageClassification = classifySourcePageType(html, identity);
 
   let eventDate: string | null = null;
   let eventDateDisplay: string | null = null;
@@ -911,7 +1130,11 @@ export function extractVenuePageData(html: string, sourceUrl: string | null, ref
     eventDate,
     eventDateDisplay,
     confidence: computeVenueConfidence(identity),
-    warnings
+    warnings,
+    pageType: pageClassification.pageType,
+    isSingleEvent: pageClassification.isSingleEvent,
+    isVenue: pageClassification.isVenue,
+    pageTypeReason: pageClassification.reason
   };
 }
 

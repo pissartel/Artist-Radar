@@ -1,4 +1,6 @@
-import { productFeatures } from "@/lib/productFeatures";
+"use client";
+
+import { useProductFeatures } from "@/components/providers/ProductFeaturesProvider";
 
 interface WarningsBannerProps {
   warnings: string[];
@@ -7,10 +9,11 @@ interface WarningsBannerProps {
 // Provider/source diagnostics for the artist's search — internal operational
 // detail (which scraper failed, which API key is missing, etc.), not a
 // product-facing state. Never shown to production users, regardless of
-// whether warnings exist; only rendered when debugWarnings is on. See
-// src/lib/productFeatures.ts.
+// whether warnings exist; only rendered when debugUIVisible is on (server-
+// derived — see lib/server/debugUI.ts).
 export default function WarningsBanner({ warnings }: WarningsBannerProps) {
-  if (warnings.length === 0 || !productFeatures.debugWarnings) {
+  const { debugUIVisible } = useProductFeatures();
+  if (warnings.length === 0 || !debugUIVisible) {
     return null;
   }
 

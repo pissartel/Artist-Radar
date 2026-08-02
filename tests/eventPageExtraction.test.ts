@@ -3,7 +3,9 @@ import {
   extractEventPageData,
   extractVenuePageData,
   isGenericPageTitle,
+  isSeoListingTitle,
   isSocialOrTicketingUrl,
+  sanitizeRawTitle,
   selectEventDetailLinks
 } from "../src/booking/eventPageExtraction.js";
 
@@ -527,5 +529,181 @@ describe("selectEventDetailLinks", () => {
 
   it("returns an empty list for a malformed agenda URL", () => {
     expect(selectEventDetailLinks(["https://quai-m.fr/event/band-a"], "not-a-url", 10)).toEqual([]);
+  });
+});
+
+// Issue #201 follow-up regression: a genre/city listing (directory/
+// aggregator) page like concerts50.com must never be classified as a venue
+// or a single event, and its SEO title must never be accepted as a
+// venue/event name.
+const CONCERTS50_LISTING_HTML = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Emo / Hardcore / Punk Concerts in Paris 2026-2027 | Music Events, Gigs & Tickets</title>
+  <meta property="og:site_name" content="Concerts50">
+</head>
+<body>
+<header><img class="logo" src="/logo.png" alt="Concerts50"></header>
+<main>
+  <div class="event-card"><a href="/event/band-a">Band A</a><time datetime="2026-09-12">12 Sep 2026</time></div>
+  <div class="event-card"><a href="/event/band-b">Band B</a><time datetime="2026-10-03">3 Oct 2026</time></div>
+  <div class="event-card"><a href="/event/band-c">Band C</a><time datetime="2026-11-20">20 Nov 2026</time></div>
+</main>
+</body>
+</html>`;
+
+describe("classifySourcePageType (issue #201 follow-up: listing/aggregator pages)", () => {
+  it("classifies a Concerts50-style genre listing page as event_listing, never a venue or single event", () => {
+    const result = extractVenuePageData(CONCERTS50_LISTING_HTML, "https://concerts50.com/france/paris/g/punk");
+
+    expect(result.pageType).toBe("event_listing");
+    expect(result.isSingleEvent).toBe(false);
+    expect(result.isVenue).toBe(false);
+  });
+
+  it("still classifies a real small venue's own agenda page as venue (quai-m.fr regression)", () => {
+    const html = `<!DOCTYPE html><html><head><title>Agenda | Quai M</title></head><body>
+<header><img class="logo" src="/logo.png" alt="Quai M"></header>
+<main>
+  <div class="event-card"><time datetime="2026-09-12">12 septembre 2026</time></div>
+  <div class="event-card"><time datetime="2026-10-03">3 octobre 2026</time></div>
+  <div class="event-card"><time datetime="2026-11-20">20 novembre 2026</time></div>
+</main>
+</body></html>`;
+
+    const result = extractVenuePageData(html, "https://quai-m.fr/agenda");
+
+    expect(result.pageType).toBe("venue");
+    expect(result.isVenue).toBe(true);
+    expect(result.venueName).toBe("Quai M");
+  });
+
+  it("classifies a page with exactly one MusicEvent JSON-LD node as single_event", () => {
+    const html = `<!DOCTYPE html><html><head><title>Show details</title></head><body>
+<script type="application/ld+json">${JSON.stringify({
+      "@type": "MusicEvent",
+      name: "The Slugz live",
+      startDate: "2026-09-12",
+      location: { name: "La Maroquinerie" }
+    })}</script>
+</body></html>`;
+
+    const result = extractVenuePageData(html, "https://example.test/event/the-slugz");
+
+    expect(result.pageType).toBe("single_event");
+    expect(result.isSingleEvent).toBe(true);
+    expect(result.isVenue).toBe(false);
+  });
+});
+
+describe("isSeoListingTitle (issue #201 follow-up)", () => {
+  it("rejects the exact reported SEO listing title", () => {
+    expect(isSeoListingTitle("Emo / Hardcore / Punk Concerts in Paris 2026-2027 | Music Events, Gigs & Tickets")).toBe(true);
+  });
+
+  it("rejects other common listing-page title patterns", () => {
+    expect(isSeoListingTitle("Upcoming Events in Lyon")).toBe(true);
+    expect(isSeoListingTitle("Best Concerts This Month")).toBe(true);
+    expect(isSeoListingTitle("Rock Concerts in Berlin 2026-2027")).toBe(true);
+  });
+
+  it("does not reject a real, specific venue or event name", () => {
+    expect(isSeoListingTitle("Quai M")).toBe(false);
+    expect(isSeoListingTitle("The Slugz at La Maroquinerie")).toBe(false);
+    expect(isSeoListingTitle("Vulgar Display feat. Rancid Youth + The Static Age")).toBe(false);
+  });
+});
+
+describe("extractEventPageData — structured title building (issue #201 follow-up)", () => {
+  it("builds 'Artist at Venue' from headliners/venue when no real title is found, instead of using a generic/SEO title", () => {
+    const html = `<!DOCTYPE html><html><head>
+  <title>Emo / Hardcore / Punk Concerts in Paris 2026-2027 | Music Events, Gigs & Tickets</title>
+  <meta property="og:title" content="Emo / Hardcore / Punk Concerts in Paris 2026-2027 | Music Events, Gigs & Tickets">
+</head><body>
+<script type="application/ld+json">${JSON.stringify({
+      "@type": "MusicEvent",
+      startDate: "2026-09-12",
+      performer: [{ name: "The Slugz" }],
+      location: { name: "La Maroquinerie" }
+    })}</script>
+</body></html>`;
+
+    const result = extractEventPageData(html, "https://concerts50.com/event/the-slugz");
+
+    expect(result.title).toBe("The Slugz at La Maroquinerie");
+    expect(result.sourceTitle).toContain("Music Events, Gigs & Tickets");
+    expect(result.title).not.toBe(result.sourceTitle);
+  });
+
+  it("keeps a genuinely specific JSON-LD event title untouched (never rebuilds over a good title)", () => {
+    const html = `<!DOCTYPE html><html><head><title>Vulgar Display at Le Razibus</title></head><body>
+<script type="application/ld+json">${JSON.stringify({
+      "@type": "MusicEvent",
+      name: "Vulgar Display feat. Rancid Youth + The Static Age",
+      startDate: "2026-09-12",
+      performer: [{ name: "Vulgar Display" }],
+      location: { name: "Le Razibus" }
+    })}</script>
+</body></html>`;
+
+    const result = extractEventPageData(html, "https://razibus.net/event/vulgar-display");
+
+    expect(result.title).toBe("Vulgar Display feat. Rancid Youth + The Static Age");
+  });
+
+  it("falls back to the generic label (never a raw SEO title) when no headliners/venue can be resolved either", () => {
+    const html = `<!DOCTYPE html><html><head>
+  <title>Best Concerts This Month | Music Events, Gigs & Tickets</title>
+</head><body>No structured data at all.</body></html>`;
+
+    const result = extractEventPageData(html, "https://concerts50.com/france/paris/g/punk");
+
+    expect(result.title).toBe("Event");
+    expect(result.title).not.toContain("Music Events");
+    expect(result.sourceTitle).toContain("Best Concerts This Month");
+  });
+});
+
+// Issue #201 follow-up (real regression, found via a live CLI run after the
+// initial fix): the WebSearchBookingSourceProvider fix alone wasn't enough —
+// SimilarArtistLiveHistoryBookingSourceProvider and
+// VenueDiscoveryBookingSourceProvider each build raw booking sources
+// directly from search-result titles with no HTML at all, and none of the
+// original blocklist patterns matched these real-world listing/ticketing
+// titles observed in that live run.
+describe("sanitizeRawTitle (issue #201 follow-up, no-HTML raw search-result path)", () => {
+  it("rejects real observed ticketing-platform genre/city listing titles", () => {
+    expect(sanitizeRawTitle("Poppunk Gigs in Paris | DICE")).toBeNull();
+    expect(sanitizeRawTitle("Pop Punk Tonight in Paris - Lineups & Tickets | Mood")).toBeNull();
+    expect(sanitizeRawTitle("Emo Gigs in Paris - DICE")).toBeNull();
+  });
+
+  it("rejects encyclopedia/blog-article-style titles", () => {
+    expect(sanitizeRawTitle("Punk subculture")).toBeNull();
+    expect(sanitizeRawTitle("The Art of Punk: How Music and Culture Collide")).toBeNull();
+  });
+
+  it("rejects a nightlife-guide-style title", () => {
+    expect(
+      sanitizeRawTitle("Punk Paradise Paris: rock concerts, clubbing & DJ sets in the 11th arrondissement")
+    ).toBeNull();
+  });
+
+  it("strips a trailing ticketing-platform brand segment but keeps a genuinely good title", () => {
+    expect(sanitizeRawTitle("Emo Night : Brokencyde + Dot Dot Curve, Paris · Shotgun Tickets")).toBe(
+      "Emo Night : Brokencyde + Dot Dot Curve, Paris"
+    );
+  });
+
+  it("keeps a real, specific event/venue title untouched", () => {
+    expect(sanitizeRawTitle("ALL TIME LOW en concert à la Salle Pleyel")).toBe("ALL TIME LOW en concert à la Salle Pleyel");
+    expect(sanitizeRawTitle("Quai M")).toBe("Quai M");
+  });
+
+  it("returns null for empty/missing input rather than an empty string", () => {
+    expect(sanitizeRawTitle(null)).toBeNull();
+    expect(sanitizeRawTitle("")).toBeNull();
+    expect(sanitizeRawTitle("   ")).toBeNull();
   });
 });

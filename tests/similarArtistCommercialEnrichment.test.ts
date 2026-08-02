@@ -54,6 +54,55 @@ function fakeProvider(results: SimilarArtistCandidateEnrichmentResult[]): Simila
 }
 
 describe("enrichSimilarArtistsWithChartmetric", () => {
+  it("is structurally additive: every original identity/platform/ranking field survives byte-for-byte, spread first and never reconstructed", async () => {
+    const original = buildArtist({
+      name: "Broad Peak",
+      url: "https://example.test/broad-peak",
+      spotifyId: "broad-peak-spotify-id",
+      spotifyUrl: "https://open.spotify.com/artist/broad-peak-spotify-id",
+      instagramUrl: "https://instagram.com/broadpeak",
+      youtubeUrl: "https://youtube.com/@broadpeak",
+      genres: ["post-rock", "shoegaze"],
+      city: "Lyon",
+      country: "France",
+      source: "spotify_search",
+      sources: ["spotify_search", "musicbrainz"],
+      bookingCategory: "local_peer",
+      estimatedFollowers: 5000,
+      estimatedPopularity: 30,
+      totalRelevance: 75,
+      relevanceToUserArtist: 75,
+      genreRelevance: 80,
+      sceneRelevance: 70,
+      sizeRelevance: 60,
+      imageUrl: "https://images.example.test/broad-peak.jpg",
+      imageSource: "spotify",
+      imageConfidence: 0.9,
+      spotify: {
+        id: "broad-peak-spotify-id",
+        url: "https://open.spotify.com/artist/broad-peak-spotify-id",
+        imageUrl: "https://images.example.test/broad-peak.jpg",
+        followers: 5000,
+        popularity: 30,
+        genres: ["post-rock", "shoegaze"]
+      }
+    });
+    const grouped = groupSimilarArtistsByTier([original]);
+    const provider = fakeProvider([{ provider: "chartmetric", candidateName: "Broad Peak", status: "not_found" }]);
+
+    const result = await enrichSimilarArtistsWithChartmetric({ profile: PROFILE, similarArtists: grouped, provider });
+    const enriched = result.local_peer[0]!;
+
+    // Every field on the original artist must be preserved unchanged —
+    // additive merge only ever adds chartmetric/commercial* keys on top.
+    for (const [key, value] of Object.entries(original)) {
+      if (key.startsWith("commercial") || key === "chartmetric" || key === "chartmetricDiagnostics") {
+        continue;
+      }
+      expect((enriched as unknown as Record<string, unknown>)[key]).toEqual(value);
+    }
+  });
+
   it("returns the original groups unchanged when there are no candidates", async () => {
     const empty: SimilarArtistsByTier = groupSimilarArtistsByTier([]);
     const provider = fakeProvider([]);

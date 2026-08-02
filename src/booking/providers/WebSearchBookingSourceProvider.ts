@@ -70,16 +70,33 @@ export function buildWebSearchBookingSourceProvider(
             nameSource: venueData.nameSource,
             rejectedNames: venueData.rejectedNames,
             isCollectionPage: venueData.isCollectionPage,
-            collectionPageReason: venueData.collectionPageReason
+            collectionPageReason: venueData.collectionPageReason,
+            pageType: venueData.pageType,
+            isSingleEvent: venueData.isSingleEvent,
+            isVenue: venueData.isVenue,
+            pageTypeReason: venueData.pageTypeReason
           });
 
-          if (venueData.venueName) {
+          // A third-party listing/directory/aggregator page (issue #201
+          // follow-up: concerts50.com-style genre pages) must never become a
+          // venue, single-event, or support-slot opportunity itself — it is
+          // kept only as source evidence for its own individual event-detail
+          // links below (Output B), which is unaffected by this check.
+          const isRejectedListingPage = venueData.pageType === "event_listing" || venueData.pageType === "search_results" || venueData.pageType === "article";
+          if (isRejectedListingPage) {
+            debugLog("booking", `[web-extract] rejected listing/non-opportunity page: ${url}`, {
+              pageType: venueData.pageType,
+              reason: venueData.pageTypeReason
+            });
+          }
+
+          if (venueData.venueName && !isRejectedListingPage) {
             rawSources.push({
               name: venueData.venueName,
               url,
               sourceUrl: url,
               sourceType: "official_site",
-              category: venueData.isCollectionPage ? "venue" : undefined,
+              category: venueData.isVenue ? "venue" : undefined,
               city: venueData.city ?? input.city,
               country: venueData.country ?? undefined,
               address: venueData.address ?? undefined,
@@ -157,6 +174,16 @@ async function extractEventOpportunity(
   if (!detailExtracted?.html) return null;
 
   const eventData = extractEventPageData(detailExtracted.html, detailUrl);
+  // Issue #201 follow-up diagnostics: title source (never the raw SEO title
+  // when a structured one could be built) and image source, so an enabled
+  // vs. disabled Chartmetric run can be compared for extraction quality too.
+  debugLog("booking", `[web-extract] event title/image resolution for ${detailUrl}`, {
+    title: eventData.title,
+    sourceTitle: eventData.sourceTitle,
+    titleSource: eventData.fieldSources.title,
+    usedStructuredTitle: eventData.title !== eventData.sourceTitle,
+    imageSource: eventData.posterImageUrl ? "posterImageUrl" : "none"
+  });
   // Never emit an event opportunity without a real, resolved date — an
   // event-detail page that doesn't yield one isn't usable as a dated
   // concert opportunity (it may still be a false-positive link, e.g. a

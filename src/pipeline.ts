@@ -157,6 +157,15 @@ export async function runOpportunitySearch(
       musicBrainzSearch: options.musicBrainzSearch,
       seedCandidates: options.seedCandidates
     });
+    // Chartmetric enrichment (issue #201) must never change which similar
+    // artists the live-search pipeline (concert history, booking search,
+    // label discovery) uses — this exact array, in this exact order, is the
+    // one and only copy those consumers see from here on. `groupedSimilarArtists`
+    // below is a *separate*, additively-enriched-and-regrouped copy used only
+    // for the result exposed to the frontend/commercial scoring; it must never
+    // be flattened back and fed into live discovery in its place.
+    const similarArtistsForLiveSearch = similarArtists;
+    debugLog("chartmetric", "similar artists before enrichment", summarizeSimilarArtistOrdering(similarArtists));
     const groupedSimilarArtists = await enrichSimilarArtistsWithChartmetricSafely(
       groupSimilarArtistsByTier(similarArtists),
       profile,
@@ -164,8 +173,14 @@ export async function runOpportunitySearch(
       options.chartmetricSimilarArtistProvider,
       options.features?.chartmetricArtistEnrichment
     );
+    debugLog(
+      "chartmetric",
+      "similar artists after enrichment (UI/commercial-scoring copy only — not used for live discovery)",
+      summarizeSimilarArtistOrdering(flattenSimilarArtists(groupedSimilarArtists))
+    );
+    debugLog("chartmetric", "artists passed to live discovery (concert history, booking search, label discovery)", summarizeSimilarArtistOrdering(similarArtistsForLiveSearch));
     const similarArtistConcerts = await findSimilarArtistConcertsSafely(
-      flattenSimilarArtists(groupedSimilarArtists),
+      similarArtistsForLiveSearch,
       options.artistConcertProviders
     );
     track("SEARCHING_OPPORTUNITIES");
@@ -178,7 +193,6 @@ export async function runOpportunitySearch(
     await gatherSearchContext(input);
 
     if (input.mode === "booking") {
-      const flattenedSimilarArtists = flattenSimilarArtists(groupedSimilarArtists);
       const bookingSearch = await searchBookingOpportunities({
         artist: input.artist,
         city: input.city,
@@ -187,11 +201,21 @@ export async function runOpportunitySearch(
         links: input.links,
         limit: input.limit,
         artistProfile: profile,
-        similarArtists: flattenedSimilarArtists
+        similarArtists: similarArtistsForLiveSearch
       }, options.bookingSearchOptions);
       debugLog("pipeline", "runOpportunitySearch booking provider summary", {
         providerCount: bookingSearch.sourceMetadata.length,
+        // Result count by provider (issue #201 follow-up diagnostics) —
+        // targetCount is each provider's raw, pre-validation candidate count;
+        // compare against the final opportunitiesCount below to see how much
+        // was filtered/deduped/scored away overall.
+        targetCountByProvider: bookingSearch.sourceMetadata.map((source) => ({
+          provider: source.sourceProvider,
+          targetCount: source.targetCount
+        })),
         targetsCount: bookingSearch.targets.length,
+        opportunitiesBeforeValidation: bookingSearch.targets.length,
+        opportunitiesAfterValidation: bookingSearch.opportunities.length,
         opportunitiesCount: bookingSearch.opportunities.length,
         warningsCount: bookingSearch.warnings.length
       });
@@ -203,7 +227,7 @@ export async function runOpportunitySearch(
         target: input.target,
         limit: input.limit,
         artistProfile: profile,
-        similarArtists: flattenedSimilarArtists
+        similarArtists: similarArtistsForLiveSearch
       }, options.labelDiscoveryOptions);
       track("SCORING_RESULTS");
       track("PREPARING_OVERVIEW");
@@ -393,6 +417,16 @@ export function flattenSimilarArtists(groups: SimilarArtistsByTier): SimilarArti
     ...groups.to_verify,
     ...groups.unknown
   ];
+}
+
+// Dev-only diagnostics (issue #201 follow-up: "make it possible to compare
+// Chartmetric enabled versus disabled"). Lists count/order/identity, never
+// the full artist payload.
+function summarizeSimilarArtistOrdering(artists: SimilarArtist[]): { count: number; order: Array<{ name: string; spotifyId: string | null }> } {
+  return {
+    count: artists.length,
+    order: artists.map((artist) => ({ name: artist.name, spotifyId: artist.spotifyId }))
+  };
 }
 
 // A failure enriching similar artists with concert history must never fail

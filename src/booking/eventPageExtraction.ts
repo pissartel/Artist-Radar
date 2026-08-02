@@ -571,13 +571,59 @@ const SEO_LISTING_TITLE_PATTERNS: RegExp[] = [
   /\bbest\s+concerts?\b/i,
   /\bwhat'?s\s+on\b/i,
   /\ball\s+concerts?\b/i,
-  /\bevents?\s+calendar\b/i
+  /\bevents?\s+calendar\b/i,
+  /\bgigs?\s+in\s+[a-z]/i, // "Gigs in Paris", "Poppunk Gigs in Paris"
+  /\blineups?\s*(&|and)\s*tickets?\b/i, // "Lineups & Tickets"
+  /\bclubbing\b.*\bdj\s+sets?\b/i, // "clubbing & DJ sets" nightlife-guide wording
+  /\bsubculture\b/i, // encyclopedia/blog-style topic pages ("Punk subculture")
+  /\bthe\s+art\s+of\s+\w+/i, // "The Art of Punk" article-style titles
+  /[a-z][a-z0-9-]*\.(paris|fr|com|net|live|io)\s*$/i // trailing bare domain, e.g. "— concerts.paris"
 ];
 
+// Real listing/ticketing sites often append their own brand as the final
+// "| Brand" / "· Brand" title segment (e.g. "Poppunk Gigs in Paris | DICE",
+// "Emo Night: Brokencyde + Dot Dot Curve, Paris · Shotgun Tickets"). Strip
+// only that trailing brand segment before pattern-checking, so a genuinely
+// good title isn't rejected outright just because a ticketing platform's
+// name happens to be appended to it.
+const TICKETING_PLATFORM_BRAND_SET = new Set(
+  ["dice", "shotgun", "shotgun tickets", "mood", "songkick", "bandsintown", "eventbrite", "festicket", "resident advisor", "ra.co", "ra"].map(
+    normalizeForComparison
+  )
+);
+
+function stripTrailingTicketingBrand(title: string): string {
+  const segments = title.split(/\s*[|·]\s*/).map((segment) => segment.trim()).filter(Boolean);
+  if (segments.length <= 1) {
+    return title;
+  }
+  const last = segments[segments.length - 1]!;
+  if (TICKETING_PLATFORM_BRAND_SET.has(normalizeForComparison(last))) {
+    return segments.slice(0, -1).join(" | ");
+  }
+  return title;
+}
+
 export function isSeoListingTitle(value: string): boolean {
-  const trimmed = value.trim();
+  const trimmed = stripTrailingTicketingBrand(value.trim());
   if (!trimmed) return false;
   return SEO_LISTING_TITLE_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+// Strips a trailing ticketing-platform brand segment and rejects the result
+// outright if it still looks like an SEO/listing title — the single entry
+// point a caller with only a raw search-result title (no page HTML to run
+// the full structured extraction on) should use before accepting that title
+// as a venue/event name (issue #201 follow-up).
+export function sanitizeRawTitle(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const cleaned = stripTrailingTicketingBrand(trimmed);
+  if (isGenericOrSeoTitle(cleaned)) {
+    return null;
+  }
+  return cleaned;
 }
 
 // Combines the short exact-match generic-label check with the broader

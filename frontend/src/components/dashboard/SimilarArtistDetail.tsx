@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import type { Opportunity, SimilarArtist } from "@/types";
 import { PLATFORM_LABELS } from "./SimilarArtistCard";
@@ -12,7 +14,7 @@ import {
   getSharedGenres,
 } from "@/lib/similarArtist";
 import { cardClassName as buildCardClassName } from "@/components/ui/Card";
-import { productFeatures } from "@/lib/productFeatures";
+import { useProductFeatures } from "@/components/providers/ProductFeaturesProvider";
 
 interface SimilarArtistDetailProps {
   artist: SimilarArtist;
@@ -35,6 +37,7 @@ export default function SimilarArtistDetail({
   referenceArtistGenres,
   relatedOpportunities,
 }: SimilarArtistDetailProps) {
+  const { debugUIVisible } = useProductFeatures();
   const reasons = artist.matchReasons ?? (artist.reason ? [artist.reason] : []);
   const sharedGenres = getSharedGenres(artist, referenceArtistGenres);
   const listeners = formatMonthlyListeners(artist.monthlyListeners);
@@ -240,7 +243,7 @@ export default function SimilarArtistDetail({
             no actions exist for a similar artist today beyond the platform
             links above. */}
 
-        {productFeatures.rawJson && (
+        {debugUIVisible && (
           <details className={cardClassName}>
             <summary className="text-[10px] font-semibold text-foreground-muted uppercase tracking-widest cursor-pointer">
               Raw data (debug)

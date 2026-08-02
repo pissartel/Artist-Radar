@@ -110,7 +110,8 @@ export interface BackendCommercialScoreBreakdown {
 // Dev-only diagnostics (issue #201 "Verify Chartmetric execution") — never
 // rendered in standard production UI. See
 // frontend/src/components/dashboard/SimilarArtistDetail.tsx's existing
-// productFeatures.rawJson-gated debug panel, the only place this may render.
+// useProductFeatures().debugUIVisible-gated debug panel, the only place this
+// may render.
 export interface BackendChartmetricDiagnostics {
   selectedForEnrichment: boolean;
   spotifyIdPresent: boolean;

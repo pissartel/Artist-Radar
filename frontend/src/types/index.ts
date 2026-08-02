@@ -88,7 +88,7 @@ export type CommercialAbsoluteScale = "emerging" | "developing" | "established" 
 export type CommercialScoreConfidence = "high" | "medium" | "low" | "unavailable";
 
 // Dev-only diagnostics (issue #201 "Verify Chartmetric execution") — only
-// ever rendered behind productFeatures.rawJson (see
+// ever rendered behind useProductFeatures().debugUIVisible (see
 // components/dashboard/SimilarArtistDetail.tsx's existing debug panel),
 // never shown to standard production users and never branded/worded as a
 // specific provider outside that debug surface.

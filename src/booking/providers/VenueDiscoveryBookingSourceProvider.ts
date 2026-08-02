@@ -1,4 +1,5 @@
 import { extractPublicContactSignals } from "../contactExtraction.js";
+import { extractVenuePageData, sanitizeRawTitle } from "../eventPageExtraction.js";
 import { matchBookingGenres } from "../genreMatching.js";
 import { normalizeBookingSource } from "../normalizeBookingTarget.js";
 import type { BookingSearchInput, BookingTarget, BookingTargetCategory, RawBookingSource } from "../types.js";
@@ -133,6 +134,40 @@ export function buildVenueDiscoveryBookingSourceProvider(
           if (!extracted) {
             continue;
           }
+
+          // Issue #201 follow-up: route the scraped page through the same
+          // structured venue-identity resolution/page-type classification
+          // used elsewhere (extractVenuePageData) instead of using the raw
+          // page <title> directly — this rejects generic/SEO listing titles,
+          // preserves a real image when one exists, and — critically —
+          // never lets a third-party listing/directory/aggregator page
+          // (e.g. concerts50.com) become a venue opportunity itself.
+          if (extracted.html) {
+            const venueData = extractVenuePageData(extracted.html, url);
+            if (venueData.pageType === "event_listing" || venueData.pageType === "search_results" || venueData.pageType === "article") {
+              droppedForMissingEvidence += 1;
+              continue;
+            }
+            if (!venueData.isVenue) {
+              droppedForMissingEvidence += 1;
+              continue;
+            }
+            const text = [extracted.title, extracted.text, extracted.markdown].filter(Boolean).join(" ");
+            const built = textToVenueSource(input, {
+              title: venueData.venueName,
+              url,
+              text,
+              confidence: Math.max(venueData.confidence, extracted.statusCode && extracted.statusCode >= 200 && extracted.statusCode < 300 ? 0.72 : 0.5),
+              imageUrl: venueData.imageUrl
+            }, city, country, []);
+            if (built) {
+              rawSources.push(built);
+            } else {
+              droppedForMissingEvidence += 1;
+            }
+            continue;
+          }
+
           const text = [extracted.title, extracted.text, extracted.markdown].filter(Boolean).join(" ");
           const built = textToVenueSource(input, {
             title: extracted.title,
@@ -182,7 +217,11 @@ function webResultToVenueSource(
 ): RawBookingSource | null {
   const text = [result.title, result.snippet, result.markdown, result.url, ...(result.links ?? [])].filter(Boolean).join(" ");
   return textToVenueSource(input, {
-    title: result.title,
+    // No HTML available yet at this stage — reject an obviously generic/SEO
+    // listing title outright rather than accepting it as a venue name
+    // (issue #201 follow-up); a real structured name/image can still be
+    // resolved later once/if this URL gets extracted below.
+    title: sanitizeRawTitle(result.title),
     url: result.url,
     text,
     confidence: Math.max(0.4, result.confidence * 0.75)
@@ -191,7 +230,7 @@ function webResultToVenueSource(
 
 function textToVenueSource(
   input: BookingSearchInput,
-  page: { title: string | null; url: string | null; text: string; confidence: number },
+  page: { title: string | null; url: string | null; text: string; confidence: number; imageUrl?: string | null },
   fallbackCity: string,
   fallbackCountry: string,
   links: string[]
@@ -226,6 +265,7 @@ function textToVenueSource(
     estimatedCapacity: Number.isFinite(estimatedCapacity) && (estimatedCapacity ?? 0) > 0 ? estimatedCapacity : null,
     contacts,
     confidence: page.confidence,
+    imageUrl: page.imageUrl ?? null,
     // Deliberately no eventDate: this candidate represents a recurring
     // venue/organization, not a specific show.
     eventDate: null

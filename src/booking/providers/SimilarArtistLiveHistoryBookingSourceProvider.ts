@@ -12,6 +12,7 @@ import {
   type ArtistEventHistoryProvider
 } from "../artistEventHistory.js";
 import { extractEventDate } from "../dateParsing.js";
+import { extractEventPageData, sanitizeRawTitle } from "../eventPageExtraction.js";
 import { matchBookingGenres } from "../genreMatching.js";
 import { normalizeBookingSource } from "../normalizeBookingTarget.js";
 import { compareArtistPopularity, isStrongSimilarArtistForBooking } from "../relevance.js";
@@ -135,13 +136,15 @@ export function buildSimilarArtistLiveHistoryBookingSourceProvider(
               rawSources.push(extractedPageToSimilarArtistSource(input, item.artist, item.url, {
                 title: extracted.title,
                 text,
-                confidence
+                confidence,
+                html: extracted.html ?? null
               }));
             } else {
               rawSources.push(extractedPageToSupportSlotSource(input, item.url, {
                 title: extracted.title,
                 text,
-                confidence
+                confidence,
+                html: extracted.html ?? null
               }));
             }
           }
@@ -372,10 +375,19 @@ function hasSupportSignal(text: string): boolean {
   return SUPPORT_SIGNAL_PATTERN.test(text);
 }
 
+// Falls back to an honest, non-misleading label instead of accepting a raw
+// search-result title outright (issue #201 follow-up) — no HTML is
+// available at this stage to build a real structured "Artist at Venue"
+// title, so the safest non-generic option is used rather than a page's own
+// SEO/listing title.
+function resolveWebResultTitle(rawTitle: string | null, fallback: string): string {
+  return sanitizeRawTitle(rawTitle) ?? fallback;
+}
+
 function webResultToSimilarArtistSource(input: BookingSearchInput, artist: SimilarArtist, result: WebSearchResult): RawBookingSource {
   const text = [result.title, result.snippet, result.markdown, result.url, ...(result.links ?? [])].filter(Boolean).join(" ");
   return buildRawSimilarArtistSource(input, artist, {
-    title: result.title ?? result.url ?? `${artist.name} live history`,
+    title: resolveWebResultTitle(result.title, `${artist.name} live history`),
     url: result.url ?? null,
     text,
     confidence: Math.max(0.45, result.confidence * 0.85)
@@ -386,7 +398,7 @@ function webResultToSupportSlotSource(input: BookingSearchInput, result: WebSear
   const text = [result.title, result.snippet, result.markdown, result.url, ...(result.links ?? [])].filter(Boolean).join(" ");
   const eventDate = extractEventDate(text);
   return {
-    name: result.title ?? result.url ?? "Support slot discovery result",
+    name: resolveWebResultTitle(result.title, "Support slot discovery result"),
     url: result.url ?? null,
     sourceUrl: result.url ?? null,
     sourceType: "similar_artist_live_history",
@@ -401,14 +413,30 @@ function webResultToSupportSlotSource(input: BookingSearchInput, result: WebSear
   };
 }
 
+// When the full page HTML is available (post web-extract), routes through
+// the same structured extraction used for single-event pages (issue #201
+// follow-up): a real, specific title survives untouched; a generic/SEO
+// listing title is rejected in favor of a built "Artist at Venue" title (or
+// the honest fallback below); and a real poster/OG image is preserved
+// instead of always being null.
 function extractedPageToSimilarArtistSource(
   input: BookingSearchInput,
   artist: SimilarArtist,
   url: string,
-  page: { title: string | null; text: string; confidence: number }
+  page: { title: string | null; text: string; confidence: number; html?: string | null }
 ): RawBookingSource {
+  if (page.html) {
+    const eventData = extractEventPageData(page.html, url);
+    return buildRawSimilarArtistSource(input, artist, {
+      title: eventData.title ?? url,
+      url,
+      text: page.text,
+      confidence: page.confidence,
+      imageUrl: eventData.posterImageUrl
+    });
+  }
   return buildRawSimilarArtistSource(input, artist, {
-    title: page.title ?? url,
+    title: resolveWebResultTitle(page.title, `${artist.name} live history`),
     url,
     text: page.text,
     confidence: page.confidence
@@ -418,11 +446,29 @@ function extractedPageToSimilarArtistSource(
 function extractedPageToSupportSlotSource(
   input: BookingSearchInput,
   url: string,
-  page: { title: string | null; text: string; confidence: number }
+  page: { title: string | null; text: string; confidence: number; html?: string | null }
 ): RawBookingSource {
+  if (page.html) {
+    const eventData = extractEventPageData(page.html, url);
+    return {
+      name: eventData.title ?? url,
+      url,
+      sourceUrl: url,
+      sourceType: "similar_artist_live_history",
+      sourceProvider: "similar_artist_live_history",
+      city: input.city,
+      country: input.artistProfile?.country ?? null,
+      text: page.text,
+      links: [url],
+      genres: [],
+      confidence: page.confidence,
+      imageUrl: eventData.posterImageUrl,
+      eventDate: eventData.eventDate ?? extractEventDate(page.text)
+    };
+  }
   const eventDate = extractEventDate(page.text);
   return {
-    name: page.title ?? url,
+    name: resolveWebResultTitle(page.title, "Support slot discovery result"),
     url,
     sourceUrl: url,
     sourceType: "similar_artist_live_history",
@@ -440,7 +486,7 @@ function extractedPageToSupportSlotSource(
 function buildRawSimilarArtistSource(
   input: BookingSearchInput,
   artist: SimilarArtist,
-  source: { title: string; url: string | null; text: string; confidence: number }
+  source: { title: string; url: string | null; text: string; confidence: number; imageUrl?: string | null }
 ): RawBookingSource {
   const popularity = compareArtistPopularity(input, artist);
   const genreMatch = matchBookingGenres([input.genre, ...(input.artistProfile?.genres ?? [])], artist.genres, source.text);
@@ -469,6 +515,7 @@ function buildRawSimilarArtistSource(
     genres: [...artist.genres, ...genreMatch.matchedGenres],
     confidence: Math.min(0.95, source.confidence + (popularity.score >= 70 ? 0.08 : 0)),
     eventDate,
+    imageUrl: source.imageUrl ?? null,
     derivedFromSimilarArtist: {
       name: artist.name,
       popularityComparison: popularity.comparison,

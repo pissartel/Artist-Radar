@@ -5,6 +5,7 @@ import {
   isGenericPageTitle,
   isSeoListingTitle,
   isSocialOrTicketingUrl,
+  sanitizeRawTitle,
   selectEventDetailLinks
 } from "../src/booking/eventPageExtraction.js";
 
@@ -661,5 +662,48 @@ describe("extractEventPageData — structured title building (issue #201 follow-
     expect(result.title).toBe("Event");
     expect(result.title).not.toContain("Music Events");
     expect(result.sourceTitle).toContain("Best Concerts This Month");
+  });
+});
+
+// Issue #201 follow-up (real regression, found via a live CLI run after the
+// initial fix): the WebSearchBookingSourceProvider fix alone wasn't enough —
+// SimilarArtistLiveHistoryBookingSourceProvider and
+// VenueDiscoveryBookingSourceProvider each build raw booking sources
+// directly from search-result titles with no HTML at all, and none of the
+// original blocklist patterns matched these real-world listing/ticketing
+// titles observed in that live run.
+describe("sanitizeRawTitle (issue #201 follow-up, no-HTML raw search-result path)", () => {
+  it("rejects real observed ticketing-platform genre/city listing titles", () => {
+    expect(sanitizeRawTitle("Poppunk Gigs in Paris | DICE")).toBeNull();
+    expect(sanitizeRawTitle("Pop Punk Tonight in Paris - Lineups & Tickets | Mood")).toBeNull();
+    expect(sanitizeRawTitle("Emo Gigs in Paris - DICE")).toBeNull();
+  });
+
+  it("rejects encyclopedia/blog-article-style titles", () => {
+    expect(sanitizeRawTitle("Punk subculture")).toBeNull();
+    expect(sanitizeRawTitle("The Art of Punk: How Music and Culture Collide")).toBeNull();
+  });
+
+  it("rejects a nightlife-guide-style title", () => {
+    expect(
+      sanitizeRawTitle("Punk Paradise Paris: rock concerts, clubbing & DJ sets in the 11th arrondissement")
+    ).toBeNull();
+  });
+
+  it("strips a trailing ticketing-platform brand segment but keeps a genuinely good title", () => {
+    expect(sanitizeRawTitle("Emo Night : Brokencyde + Dot Dot Curve, Paris · Shotgun Tickets")).toBe(
+      "Emo Night : Brokencyde + Dot Dot Curve, Paris"
+    );
+  });
+
+  it("keeps a real, specific event/venue title untouched", () => {
+    expect(sanitizeRawTitle("ALL TIME LOW en concert à la Salle Pleyel")).toBe("ALL TIME LOW en concert à la Salle Pleyel");
+    expect(sanitizeRawTitle("Quai M")).toBe("Quai M");
+  });
+
+  it("returns null for empty/missing input rather than an empty string", () => {
+    expect(sanitizeRawTitle(null)).toBeNull();
+    expect(sanitizeRawTitle("")).toBeNull();
+    expect(sanitizeRawTitle("   ")).toBeNull();
   });
 });

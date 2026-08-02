@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import type { MatchFactor, Opportunity, SimilarArtist } from "@/types";
 import { TYPE_LABELS } from "./BookingOpportunityCard";
@@ -28,7 +30,7 @@ import {
   type OpportunitySignalKind,
 } from "@/lib/opportunity";
 import { cardClassName as buildCardClassName } from "@/components/ui/Card";
-import { productFeatures } from "@/lib/productFeatures";
+import { useProductFeatures } from "@/components/providers/ProductFeaturesProvider";
 
 interface OpportunityDetailProps {
   opportunity: Opportunity;
@@ -398,6 +400,7 @@ export default function OpportunityDetail({
   opportunity,
   relatedArtists,
 }: OpportunityDetailProps) {
+  const { debugUIVisible } = useProductFeatures();
   const formattedDate = formatOpportunityDate(opportunity.date);
   const title = getDisplayTitle(opportunity);
   const positiveFactors = getPositiveMatchFactors(opportunity);
@@ -532,7 +535,7 @@ export default function OpportunityDetail({
         {/* 7. Source evidence. */}
         <SourceEvidenceSection opportunity={opportunity} />
 
-        {productFeatures.rawJson && (
+        {debugUIVisible && (
           <details className={cardClassName}>
             <summary className="text-[10px] font-semibold text-foreground-muted uppercase tracking-widest cursor-pointer">
               Raw data (debug)

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Opportunity } from "@/types";
 import { filterBookingOpportunities, type BookingTabName } from "@/lib/opportunity";
-import { productFeatures } from "@/lib/productFeatures";
+import { useProductFeatures } from "@/components/providers/ProductFeaturesProvider";
 import BookingOpportunityCard from "./BookingOpportunityCard";
 
 const BASE_TABS: BookingTabName[] = [
@@ -14,12 +14,6 @@ const BASE_TABS: BookingTabName[] = [
   "Opening Slots",
   "Contacts",
 ];
-
-// Raw JSON is a developer diagnostic view, not a product tab — never shown
-// to production users. See src/lib/productFeatures.ts.
-const TABS: BookingTabName[] = productFeatures.rawJson
-  ? [...BASE_TABS, "Raw JSON"]
-  : BASE_TABS;
 
 const EMPTY_STATE_MESSAGE: Record<BookingTabName, string> = {
   All: "No booking opportunities found in this analysis",
@@ -55,7 +49,16 @@ function RawJsonTab({ opportunities }: { opportunities: Opportunity[] }) {
 }
 
 export default function BookingTabs({ opportunities }: BookingTabsProps) {
+  const { debugUIVisible } = useProductFeatures();
   const [activeTab, setActiveTab] = useState<BookingTabName>("All");
+
+  // Raw JSON is a developer diagnostic view, not a product tab — never shown
+  // to production users. debugUIVisible is server-derived (see
+  // lib/server/debugUI.ts), never computed from a client-only env var.
+  const TABS: BookingTabName[] = useMemo(
+    () => (debugUIVisible ? [...BASE_TABS, "Raw JSON"] : BASE_TABS),
+    [debugUIVisible],
+  );
 
   const tabCounts = useMemo(() => {
     const counts = {} as Record<BookingTabName, number>;
@@ -63,7 +66,7 @@ export default function BookingTabs({ opportunities }: BookingTabsProps) {
       counts[tab] = filterBookingOpportunities(opportunities, tab).length;
     }
     return counts;
-  }, [opportunities]);
+  }, [opportunities, TABS]);
 
   const activeOpportunities = useMemo(
     () => filterBookingOpportunities(opportunities, activeTab),

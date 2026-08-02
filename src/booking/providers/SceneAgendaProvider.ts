@@ -248,7 +248,7 @@ function searchResultToSceneEvent(
   };
 }
 
-function attachSimilarArtistContext(input: BookingSearchInput, target: BookingTarget): BookingTarget {
+export function attachSimilarArtistContext(input: BookingSearchInput, target: BookingTarget): BookingTarget {
   const text = [target.name, target.description, ...target.evidence, ...(target.pastProgramming ?? [])].filter(Boolean).join(" ").toLowerCase();
   const similarArtist = (input.similarArtists ?? [])
     .filter((artist) => isStrongSimilarArtistForBooking(input, artist))

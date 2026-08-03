@@ -1,4 +1,5 @@
 import { decodeHtmlEntities } from "../utils/htmlEntities.js";
+import { isSeoListingTitle } from "./eventPageExtraction.js";
 import type { BookingTargetCategory, DerivedFromSimilarArtist } from "./types.js";
 
 // Raw booking sources are scraped agenda/search-result titles such as
@@ -27,7 +28,7 @@ export interface TitleNormalizationResult {
 }
 
 const SITE_SUFFIX_PATTERN =
-  /\s*[-–|]\s*(france ?tv|songkick|bandsintown|facebook|instagram|youtube|eventbrite|dice(?:\.fm)?|shotgun(?:\.live)?|ticketmaster|wikipedia|spotify)\s*$/i;
+  /\s*[-–|]\s*(france ?tv|songkick|bandsintown|facebook|instagram|youtube|eventbrite|dice(?:\.fm)?|shotgun(?:\.live)?|ticketmaster|wikipedia|spotify|mood|festicket|resident ?advisor|ra\.co)\s*$/i;
 const REPLAY_PATTERN = /\ben\s+replay\b/gi;
 const TRAILING_SEPARATOR_PATTERN = /[-–|]\s*$/;
 const URL_PATTERN = /^https?:\/\//i;
@@ -49,7 +50,19 @@ const GENERIC_TITLE_PATTERNS = [
 export function normalizeOpportunityTitle(input: TitleNormalizationInput): TitleNormalizationResult {
   const decodedRawTitle = decodeHtmlEntities(input.rawTitle);
   const cleaned = cleanRawTitle(decodedRawTitle);
-  const isUsable = cleaned.length > 0 && !URL_PATTERN.test(cleaned) && !looksLikeBarePath(cleaned) && !isGenericCtaTitle(cleaned);
+  // Issue #201 follow-up: a scraped SEO/listing-page title ("Poppunk Gigs in
+  // Paris", "Emo / Hardcore / Punk Concerts in Paris 2026-2027", "Agenda
+  // Concert Punk 2026 | Tous les concerts punk en France") is not CTA text
+  // and doesn't match the older isGenericCtaTitle patterns, so it was
+  // passing through this final normalization step verbatim — this is the
+  // single authoritative place displayTitle is decided (searchBookingOpportunities.ts),
+  // so it must reject these too, not just the earlier per-source extraction.
+  const isUsable =
+    cleaned.length > 0 &&
+    !URL_PATTERN.test(cleaned) &&
+    !looksLikeBarePath(cleaned) &&
+    !isGenericCtaTitle(cleaned) &&
+    !isSeoListingTitle(cleaned);
   const displayTitle = isUsable ? cleaned : buildFallbackTitle(input);
 
   return {

@@ -133,3 +133,82 @@ describe("isGenericCtaTitle", () => {
     expect(isGenericCtaTitle("Soirée Punk - Ferme de Quincé")).toBe(false);
   });
 });
+
+// Issue #201 follow-up (real regression, found in live production output):
+// SEO/listing-page titles were passing through this final normalization
+// step verbatim, since normalizeOpportunityTitle's own isUsable check only
+// ever covered generic CTA text ("View event"), bare URLs, and site-suffix
+// stripping — never SEO-listing/article-style titles.
+describe("normalizeOpportunityTitle rejects SEO/listing/article titles (issue #201 follow-up)", () => {
+  it("falls back to a structured title instead of a raw genre/city listing title", () => {
+    const result = normalizeOpportunityTitle({
+      rawTitle: "Poppunk Gigs in Paris | DICE",
+      category: "venue",
+      city: "Paris",
+      eventDate: null
+    });
+    expect(result.displayTitle).not.toContain("Gigs in Paris");
+    expect(result.wasRewritten).toBe(true);
+  });
+
+  it("falls back to a structured title instead of a raw SEO listing title with a year range", () => {
+    const result = normalizeOpportunityTitle({
+      rawTitle: "Emo / Hardcore / Punk Concerts in Paris 2026-2027",
+      category: "event",
+      city: "Paris",
+      eventDate: "2026-11-30"
+    });
+    expect(result.displayTitle).not.toContain("Concerts in Paris");
+  });
+
+  it("falls back to a structured title instead of a raw article/blog headline", () => {
+    const result = normalizeOpportunityTitle({
+      rawTitle: "Femmes à l'honneur, rap… Ce qu'il faut retenir de la programmation de Bonjour Minuit à Saint-Brieuc",
+      category: "venue",
+      city: null,
+      eventDate: null
+    });
+    expect(result.displayTitle).not.toContain("Ce qu'il faut retenir");
+  });
+
+  it("falls back to a structured title instead of a 'Top N places' listicle headline", () => {
+    const result = normalizeOpportunityTitle({
+      rawTitle: "Top 5 Places to Listen to Live Music in Paris",
+      category: "venue",
+      city: "Paris",
+      eventDate: null
+    });
+    expect(result.displayTitle).not.toMatch(/top\s+5/i);
+  });
+
+  it("falls back to a structured title instead of a magazine-style article headline", () => {
+    const result = normalizeOpportunityTitle({
+      rawTitle: "Oi! la la: meet the new wave of French punks making noise",
+      category: "venue",
+      city: null,
+      eventDate: null
+    });
+    expect(result.displayTitle).not.toMatch(/meet the new wave/i);
+  });
+
+  it("strips a trailing 'Mood' ticketing-platform suffix from an otherwise-good title", () => {
+    const result = normalizeOpportunityTitle({
+      rawTitle: "Punk Paradise Paris | Next: Emerson Dias, 4 Jul | Mood",
+      category: "venue",
+      city: "Paris",
+      eventDate: null
+    });
+    expect(result.displayTitle).toBe("Punk Paradise Paris | Next: Emerson Dias, 4 Jul");
+  });
+
+  it("keeps a real, specific razibus-style event title untouched", () => {
+    const result = normalizeOpportunityTitle({
+      rawTitle: "The Tensions + KarKass | Guinguette de L'Eau de Là le 19 août 2026 à Bourgnac (24)",
+      category: "event",
+      city: null,
+      eventDate: "2026-08-19"
+    });
+    expect(result.displayTitle).toBe("The Tensions + KarKass | Guinguette de L'Eau de Là le 19 août 2026 à Bourgnac (24)");
+    expect(result.wasRewritten).toBe(false);
+  });
+});

@@ -173,11 +173,18 @@ export function extractEventPageData(
   const lineup = pick("lineup", []);
   const venueName = pick("venueName", null);
   const rawPickedTitle = pick("title", null);
+  // sanitizeRawTitle both rejects generic/SEO titles *and* strips a
+  // trailing ticketing-brand segment from an otherwise-good title (e.g.
+  // "Punk Paradise Paris | Next: Emerson Dias, 4 Jul | Mood" ->
+  // "Punk Paradise Paris | Next: Emerson Dias, 4 Jul") — using the plain
+  // isGenericOrSeoTitle boolean here previously discarded that cleaned
+  // result and fell through to the original, unstripped rawPickedTitle.
+  const cleanedRawTitle = sanitizeRawTitle(rawPickedTitle);
   let title: string;
-  if (rawPickedTitle && !isGenericOrSeoTitle(rawPickedTitle)) {
+  if (cleanedRawTitle) {
     // A real, specific title was already found (e.g. JSON-LD's own event
     // `name`) — never replace a genuinely good title with a rebuilt one.
-    title = rawPickedTitle;
+    title = cleanedRawTitle;
   } else {
     const structuredTitle = buildStructuredEventTitle(headliners, lineup, venueName);
     if (structuredTitle) {
@@ -577,7 +584,13 @@ const SEO_LISTING_TITLE_PATTERNS: RegExp[] = [
   /\bclubbing\b.*\bdj\s+sets?\b/i, // "clubbing & DJ sets" nightlife-guide wording
   /\bsubculture\b/i, // encyclopedia/blog-style topic pages ("Punk subculture")
   /\bthe\s+art\s+of\s+\w+/i, // "The Art of Punk" article-style titles
-  /[a-z][a-z0-9-]*\.(paris|fr|com|net|live|io)\s*$/i // trailing bare domain, e.g. "— concerts.paris"
+  /[a-z][a-z0-9-]*\.(paris|fr|com|net|live|io)\s*$/i, // trailing bare domain, e.g. "— concerts.paris"
+  /\btop\s+\d+\b/i, // "Top 5 Places to Listen to Live Music in Paris"
+  /\breview\s+of\b/i, // "... - Review of Le Volume, Nice, France - Tripadvisor"
+  /\bthe\s+evolution\s+of\b/i, // "The Evolution of Emo and Pop Punk Concert Culture"
+  /\bmeet\s+the\s+(new\s+)?wave\b/i, // "meet the new wave of French punks making noise"
+  /\bce\s+qu['’]?il\s+faut\s+retenir\b/i, // French article-summary phrasing
+  /\bdefinitive\s+guide\b/i // "The Definitive Guide [2019]"
 ];
 
 // Real listing/ticketing sites often append their own brand as the final

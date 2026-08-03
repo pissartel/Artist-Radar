@@ -45,7 +45,7 @@ describe("OpportunityDetail content (issue #132 review feedback)", () => {
 
   it("renders a dedicated Source evidence section listing every source, not only the first", () => {
     expect(source).toMatch(/Source evidence/);
-    expect(source).toMatch(/getSourceEvidence\(opportunity\)/);
+    expect(source).toMatch(/getSourceEvidenceExcluding\(opportunity, \[eventUrl, ticketAction\?\.href\]\)/);
   });
 
   it("renders the source attribution as a clickable link, not plain text", () => {
@@ -76,6 +76,32 @@ describe("OpportunityDetail content (issue #132 review feedback)", () => {
 
   it("shows lineup completeness alongside the line-up", () => {
     expect(source).toMatch(/getLineupCompletenessLabel\(opportunity\)/);
+  });
+
+  // PR #218 review feedback: any raw URL value shown via InfoRow must render
+  // as a clickable link, never plain text.
+  it("renders InfoRow values as clickable links when the value is itself a URL", () => {
+    expect(source).toMatch(/function isHttpUrl\(value: string\): boolean/);
+    expect(source).toMatch(/const href = isHttpUrl\(value\) \? value : null;/);
+  });
+
+  // PR #218 review feedback: contacts that are URLs must be clickable even
+  // when no separate structured `contact.url` was provided.
+  it("renders a contact value as a link when it is itself a URL, not only when contact.url is set", () => {
+    expect(source).toMatch(/contact\.url \|\| isHttpUrl\(contact\.value\)/);
+  });
+
+  // PR #218 review feedback: "Source evidence" must never repeat a source
+  // already shown in "Source and ticketing".
+  it("excludes the event/ticket URL already shown in Source and ticketing from Source evidence", () => {
+    expect(source).toMatch(/getSourceEvidenceExcluding\(opportunity, \[eventUrl, ticketAction\?\.href\]\)/);
+  });
+
+  // PR #218 review feedback: a venue opportunity discovered from similar
+  // artists' live history must explicitly list every contributing artist.
+  it("lists every similar artist confirmed at the venue, each linking to its own concert source", () => {
+    expect(source).toMatch(/Similar artists who played here/);
+    expect(source).toMatch(/href={item\.sourceUrl}/);
   });
 });
 

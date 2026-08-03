@@ -447,6 +447,18 @@ export const OpportunityRelatedArtistSchema = z.object({
   matchedGenres: z.array(z.string().trim().min(1)).default([])
 });
 
+// One similar artist's past concert at this venue (issue #213 review
+// feedback): a venue opportunity discovered via similar-artist live history
+// must explicitly list every contributing similar artist, each with the
+// concert source that proves they played there — never only the single
+// most-recent artist via `relatedArtist` above.
+export const OpportunityVenueArtistEvidenceSchema = z.object({
+  similarArtistName: z.string().trim().min(1),
+  sourceUrl: z.string().trim().url(),
+  eventDate: z.string().trim().min(1).nullable().optional(),
+  eventName: z.string().trim().min(1).nullable().optional()
+});
+
 export const MatchFactorCodeSchema = z.enum([
   "genre_match",
   "location_match",
@@ -530,6 +542,11 @@ export const OpportunitySchema = z.object({
   recentEvents: z.array(z.string().trim().min(1)).default([]),
   // Present only when this opportunity was surfaced from a similar artist's live history.
   relatedArtist: OpportunityRelatedArtistSchema.nullable().optional(),
+  // Every similar artist known to have played this venue (issue #213 review
+  // feedback), each with its own concert source — this is the evidence used
+  // to prove venue relevance, and must never be confused with the venue's
+  // own official website (source_url/venueWebsite above).
+  venueArtistEvidence: z.array(OpportunityVenueArtistEvidenceSchema).default([]),
   // Full announced lineup (headliner + support), when a source lists it. Never guessed.
   lineup: z.array(z.string().trim().min(1)).default([]),
   // Poster/event image URL, extracted from source page metadata. Never guessed.

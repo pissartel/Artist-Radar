@@ -368,7 +368,7 @@ async function enrichSimilarArtistsWithChartmetricSafely(
   }
 }
 
-function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpportunity): Opportunity {
+export function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpportunity): Opportunity {
   return {
     name: opportunity.name,
     rawTitle: opportunity.rawTitle,
@@ -409,6 +409,17 @@ function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpportunit
           matchedGenres: opportunity.derivedFromSimilarArtist.matchedGenres
         }
       : null,
+    // Every similar artist confirmed at this venue, not only the single most
+    // recent one (issue #213 review feedback), each kept with its own
+    // concert source as evidence — never mapped onto venueWebsite.
+    venueArtistEvidence: (opportunity.target.venueArtistEvidence ?? [])
+      .filter((evidence) => evidence.similarArtistName)
+      .map((evidence) => ({
+        similarArtistName: evidence.similarArtistName as string,
+        sourceUrl: evidence.sourceUrl,
+        eventDate: evidence.eventDate ?? null,
+        eventName: evidence.eventName ?? null
+      })),
     internalReview: opportunity.internalReview
   };
 }

@@ -200,13 +200,62 @@ function mapOpportunityCategory(opportunity: BackendOpportunity): OpportunityCat
   return "unknown";
 }
 
+// Domains that are always an aggregator/discovery source, never a venue's
+// own official site (PR #218 review feedback): a concert found through one
+// of these must never be surfaced as "the venue's website".
+const NON_VENUE_WEBSITE_DOMAINS = [
+  "songkick.com",
+  "bandsintown.com",
+  "setlist.fm",
+  "shotgun.live",
+  "dice.fm",
+  "ra.co",
+  "residentadvisor.net",
+  "ticketmaster.com",
+  "ticketmaster.fr",
+  "eventbrite.com",
+  "eventbrite.fr",
+  "facebook.com",
+  "last.fm",
+  "allevents.in",
+  "wegow.com",
+];
+
+// Path segments identifying an artist profile, event listing, calendar, or
+// ticketing page rather than a venue's own homepage (PR #218 review
+// feedback: "ne jamais mapper une page artiste, un calendrier artiste, une
+// billetterie de concert, une page événement ou une source d'agrégateur
+// vers venueWebsite").
+const NON_VENUE_WEBSITE_PATH_PATTERN = /\/(artists?|events?|calendar|tickets?|billetterie|billets|e|tour)(\/|$)/i;
+
+function isLikelyVenueWebsite(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.replace(/^www\./, "");
+    if (NON_VENUE_WEBSITE_DOMAINS.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`))) {
+      return false;
+    }
+    return !NON_VENUE_WEBSITE_PATH_PATTERN.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
 // A venue's own official website is only ever the opportunity's own source
 // when the opportunity IS the venue (its source page is the venue's site,
 // not a third-party event/listing page) — never inferred for concert/
 // festival/opening_slot opportunities, whose source is the event page
 // (issue #213: "Do not label a generic listing page as the venue website").
+// Even for a venue-type opportunity, the source is validated first (PR #218
+// review feedback): a similar-artist concert page (Songkick/Shotgun/
+// Bandsintown artist, calendar, event or ticketing URL) must never be
+// displayed as the venue's official website — if the source doesn't look
+// like a venue's own homepage, no website is shown at all rather than a
+// misleading one.
 function mapVenueWebsite(opportunity: BackendOpportunity, category: OpportunityCategory): string | undefined {
-  return category === "venue" ? opportunity.source_url ?? undefined : undefined;
+  if (category !== "venue") return undefined;
+  const sourceUrl = opportunity.source_url;
+  return sourceUrl && isLikelyVenueWebsite(sourceUrl) ? sourceUrl : undefined;
 }
 
 function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
@@ -248,6 +297,7 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
     recentEvents: opportunity.recentEvents ?? [],
     lineup: opportunity.lineup ?? [],
     relatedArtist: opportunity.relatedArtist ?? null,
+    venueArtistEvidence: opportunity.venueArtistEvidence ?? [],
     imageUrl: opportunity.imageUrl ?? undefined,
   };
 }

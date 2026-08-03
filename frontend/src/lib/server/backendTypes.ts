@@ -166,6 +166,16 @@ export interface BackendOpportunityRelatedArtist {
   matchedGenres: string[];
 }
 
+// One similar artist's past concert at this venue (issue #213 review
+// feedback) — the source URL here is concert evidence, never the venue's
+// own official website.
+export interface BackendOpportunityVenueArtistEvidence {
+  similarArtistName: string;
+  sourceUrl: string;
+  eventDate?: string | null;
+  eventName?: string | null;
+}
+
 export type BackendMatchFactorCode =
   | "genre_match"
   | "location_match"
@@ -227,6 +237,7 @@ export interface BackendOpportunity {
   recentEvents?: string[];
   lineup?: string[];
   relatedArtist?: BackendOpportunityRelatedArtist | null;
+  venueArtistEvidence?: BackendOpportunityVenueArtistEvidence[];
   imageUrl?: string | null;
   ticketUrl?: string | null;
   matchBreakdown?: BackendOpportunityMatchBreakdown;

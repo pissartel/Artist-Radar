@@ -8,6 +8,7 @@ import {
   getOpportunitySignal,
   getRecommendedAction,
   getSourceEvidence,
+  getSourceEvidenceExcluding,
   getVenueTypeLabel,
   hasLiveEventInfo,
   isLiveEventOpportunity,
@@ -184,6 +185,41 @@ describe("getSourceEvidence", () => {
 
   it("returns an empty list when there are no sources", () => {
     expect(getSourceEvidence(buildOpportunity())).toEqual([]);
+  });
+});
+
+// PR #218 review feedback: "Source and ticketing" and "Source evidence" must
+// never repeat the exact same source/URL as two separate cards.
+describe("getSourceEvidenceExcluding", () => {
+  it("filters out evidence whose URL is already shown elsewhere (e.g. as the event source)", () => {
+    const opportunity = buildOpportunity({
+      sourceUrls: ["https://songkick.example/events/123"],
+    });
+    expect(getSourceEvidenceExcluding(opportunity, ["https://songkick.example/events/123"])).toEqual([]);
+  });
+
+  it("ignores trivial URL differences (trailing slash) when comparing", () => {
+    const opportunity = buildOpportunity({
+      sourceUrls: ["https://songkick.example/events/123/"],
+    });
+    expect(getSourceEvidenceExcluding(opportunity, ["https://songkick.example/events/123"])).toEqual([]);
+  });
+
+  it("keeps evidence whose URL is genuinely distinct from the excluded URLs", () => {
+    const opportunity = buildOpportunity({
+      sourceEvidence: [
+        { url: "https://songkick.example/events/123", title: "Event listing" },
+        { url: "https://venue.example/programme", title: "Venue programme" },
+      ],
+    });
+    const result = getSourceEvidenceExcluding(opportunity, ["https://songkick.example/events/123"]);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.url).toBe("https://venue.example/programme");
+  });
+
+  it("ignores null/undefined excluded URLs", () => {
+    const opportunity = buildOpportunity({ sourceUrls: ["https://a.example/1"] });
+    expect(getSourceEvidenceExcluding(opportunity, [null, undefined])).toHaveLength(1);
   });
 });
 

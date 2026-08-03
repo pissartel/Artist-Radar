@@ -121,6 +121,75 @@ export interface CommercialScoreBreakdown {
   crossPlatformEvidence: number;
 }
 
+// Issue #219: cross-platform commercial-scale band/confidence vocabulary —
+// deliberately separate from CommercialTier/CommercialAbsoluteScale above:
+// those describe a *relationship*/absolute-stage classification derived
+// largely from Chartmetric candidate data, while artistScaleScore is an
+// independent, always-computable (main artist included) cross-platform scale
+// reading used to compare the analyzed artist against its similar artists.
+export type ArtistScaleBand =
+  | "emerging"
+  | "developing"
+  | "established_local"
+  | "regional"
+  | "national"
+  | "major";
+
+export type ArtistScaleScoreConfidence = "high" | "medium" | "low" | "unavailable";
+
+// Null whenever the underlying signal is missing — never a fabricated
+// neutral value.
+export interface ArtistScaleScoreComponents {
+  streaming: number | null;
+  social: number | null;
+  growth: number | null;
+  liveActivity: number | null;
+}
+
+export type ArtistScaleComparisonClassification =
+  | "well_below"
+  | "slightly_below"
+  | "in_line"
+  | "slightly_above"
+  | "well_above";
+
+export type ArtistScaleComparisonUnavailableReason =
+  | "main_artist_score_unavailable"
+  | "insufficient_similar_artist_scores";
+
+// Position of the analyzed artist's artistScaleScore relative to its similar
+// artists. `available` is false — with every percentile/classification
+// figure left null — whenever there aren't enough real similar-artist scores
+// or the analyzed artist has no score at all. The UI must hide the
+// comparison entirely (rather than render a misleading figure) whenever
+// `available` is false — see components/dashboard/ArtistScalePanel.tsx.
+export interface ArtistScaleComparison {
+  available: boolean;
+  reason?: ArtistScaleComparisonUnavailableReason;
+  sampleSize: number;
+  median: number | null;
+  average: number | null;
+  minimum: number | null;
+  maximum: number | null;
+  percentile: number | null;
+  differenceToMedian: number | null;
+  differenceToAverage: number | null;
+  classification: ArtistScaleComparisonClassification | null;
+}
+
+// Full artistScaleScore result for the analyzed artist, plus its comparison
+// against similar artists.
+export interface ArtistScale {
+  artistScaleScore: number | null;
+  artistScaleBand: ArtistScaleBand | null;
+  confidence: ArtistScaleScoreConfidence;
+  coverage: number;
+  components: ArtistScaleScoreComponents;
+  missingSignals: string[];
+  explanation: string;
+  comparison: ArtistScaleComparison;
+}
+
 export interface SimilarArtist {
   id: string;
   name: string;

@@ -39,6 +39,11 @@ import {
   enrichSimilarArtistsWithChartmetric,
   type SimilarArtistCandidateEnrichmentProvider
 } from "./modules/similarArtistCommercialEnrichment.js";
+import {
+  computeArtistScaleForAnalysis,
+  type ComputeArtistScaleForAnalysisResult
+} from "./modules/artistScaleEnrichment.js";
+import type { ArtistScale } from "./schemas.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
@@ -102,6 +107,15 @@ export interface OpportunitySearchRunResult {
   // distinguish "unavailable" from "not attempted" — a normalized
   // ArtistEnrichmentResult, never a raw Chartmetric response.
   chartmetric?: ArtistEnrichmentResult;
+  // Cross-platform artistScaleScore for the analyzed artist plus its
+  // comparison against the (Chartmetric-enriched) similar-artist sample
+  // (issue #219). Always populated by runOpportunitySearch — a best-effort
+  // result with `artistScaleScore: null`/`comparison.available: false`
+  // rather than an exception whenever there isn't enough underlying data or
+  // this step itself fails. The matching per-candidate
+  // artistScaleScore/artistScaleBand/artistScaleScoreConfidence fields are
+  // attached directly to each entry in `similarArtists` above.
+  artistScale?: ArtistScale;
 }
 
 export async function runOpportunitySearch(
@@ -179,6 +193,16 @@ export async function runOpportunitySearch(
       summarizeSimilarArtistOrdering(flattenSimilarArtists(groupedSimilarArtists))
     );
     debugLog("chartmetric", "artists passed to live discovery (concert history, booking search, label discovery)", summarizeSimilarArtistOrdering(similarArtistsForLiveSearch));
+    // Issue #219: computes artistScaleScore for the analyzed artist and for
+    // every similar artist (reusing the Chartmetric candidate metrics just
+    // attached above), then positions the analyzed artist against that
+    // sample. Purely additive — never changes which similar artists exist or
+    // their ordering, only adds artistScale* fields to each entry.
+    const { artistScale, similarArtists: scaledSimilarArtists } = computeArtistScaleSafely(
+      profile,
+      chartmetric,
+      groupedSimilarArtists
+    );
     const similarArtistConcerts = await findSimilarArtistConcertsSafely(
       similarArtistsForLiveSearch,
       options.artistConcertProviders
@@ -234,7 +258,7 @@ export async function runOpportunitySearch(
 
       const bookingResult: OpportunitySearchRunResult = {
         artistProfile: profile,
-        similarArtists: groupedSimilarArtists,
+        similarArtists: scaledSimilarArtists,
         venueCandidates,
         eventCandidates,
         opportunities: bookingSearch.opportunities.map(mapBookingOpportunityToLegacyOpportunity),
@@ -242,7 +266,8 @@ export async function runOpportunitySearch(
         similarArtistConcerts,
         ticketmaster: buildTicketmasterEvidenceSafely(bookingSearch),
         labelOpportunities,
-        chartmetric
+        chartmetric,
+        artistScale
       };
       track("COMPLETED");
       if (executionId) {
@@ -276,12 +301,13 @@ export async function runOpportunitySearch(
 
     const promoResult: OpportunitySearchRunResult = {
       artistProfile: profile,
-      similarArtists: groupedSimilarArtists,
+      similarArtists: scaledSimilarArtists,
       venueCandidates,
       eventCandidates,
       opportunities: validated.opportunities.slice(0, input.limit),
       similarArtistConcerts,
-      chartmetric
+      chartmetric,
+      artistScale
     };
     track("COMPLETED");
     if (executionId) {
@@ -365,6 +391,54 @@ async function enrichSimilarArtistsWithChartmetricSafely(
       message: error instanceof Error ? error.message : String(error)
     });
     return groupedSimilarArtists;
+  }
+}
+
+// Artist-scale scoring/comparison (issue #219) is an additive, best-effort
+// step, mirroring enrichSimilarArtistsWithChartmetricSafely above: a failure
+// here must never take down the rest of the analysis and must never change
+// which similar artists exist or their ordering — on any failure this
+// degrades to the unenriched groups plus an "unavailable" artistScale.
+function computeArtistScaleSafely(
+  profile: ArtistProfile,
+  mainArtistChartmetric: ArtistEnrichmentResult,
+  groupedSimilarArtists: SimilarArtistsByTier
+): ComputeArtistScaleForAnalysisResult {
+  try {
+    return computeArtistScaleForAnalysis({
+      profile,
+      mainArtistChartmetric,
+      similarArtists: groupedSimilarArtists
+    });
+  } catch (error) {
+    warnLog("enrichment", "artist scale scoring/comparison failed and was skipped", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+    return {
+      artistScale: {
+        artistScaleScore: null,
+        artistScaleBand: null,
+        confidence: "unavailable",
+        coverage: 0,
+        components: { streaming: null, social: null, growth: null, liveActivity: null },
+        missingSignals: [],
+        explanation: "Artist scale scoring was unavailable for this run.",
+        comparison: {
+          available: false,
+          reason: "main_artist_score_unavailable",
+          sampleSize: 0,
+          median: null,
+          average: null,
+          minimum: null,
+          maximum: null,
+          percentile: null,
+          differenceToMedian: null,
+          differenceToAverage: null,
+          classification: null
+        }
+      },
+      similarArtists: groupedSimilarArtists
+    };
   }
 }
 

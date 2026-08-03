@@ -1,6 +1,7 @@
 import type {
   ArtistMetrics,
   ArtistProfile,
+  ArtistScale,
   BookingSource,
   CityOpportunityStat,
   KpiMetric,
@@ -13,6 +14,7 @@ import type {
 import type { ArtistRadarRequest, ArtistRadarResponse } from "@/types/artistRadar";
 import type {
   BackendArtistProfile,
+  BackendArtistScale,
   BackendArtistTier,
   BackendOpportunity,
   BackendPipelineResult,
@@ -145,6 +147,36 @@ function mapSimilarArtist(artist: BackendSimilarArtist): SimilarArtist {
     commercialScoreBreakdown: artist.commercialScoreBreakdown,
     commercialScoreExplanation: artist.commercialScoreExplanation,
     chartmetricDiagnostics: artist.chartmetricDiagnostics,
+    artistScaleScore: artist.artistScaleScore,
+    artistScaleBand: artist.artistScaleBand,
+    artistScaleScoreConfidence: artist.artistScaleScoreConfidence,
+    artistScaleScoreCoverage: artist.artistScaleScoreCoverage,
+  };
+}
+
+function mapArtistScale(artistScale?: BackendArtistScale): ArtistScale | undefined {
+  if (!artistScale) return undefined;
+  return {
+    artistScaleScore: artistScale.artistScaleScore,
+    artistScaleBand: artistScale.artistScaleBand,
+    confidence: artistScale.confidence,
+    coverage: artistScale.coverage,
+    components: artistScale.components,
+    missingSignals: artistScale.missingSignals,
+    explanation: artistScale.explanation,
+    comparison: {
+      available: artistScale.comparison.available,
+      reason: artistScale.comparison.reason,
+      sampleSize: artistScale.comparison.sampleSize,
+      median: artistScale.comparison.median,
+      average: artistScale.comparison.average,
+      minimum: artistScale.comparison.minimum,
+      maximum: artistScale.comparison.maximum,
+      percentile: artistScale.comparison.percentile,
+      differenceToMedian: artistScale.comparison.differenceToMedian,
+      differenceToAverage: artistScale.comparison.differenceToAverage,
+      classification: artistScale.comparison.classification,
+    },
   };
 }
 
@@ -418,5 +450,6 @@ export function mapPipelineResultToArtistRadarResponse(
         }
       : undefined,
     warnings,
+    artistScale: mapArtistScale(result.artistScale),
   };
 }

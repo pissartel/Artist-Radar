@@ -91,6 +91,28 @@ export {
 export type { SpotifyCapabilities } from "./services/spotifyService.js";
 export { extractYouTubeChannelIdentifier, getYouTubeChannelStats, parseYouTubeChannelInput } from "./services/youtubeService.js";
 export { findVenueEventCandidates } from "./modules/venueEventFinder.js";
+export {
+  computeArtistScaleForAnalysis,
+  type ComputeArtistScaleForAnalysisInput,
+  type ComputeArtistScaleForAnalysisResult
+} from "./modules/artistScaleEnrichment.js";
+export {
+  DEFAULT_COMPONENT_WEIGHTS as ARTIST_SCALE_DEFAULT_COMPONENT_WEIGHTS,
+  DEFAULT_MAX_COMPONENT_SHARE as ARTIST_SCALE_DEFAULT_MAX_COMPONENT_SHARE,
+  DEFAULT_SCALE_BANDS as ARTIST_SCALE_DEFAULT_SCALE_BANDS,
+  scoreArtistScale,
+  type ArtistScaleComponentWeights,
+  type ArtistScaleScoreInput,
+  type ArtistScaleScoreOptions,
+  type ArtistScaleScoreResult,
+  type ScaleBandThreshold
+} from "./scoring/artistScaleScore.js";
+export {
+  DEFAULT_ARTIST_SCALE_COMPARISON_THRESHOLDS,
+  compareArtistScaleToSimilarArtists,
+  type ArtistScaleComparisonResult,
+  type ArtistScaleComparisonThresholds
+} from "./scoring/artistScaleComparison.js";
 export type { OpportunitySearchRunResult } from "./pipeline.js";
 export type {
   WebLocalSceneArtistDiscovery,
@@ -129,6 +151,13 @@ export type {
   Popularity,
   PlatformStats,
   SimilarArtist,
+  ArtistScale,
+  ArtistScaleBand,
+  ArtistScaleComparison,
+  ArtistScaleComparisonClassification,
+  ArtistScaleComparisonUnavailableReason,
+  ArtistScaleScoreComponents,
+  ArtistScaleScoreConfidence,
   SimilarArtistPossibleUse,
   SizeSignalSource,
   SimilarArtistSource,
@@ -197,6 +226,13 @@ export {
   PopularitySchema,
   PlatformStatsSchema,
   SimilarArtistSchema,
+  ArtistScaleSchema,
+  ArtistScaleBandSchema,
+  ArtistScaleComparisonSchema,
+  ArtistScaleComparisonClassificationSchema,
+  ArtistScaleComparisonUnavailableReasonSchema,
+  ArtistScaleScoreComponentsSchema,
+  ArtistScaleScoreConfidenceSchema,
   SimilarArtistPossibleUseSchema,
   SimilarArtistSourceSchema,
   SizeEvidenceSchema,

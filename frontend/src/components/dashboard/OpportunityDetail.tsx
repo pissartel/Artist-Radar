@@ -26,7 +26,7 @@ import {
   type OpportunityCardFamily,
   getPositiveMatchFactors,
   getRecommendedAction,
-  getSourceEvidence,
+  getSourceEvidenceExcluding,
   getTicketAction,
   getVenueTypeLabel,
   LINEUP_POSITION_LABELS,
@@ -50,12 +50,32 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Any value that is itself an absolute http(s) URL must render as a
+// clickable link, never raw text (PR #218 review feedback) — the credit
+// system that will eventually attribute these links comes later, but the
+// links themselves must work now.
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value.trim());
+}
+
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null;
+  const href = isHttpUrl(value) ? value : null;
   return (
     <div className="flex items-baseline gap-2 text-sm">
       <span className="text-foreground-muted w-24 flex-shrink-0">{label}</span>
-      <span className="text-foreground-secondary">{value}</span>
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-accent-text hover:text-foreground transition-colors break-all"
+        >
+          {value}
+        </a>
+      ) : (
+        <span className="text-foreground-secondary">{value}</span>
+      )}
     </div>
   );
 }
@@ -313,9 +333,41 @@ function VenueSection({ opportunity }: { opportunity: Opportunity }) {
               View venue details →
             </Link>
           </div>
+          <VenueArtistEvidenceList evidence={opportunity.venueArtistEvidence} />
         </div>
       </div>
     </div>
+  );
+}
+
+// Every similar artist confirmed at this venue (issue #213 review feedback:
+// "Explicitly mention which similar artist(s) played the venue"), each name
+// linking to its own concert source as evidence — never presented as the
+// venue's own website.
+function VenueArtistEvidenceList({
+  evidence,
+}: {
+  evidence?: Opportunity["venueArtistEvidence"];
+}) {
+  if (!evidence || evidence.length === 0) return null;
+
+  return (
+    <p className="text-xs text-foreground-muted mt-3">
+      Similar artists who played here:{" "}
+      {evidence.map((item, index) => (
+        <span key={`${item.similarArtistName}-${item.sourceUrl}`}>
+          {index > 0 && ", "}
+          <a
+            href={item.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent-text hover:text-foreground transition-colors"
+          >
+            {item.similarArtistName}
+          </a>
+        </span>
+      ))}
+    </p>
   );
 }
 
@@ -343,9 +395,9 @@ function ContactSection({ opportunity }: { opportunity: Opportunity }) {
               {group.contacts.map((contact) => (
                 <li key={`${contact.purpose}-${contact.value}`} className="text-sm">
                   <div className="flex items-center gap-2 flex-wrap">
-                    {contact.url ? (
+                    {contact.url || isHttpUrl(contact.value) ? (
                       <a
-                        href={contact.url}
+                        href={contact.url ?? contact.value}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-accent-text hover:text-foreground transition-colors"
@@ -471,8 +523,14 @@ function SourceAndTicketingSection({ opportunity }: { opportunity: Opportunity }
 
 // Every source used to build this opportunity, each with what it contributed
 // and a direct link — not only the domain name (issue #132 review feedback).
+// Excludes anything already shown in Source and ticketing above, so the same
+// source/URL is never displayed twice (issue #213 review feedback) — when
+// nothing distinct remains, the whole section is hidden rather than repeating
+// the event/ticket link under a second heading.
 function SourceEvidenceSection({ opportunity }: { opportunity: Opportunity }) {
-  const evidence = getSourceEvidence(opportunity);
+  const eventUrl = getOpportunitySourceUrl(opportunity);
+  const ticketAction = getTicketAction(opportunity);
+  const evidence = getSourceEvidenceExcluding(opportunity, [eventUrl, ticketAction?.href]);
   if (evidence.length === 0) return null;
 
   return (

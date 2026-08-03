@@ -415,6 +415,30 @@ export function getSourceEvidence(opportunity: Opportunity): SourceEvidenceItem[
   }));
 }
 
+function normalizeUrlForComparison(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = "";
+    return parsed.toString().replace(/\/$/, "").toLowerCase();
+  } catch {
+    return url.trim().toLowerCase();
+  }
+}
+
+// Source evidence with anything already shown elsewhere on the page (e.g.
+// the event/ticket link in "Source and ticketing") filtered out, so the
+// same source is never displayed twice (PR #218 review feedback: "Source
+// and ticketing" and "Source evidence" must never repeat the same URL).
+export function getSourceEvidenceExcluding(
+  opportunity: Opportunity,
+  excludeUrls: (string | null | undefined)[],
+): SourceEvidenceItem[] {
+  const excluded = new Set(
+    excludeUrls.filter((url): url is string => Boolean(url)).map(normalizeUrlForComparison),
+  );
+  return getSourceEvidence(opportunity).filter((item) => !excluded.has(normalizeUrlForComparison(item.url)));
+}
+
 export type OpportunitySignalKind =
   | "support_slot_available"
   | "open_call"

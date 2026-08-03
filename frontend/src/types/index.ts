@@ -187,6 +187,18 @@ export interface OpportunityRelatedArtist {
   matchedGenres: string[];
 }
 
+// One similar artist's past concert at this venue (issue #213 review
+// feedback): a venue opportunity discovered from similar-artist live history
+// must explicitly list every contributing artist, each with the concert
+// source that proves they played there. This is evidence, never the venue's
+// own official website (see `venueWebsite` below).
+export interface OpportunityVenueArtistEvidence {
+  similarArtistName: string;
+  sourceUrl: string;
+  eventDate?: string | null;
+  eventName?: string | null;
+}
+
 // Structured match factors from the backend (issue #130 review feedback).
 // The frontend must render these directly and never parse `matchReasons`
 // prose to derive "why this matches" copy.
@@ -404,6 +416,9 @@ export interface Opportunity {
   lineup: string[];
   // Present only when this opportunity was surfaced from a similar artist's live history.
   relatedArtist?: OpportunityRelatedArtist | null;
+  // Every similar artist known to have played this venue (issue #213 review
+  // feedback), each with its own concert source as evidence.
+  venueArtistEvidence?: OpportunityVenueArtistEvidence[];
 }
 
 export interface BookingSource {

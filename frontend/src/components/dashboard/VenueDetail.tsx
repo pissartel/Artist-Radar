@@ -22,12 +22,30 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Any value that is itself an absolute http(s) URL must render as a
+// clickable link, never raw text (PR #218 review feedback).
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value.trim());
+}
+
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null;
+  const href = isHttpUrl(value) ? value : null;
   return (
     <div className="flex items-baseline gap-2 text-sm">
       <span className="text-foreground-muted w-24 flex-shrink-0">{label}</span>
-      <span className="text-foreground-secondary">{value}</span>
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-accent-text hover:text-foreground transition-colors break-all"
+        >
+          {value}
+        </a>
+      ) : (
+        <span className="text-foreground-secondary">{value}</span>
+      )}
     </div>
   );
 }

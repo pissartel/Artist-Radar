@@ -577,6 +577,87 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     expect(opportunity?.venueWebsite).toBe("https://le-petit-club.example/");
   });
 
+  // PR #218 review feedback: a venue opportunity discovered from a similar
+  // artist's concert history must never surface that artist's Songkick/
+  // Shotgun/Bandsintown profile, calendar, or ticketing page as the venue's
+  // own official website.
+  it.each([
+    ["a Songkick artist calendar page", "https://songkick.com/artists/mina-warren/calendar"],
+    ["a Shotgun artist profile page", "https://shotgun.live/en/users/artists/minawarren"],
+    ["a Bandsintown event/ticketing page", "https://bandsintown.com/e/neon-riot-monsters-art"],
+    ["a generic /events/ listing page", "https://agenda.example/events/monsters-art-night"],
+  ])("never maps %s to venueWebsite", (_label, sourceUrl) => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Monster's Art",
+          type: "venue",
+          city: "Marseille",
+          country: "France",
+          source_url: sourceUrl,
+          contact: null,
+          reason: "Similar artists played this venue.",
+          score: 70,
+          suggested_message: "Reach out.",
+          venueName: "Monster's Art",
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const opportunity = response.bookingOpportunities[0];
+
+    expect(opportunity?.venueWebsite).toBeUndefined();
+  });
+
+  it("lists every similar artist confirmed at the venue, each with its own concert source (issue #213 review feedback)", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Monster's Art",
+          type: "venue",
+          city: "Marseille",
+          country: "France",
+          source_url: "https://songkick.com/artists/mina-warren/calendar",
+          contact: null,
+          reason: "Similar artists played this venue.",
+          score: 70,
+          suggested_message: "Reach out.",
+          venueName: "Monster's Art",
+          venueArtistEvidence: [
+            {
+              similarArtistName: "Mina Warren",
+              sourceUrl: "https://songkick.com/artists/mina-warren/calendar",
+              eventDate: "2026-03-01",
+            },
+            {
+              similarArtistName: "Neon Riot",
+              sourceUrl: "https://bandsintown.com/e/neon-riot-monsters-art",
+              eventDate: "2026-01-15",
+            },
+          ],
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const opportunity = response.bookingOpportunities[0];
+
+    expect(opportunity?.venueWebsite).toBeUndefined();
+    expect(opportunity?.venueArtistEvidence).toEqual([
+      {
+        similarArtistName: "Mina Warren",
+        sourceUrl: "https://songkick.com/artists/mina-warren/calendar",
+        eventDate: "2026-03-01",
+      },
+      {
+        similarArtistName: "Neon Riot",
+        sourceUrl: "https://bandsintown.com/e/neon-riot-monsters-art",
+        eventDate: "2026-01-15",
+      },
+    ]);
+  });
+
   it("omits venueId when the backend didn't resolve a venue name", () => {
     const result = buildResult({
       opportunities: [

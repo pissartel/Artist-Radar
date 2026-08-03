@@ -514,6 +514,18 @@ export const OpportunitySchema = z.object({
   venueCapacity: z.number().int().positive().nullable().optional(),
   // Full street address, when a source reports it. Never guessed.
   address: z.string().trim().min(1).nullable().optional(),
+  // Venue name, when a source reports it (issue #213). Never guessed.
+  venueName: z.string().trim().min(1).nullable().optional(),
+  // Kind of venue (e.g. "venue", "bar", "association", "festival"), from the
+  // target's classified category (issue #213). Never guessed.
+  venueType: z.string().trim().min(1).nullable().optional(),
+  // Venue's own logo/branding image, distinct from the event poster
+  // (`imageUrl` above) — only ever set from a source explicitly identified
+  // as venue branding (header logo/favicon), never from an event-specific
+  // image (issue #213).
+  venueImageUrl: z.string().trim().url().nullable().optional(),
+  // Confidence (0-1) in the resolved venue/target data, when known (issue #213).
+  venueConfidence: ConfidenceScoreSchema.nullable().optional(),
   // Past events/programming attributed to this target, when known.
   recentEvents: z.array(z.string().trim().min(1)).default([]),
   // Present only when this opportunity was surfaced from a similar artist's live history.

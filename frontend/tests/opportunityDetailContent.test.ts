@@ -56,6 +56,27 @@ describe("OpportunityDetail content (issue #132 review feedback)", () => {
   it("shows what kind of opportunity this is (support slot, open call, venue contact, or general event)", () => {
     expect(source).toMatch(/OpportunitySignalBanner/);
   });
+
+  it("renders a dedicated Venue section linking to the canonical venue page (issue #213)", () => {
+    expect(source).toMatch(/<SectionTitle>Venue<\/SectionTitle>/);
+    expect(source).toMatch(/href={`\/venues\/\$\{opportunity\.venueId\}`}/);
+    expect(source).toMatch(/View venue details/);
+  });
+
+  it("only renders the Venue section for a live event opportunity with a resolved venueId", () => {
+    expect(source).toMatch(
+      /if \(!isLiveEventOpportunity\(opportunity\) \|\| !opportunity\.venueId \|\| !opportunity\.venue\) return null;/,
+    );
+  });
+
+  it("renders a dedicated Source and ticketing section, separate from the Venue section", () => {
+    expect(source).toMatch(/Source and ticketing/);
+    expect(source).toMatch(/<SourceAndTicketingSection opportunity={opportunity} \/>/);
+  });
+
+  it("shows lineup completeness alongside the line-up", () => {
+    expect(source).toMatch(/getLineupCompletenessLabel\(opportunity\)/);
+  });
 });
 
 describe("OpportunityActions content (issue #130/#132 review feedback)", () => {

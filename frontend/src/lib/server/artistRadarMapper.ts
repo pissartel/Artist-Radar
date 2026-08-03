@@ -200,8 +200,23 @@ function mapOpportunityCategory(opportunity: BackendOpportunity): OpportunityCat
   return "unknown";
 }
 
+// A venue's own official website is only ever the opportunity's own source
+// when the opportunity IS the venue (its source page is the venue's site,
+// not a third-party event/listing page) — never inferred for concert/
+// festival/opening_slot opportunities, whose source is the event page
+// (issue #213: "Do not label a generic listing page as the venue website").
+function mapVenueWebsite(opportunity: BackendOpportunity, category: OpportunityCategory): string | undefined {
+  return category === "venue" ? opportunity.source_url ?? undefined : undefined;
+}
+
 function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
   const category = mapOpportunityCategory(opportunity);
+  const venueName = opportunity.venueName?.trim() || undefined;
+  // Stable per-session id: two opportunities that resolve to the same venue
+  // name + city/country link to the same canonical venue page. Absent
+  // whenever no venue name was resolved (issue #213 acceptance criterion).
+  const venueId = venueName ? slugify(`${venueName}-${opportunity.city ?? ""}-${opportunity.country ?? ""}`) : undefined;
+
   return {
     id: slugify(`${opportunity.name}-${opportunity.city ?? "unknown"}`),
     type: mapOpportunityType(opportunity.type),
@@ -224,6 +239,12 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
     genres: opportunity.genres ?? [],
     venueCapacity: opportunity.venueCapacity ?? null,
     address: opportunity.address ?? undefined,
+    venue: venueName,
+    venueId,
+    venueType: opportunity.venueType ?? undefined,
+    venueWebsite: mapVenueWebsite(opportunity, category),
+    venueImageUrl: opportunity.venueImageUrl ?? undefined,
+    venueConfidence: opportunity.venueConfidence != null ? Math.round(opportunity.venueConfidence * 100) : null,
     recentEvents: opportunity.recentEvents ?? [],
     lineup: opportunity.lineup ?? [],
     relatedArtist: opportunity.relatedArtist ?? null,

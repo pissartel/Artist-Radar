@@ -14,10 +14,13 @@ import {
   getContactAction,
   getDisplayTitle,
   getGroupedContacts,
+  getLineupCompletenessLabel,
   getLineupEntries,
+  isLiveEventOpportunity,
   getNegativeMatchFactors,
   getNeutralMatchFactors,
   getOpportunitySignal,
+  getOpportunitySource,
   getOpportunitySourceUrl,
   getOrganizationTypeLabel,
   type OpportunityCardFamily,
@@ -85,15 +88,14 @@ function buildEventInfoRows(opportunity: Opportunity): { label: string; value?: 
       { label: "Location", value: location },
     ];
   } else {
+    // Venue-specific facts (name, type, website, address, capacity) live in
+    // the dedicated Venue section below instead of here (issue #213), so
+    // event information stays about the event itself.
     rows = [
       { label: "Date", value: formatOpportunityDate(opportunity.date) },
       { label: "Time", value: opportunity.time },
       { label: "Deadline", value: opportunity.deadline },
       { label: "Location", value: location },
-      { label: "Venue", value: opportunity.venue },
-      { label: "Venue type", value: venueTypeLabel },
-      { label: "Website", value: opportunity.venueWebsite },
-      { label: "Address", value: opportunity.address },
     ];
   }
 
@@ -153,10 +155,12 @@ function LineupSection({
   if (entries.length === 0) return null;
 
   const relatedByName = new Map(relatedArtists.map((artist) => [artist.name.trim().toLowerCase(), artist]));
+  const completenessLabel = getLineupCompletenessLabel(opportunity);
 
   return (
     <div className={cardClassName}>
       <SectionTitle>Line-up</SectionTitle>
+      {completenessLabel && <p className="text-xs text-foreground-muted mb-2.5">{completenessLabel}</p>}
       <ul className="flex flex-col gap-2.5">
         {entries.map((entry) => {
           const matchedArtist = relatedByName.get(entry.name.trim().toLowerCase());
@@ -243,17 +247,88 @@ function SupportSlotPotentialSection({ opportunity }: { opportunity: Opportunity
   );
 }
 
+// The venue as its own reusable entity, distinct from the event (issue
+// #213). Only renders for a live-event opportunity (concert/festival/
+// opening_slot) that resolved a venueId — a venue-type opportunity already
+// presents itself as the venue in the Event information card above, so
+// rendering this too would just duplicate it. Missing fields are omitted
+// individually rather than hiding the whole section.
+function VenueSection({ opportunity }: { opportunity: Opportunity }) {
+  if (!isLiveEventOpportunity(opportunity) || !opportunity.venueId || !opportunity.venue) return null;
+
+  const location = [opportunity.city, opportunity.country].filter(Boolean).join(", ");
+  const venueTypeLabel = getVenueTypeLabel(opportunity);
+  const bookingContactAction = getContactAction(opportunity);
+
+  return (
+    <div className={cardClassName}>
+      <SectionTitle>Venue</SectionTitle>
+      <div className="flex items-start gap-3">
+        <OpportunityImage src={opportunity.venueImageUrl} alt={opportunity.venue} variant="thumbnail" className="w-11 h-11" />
+        <div className="min-w-0 flex-1">
+          <Link
+            href={`/venues/${opportunity.venueId}`}
+            className="text-sm font-semibold text-foreground hover:text-accent-text transition-colors"
+          >
+            {opportunity.venue}
+          </Link>
+          <div className="flex flex-col gap-1.5 mt-2">
+            <InfoRow label="Type" value={venueTypeLabel} />
+            <InfoRow label="Address" value={opportunity.address} />
+            <InfoRow label="Location" value={location || null} />
+            <InfoRow
+              label="Capacity"
+              value={opportunity.venueCapacity != null ? `~${opportunity.venueCapacity.toLocaleString()}` : null}
+            />
+            <InfoRow
+              label="Confidence"
+              value={opportunity.venueConfidence != null ? `${opportunity.venueConfidence}/100` : null}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            {opportunity.venueWebsite && (
+              <a
+                href={opportunity.venueWebsite}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-accent-text hover:text-foreground transition-colors"
+              >
+                Official website ↗
+              </a>
+            )}
+            {bookingContactAction && (
+              <a
+                href={bookingContactAction.href}
+                target={bookingContactAction.href.startsWith("http") ? "_blank" : undefined}
+                rel={bookingContactAction.href.startsWith("http") ? "noopener noreferrer" : undefined}
+                className="text-xs text-accent-text hover:text-foreground transition-colors"
+              >
+                Booking contact
+              </a>
+            )}
+            <Link
+              href={`/venues/${opportunity.venueId}`}
+              className="text-xs text-accent-text hover:text-foreground transition-colors"
+            >
+              View venue details →
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Contacts grouped by purpose, each labeled with its trust source and
 // verification state — never an invented or inferred contact (issue #132
-// review feedback). External Contact/Get tickets links live here too, next
-// to the rest of the contact/booking information instead of at the page
-// bottom.
+// review feedback). The Contact/Get tickets external links live here too,
+// next to the rest of the contact/booking information (ticketing itself
+// moved into Source and ticketing below — issue #213).
 function ContactSection({ opportunity }: { opportunity: Opportunity }) {
   const groups = getGroupedContacts(opportunity);
   const contactAction = getContactAction(opportunity);
-  const ticketAction = getTicketAction(opportunity);
 
-  if (groups.length === 0 && !contactAction && !ticketAction) return null;
+  if (groups.length === 0 && !contactAction) return null;
 
   return (
     <div className={cardClassName}>
@@ -298,28 +373,16 @@ function ContactSection({ opportunity }: { opportunity: Opportunity }) {
             </ul>
           </div>
         ))}
-        {(contactAction || ticketAction) && (
+        {contactAction && (
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            {contactAction && (
-              <a
-                href={contactAction.href}
-                target={contactAction.href.startsWith("http") ? "_blank" : undefined}
-                rel={contactAction.href.startsWith("http") ? "noopener noreferrer" : undefined}
-                className="text-xs font-medium text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
-              >
-                {contactAction.label}
-              </a>
-            )}
-            {ticketAction && (
-              <a
-                href={ticketAction.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-medium text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
-              >
-                {ticketAction.label}
-              </a>
-            )}
+            <a
+              href={contactAction.href}
+              target={contactAction.href.startsWith("http") ? "_blank" : undefined}
+              rel={contactAction.href.startsWith("http") ? "noopener noreferrer" : undefined}
+              className="text-xs font-medium text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
+            >
+              {contactAction.label}
+            </a>
           </div>
         )}
       </div>
@@ -358,6 +421,50 @@ function MatchFactorSection({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+// Official event URL, source provider, and ticket URL — kept separate from
+// the Venue section above and from the detailed Source evidence list below
+// (issue #213), so the event's own source is never confused with the
+// venue's own official site.
+function SourceAndTicketingSection({ opportunity }: { opportunity: Opportunity }) {
+  const family = getCardFamily(opportunity);
+  const eventUrl = getOpportunitySourceUrl(opportunity);
+  const sourceProvider = getOpportunitySource(opportunity);
+  const ticketAction = getTicketAction(opportunity);
+
+  if (!eventUrl && !ticketAction) return null;
+
+  return (
+    <div className={cardClassName}>
+      <SectionTitle>Source and ticketing</SectionTitle>
+      <div className="flex flex-col gap-1.5">
+        <InfoRow label="Source" value={sourceProvider} />
+      </div>
+      <div className="flex flex-wrap items-center gap-2 mt-3">
+        {eventUrl && (
+          <a
+            href={eventUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-medium text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
+          >
+            {getSourceLinkLabel(eventUrl, family)}
+          </a>
+        )}
+        {ticketAction && (
+          <a
+            href={ticketAction.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-medium text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
+          >
+            {ticketAction.label}
+          </a>
+        )}
+      </div>
     </div>
   );
 }
@@ -408,7 +515,6 @@ export default function OpportunityDetail({
   const neutralFactors = getNeutralMatchFactors(opportunity);
   const recommendedAction = getRecommendedAction(opportunity);
   const eventInfoRows = buildEventInfoRows(opportunity).filter((row) => Boolean(row.value));
-  const originalEventUrl = getOpportunitySourceUrl(opportunity);
   const family = getCardFamily(opportunity);
 
   // A full poster is shown right below the header when an image is
@@ -449,6 +555,7 @@ export default function OpportunityDetail({
                 <span> · {opportunity.city}, {opportunity.country}</span>
               )}
               {formattedDate && <span> · {formattedDate}</span>}
+              {opportunity.time && <span> · {opportunity.time}</span>}
             </p>
           </div>
         </div>
@@ -486,16 +593,6 @@ export default function OpportunityDetail({
                 <InfoRow key={row.label} label={row.label} value={row.value} />
               ))}
             </div>
-            {originalEventUrl && (
-              <a
-                href={originalEventUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block mt-3 text-xs text-accent-text hover:text-foreground transition-colors"
-              >
-                {getSourceLinkLabel(originalEventUrl, family)}
-              </a>
-            )}
           </div>
         )}
 
@@ -504,6 +601,11 @@ export default function OpportunityDetail({
 
         {/* 4b. Support slot potential (concert opportunities only). */}
         <SupportSlotPotentialSection opportunity={opportunity} />
+
+        {/* 4c. Venue section (issue #213): the venue as its own reusable
+            entity, distinct from the event itself, linking to its canonical
+            page. Only rendered once a venue was actually resolved. */}
+        <VenueSection opportunity={opportunity} />
 
         {/* 5. Contact information. */}
         <ContactSection opportunity={opportunity} />
@@ -532,7 +634,10 @@ export default function OpportunityDetail({
           </div>
         )}
 
-        {/* 7. Source evidence. */}
+        {/* 7. Source and ticketing: official event URL, source provider,
+            ticket URL, and source evidence — kept separate from the venue
+            section above (issue #213). */}
+        <SourceAndTicketingSection opportunity={opportunity} />
         <SourceEvidenceSection opportunity={opportunity} />
 
         {debugUIVisible && (

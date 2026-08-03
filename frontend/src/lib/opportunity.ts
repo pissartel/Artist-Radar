@@ -130,13 +130,19 @@ const PHONE_PATTERN = /^[+]?[\d\s().-]{6,}$/;
 
 // Only returns an action when the contact string is itself directly usable
 // (an email, URL, or phone number) — never fabricates a link from free text.
-export function getContactAction(opportunity: Opportunity): OpportunityContactAction | null {
-  const contact = opportunity.contact?.trim();
+// Shared by opportunity and venue pages (issue #213), both of which surface
+// the same underlying contact value.
+export function getContactActionForValue(rawContact?: string | null): OpportunityContactAction | null {
+  const contact = rawContact?.trim();
   if (!contact) return null;
   if (EMAIL_PATTERN.test(contact)) return { href: `mailto:${contact}`, label: "Contact" };
   if (/^https?:\/\//i.test(contact)) return { href: contact, label: "Contact" };
   if (PHONE_PATTERN.test(contact)) return { href: `tel:${contact.replace(/[^\d+]/g, "")}`, label: "Contact" };
   return null;
+}
+
+export function getContactAction(opportunity: Opportunity): OpportunityContactAction | null {
+  return getContactActionForValue(opportunity.contact);
 }
 
 // Only returns an action when a ticket/booking URL was already found on the
@@ -351,6 +357,21 @@ export function getLineupEntries(opportunity: Opportunity): LineupEntry[] {
   }
 
   return entries;
+}
+
+// Honest, count-based lineup-completeness wording (issue #213) — never
+// claims a lineup is "complete" or "final", since the source data never
+// confirms that; only describes what is actually known.
+export function getLineupCompletenessLabel(opportunity: Opportunity): string | null {
+  const entries = getLineupEntries(opportunity);
+  if (entries.length === 0) return null;
+
+  const hasHeadliner = entries.some((entry) => entry.position === "headliner");
+  if (entries.length === 1 && hasHeadliner) {
+    return "Headliner confirmed — rest of the lineup not yet announced";
+  }
+
+  return `${entries.length} artist${entries.length === 1 ? "" : "s"} listed`;
 }
 
 const VENUE_TYPE_LABELS: Record<string, string> = {

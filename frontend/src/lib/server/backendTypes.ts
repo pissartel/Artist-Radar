@@ -219,6 +219,11 @@ export interface BackendOpportunity {
   genres?: string[];
   venueCapacity?: number | null;
   address?: string | null;
+  // Venue identity fields (issue #213). Never guessed.
+  venueName?: string | null;
+  venueType?: string | null;
+  venueImageUrl?: string | null;
+  venueConfidence?: number | null;
   recentEvents?: string[];
   lineup?: string[];
   relatedArtist?: BackendOpportunityRelatedArtist | null;

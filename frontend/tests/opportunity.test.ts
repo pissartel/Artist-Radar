@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   getAdditionalMetadata,
+  getContactActionForValue,
   getGroupedContacts,
+  getLineupCompletenessLabel,
   getLineupEntries,
   getOpportunitySignal,
   getRecommendedAction,
@@ -212,5 +214,45 @@ describe("getOpportunitySignal", () => {
   it("falls back to a general event when there is no confirmed opportunity signal", () => {
     const opportunity = buildOpportunity({ type: "concert" });
     expect(getOpportunitySignal(opportunity).kind).toBe("general_event");
+  });
+});
+
+describe("getLineupCompletenessLabel", () => {
+  it("returns null when there is no lineup information", () => {
+    expect(getLineupCompletenessLabel(buildOpportunity({ lineup: [] }))).toBeNull();
+  });
+
+  it("says only the headliner is confirmed when that is the only entry", () => {
+    const opportunity = buildOpportunity({ headliner: ["Headline Act"], lineup: ["Headline Act"] });
+    expect(getLineupCompletenessLabel(opportunity)).toBe(
+      "Headliner confirmed — rest of the lineup not yet announced",
+    );
+  });
+
+  it("counts every listed artist without claiming the lineup is final", () => {
+    const opportunity = buildOpportunity({
+      headliner: ["Headline Act"],
+      lineup: ["Headline Act", "Support Act"],
+    });
+    expect(getLineupCompletenessLabel(opportunity)).toBe("2 artists listed");
+  });
+});
+
+describe("getContactActionForValue", () => {
+  it("turns an email into a mailto link", () => {
+    expect(getContactActionForValue("booking@venue.test")).toEqual({
+      href: "mailto:booking@venue.test",
+      label: "Contact",
+    });
+  });
+
+  it("returns null for an empty or missing contact", () => {
+    expect(getContactActionForValue(null)).toBeNull();
+    expect(getContactActionForValue(undefined)).toBeNull();
+    expect(getContactActionForValue("  ")).toBeNull();
+  });
+
+  it("never fabricates a link from free text that isn't itself usable", () => {
+    expect(getContactActionForValue("Ask at the door")).toBeNull();
   });
 });

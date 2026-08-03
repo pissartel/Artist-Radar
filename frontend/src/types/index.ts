@@ -345,6 +345,17 @@ export interface Opportunity {
   // "cultural_centre"), distinct from the opportunity's own `type`.
   venueType?: string;
   venueWebsite?: string;
+  // Stable id for the venue this opportunity resolves to, derived from the
+  // venue name + city/country (issue #213). Present only when a venue name
+  // was actually resolved — never guessed. Opportunities that share a
+  // venueId link to the same canonical venue page.
+  venueId?: string;
+  // Venue's own logo/branding image, distinct from `imageUrl` (the event
+  // poster) — only ever set from a source explicitly identified as venue
+  // branding, never from an event-specific image.
+  venueImageUrl?: string;
+  // Confidence (0-100) in the resolved venue data, when known.
+  venueConfidence?: number | null;
   date?: string;
   time?: string;
   deadline?: string;

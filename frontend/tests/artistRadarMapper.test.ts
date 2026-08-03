@@ -483,6 +483,149 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     expect(opportunity?.relatedArtist).toBeNull();
   });
 
+  it("resolves a stable venueId and venue fields for a concert opportunity (issue #213)", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Neon Riot at Le Point Ephemere",
+          type: "concert",
+          city: "Paris",
+          country: "France",
+          source_url: "https://songkick.example/events/123",
+          contact: null,
+          reason: "Strong genre match.",
+          score: 82,
+          suggested_message: "Reach out.",
+          venueName: "Le Point Ephemere",
+          venueType: "venue",
+          venueImageUrl: "https://le-point-ephemere.example/logo.png",
+          venueConfidence: 0.8,
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const opportunity = response.bookingOpportunities[0];
+
+    expect(opportunity?.venue).toBe("Le Point Ephemere");
+    expect(opportunity?.venueId).toBeTruthy();
+    expect(opportunity?.venueType).toBe("venue");
+    expect(opportunity?.venueImageUrl).toBe("https://le-point-ephemere.example/logo.png");
+    expect(opportunity?.venueConfidence).toBe(80);
+    // The event's own source (a listing page) must never be mislabeled as
+    // the venue's own official website (issue #213 acceptance criterion).
+    expect(opportunity?.venueWebsite).toBeUndefined();
+  });
+
+  it("gives two concerts at the same venue the same venueId, so they link to one canonical venue page", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Neon Riot at Le Point Ephemere",
+          type: "concert",
+          city: "Paris",
+          country: "France",
+          source_url: null,
+          contact: null,
+          reason: "Strong genre match.",
+          score: 82,
+          suggested_message: "Reach out.",
+          venueName: "Le Point Ephemere",
+        },
+        {
+          name: "Blink Kids at Le Point Ephemere",
+          type: "concert",
+          city: "Paris",
+          country: "France",
+          source_url: null,
+          contact: null,
+          reason: "Strong genre match.",
+          score: 70,
+          suggested_message: "Reach out.",
+          venueName: "Le Point Ephemere",
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const [first, second] = response.bookingOpportunities;
+
+    expect(first.venueId).toBe(second.venueId);
+  });
+
+  it("uses the opportunity's own source as the venue website only when the opportunity IS the venue", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Le Petit Club",
+          type: "venue",
+          city: "Paris",
+          country: "France",
+          source_url: "https://le-petit-club.example/",
+          contact: null,
+          reason: "Strong genre match.",
+          score: 82,
+          suggested_message: "Reach out.",
+          venueName: "Le Petit Club",
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const opportunity = response.bookingOpportunities[0];
+
+    expect(opportunity?.venueWebsite).toBe("https://le-petit-club.example/");
+  });
+
+  it("omits venueId when the backend didn't resolve a venue name", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Open call for support acts",
+          type: "organization",
+          city: "Paris",
+          country: "France",
+          source_url: null,
+          contact: null,
+          reason: "Open call.",
+          score: 60,
+          suggested_message: "Apply.",
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const opportunity = response.bookingOpportunities[0];
+
+    expect(opportunity?.venueId).toBeUndefined();
+    expect(opportunity?.venue).toBeUndefined();
+  });
+
+  it("only exposes a venue's own branding image, never an event-specific poster, as venueImageUrl", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Neon Riot at Le Point Ephemere",
+          type: "concert",
+          city: "Paris",
+          country: "France",
+          source_url: null,
+          contact: null,
+          reason: "Strong genre match.",
+          score: 82,
+          suggested_message: "Reach out.",
+          venueName: "Le Point Ephemere",
+          venueImageUrl: null,
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const opportunity = response.bookingOpportunities[0];
+
+    expect(opportunity?.venueImageUrl).toBeUndefined();
+  });
+
   it("passes the generic imageUrl through for the main artist and similar artists, not spotify.imageUrl", () => {
     const result = buildResult({
       artistProfile: {

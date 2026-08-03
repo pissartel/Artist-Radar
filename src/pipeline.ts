@@ -387,6 +387,15 @@ function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpportunit
     genres: opportunity.target.genres,
     venueCapacity: opportunity.target.estimatedCapacity ?? null,
     address: opportunity.target.address ?? null,
+    venueName: opportunity.target.venueName ?? null,
+    venueType: opportunity.target.category ?? null,
+    // Only ever a venue-branding image (header logo/favicon) — never the
+    // event poster/hero image, which stays on `imageUrl` above (issue #213).
+    venueImageUrl:
+      opportunity.target.imageSource === "header_logo" || opportunity.target.imageSource === "favicon"
+        ? opportunity.target.imageUrl ?? null
+        : null,
+    venueConfidence: opportunity.target.confidence ?? null,
     recentEvents: opportunity.target.pastProgramming ?? [],
     lineup: opportunity.target.lineup ?? [],
     imageUrl: opportunity.imageUrl ?? undefined,

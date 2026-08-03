@@ -221,6 +221,14 @@ export interface SimilarArtist {
   commercialScoreBreakdown?: CommercialScoreBreakdown;
   commercialScoreExplanation?: string;
   chartmetricDiagnostics?: ChartmetricDiagnostics;
+  // Issue #219: this candidate's own cross-platform artistScaleScore, computed
+  // the same way as the analyzed artist's (see ArtistScale below) so the two
+  // are directly comparable. Null/absent whenever there's not enough signal
+  // to compute a real score — never fabricated.
+  artistScaleScore?: number | null;
+  artistScaleBand?: ArtistScaleBand | null;
+  artistScaleScoreConfidence?: ArtistScaleScoreConfidence;
+  artistScaleScoreCoverage?: number;
   // Future fields expected from the similar-artist pipeline (not yet populated in V1):
   matchReasons?: string[];
   sharedGenres?: string[];
@@ -561,4 +569,8 @@ export interface DashboardData {
     }>;
     backend?: unknown;
   };
+  // Issue #219: the analyzed artist's cross-platform artistScaleScore plus
+  // its comparison against similarArtists[].artistScaleScore. Absent when
+  // the backend didn't compute it at all (e.g. an older cached response).
+  artistScale?: ArtistScale;
 }

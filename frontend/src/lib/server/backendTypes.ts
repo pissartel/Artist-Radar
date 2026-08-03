@@ -129,6 +129,66 @@ export interface BackendChartmetricDiagnostics {
   scoreConfidence?: BackendCommercialScoreConfidence;
 }
 
+// Issue #219: cross-platform commercial-scale band/confidence vocabulary —
+// deliberately separate from BackendCommercialTier/BackendCommercialAbsoluteScale
+// above (see src/scoring/artistScaleScore.ts on the backend): those describe
+// a *relationship*/absolute-stage classification derived largely from
+// Chartmetric candidate data, while artistScaleScore is an independent,
+// always-computable (main artist included) cross-platform scale reading used
+// to compare the analyzed artist against its similar artists.
+export type BackendArtistScaleBand =
+  | "emerging"
+  | "developing"
+  | "established_local"
+  | "regional"
+  | "national"
+  | "major";
+
+export type BackendArtistScaleScoreConfidence = "high" | "medium" | "low" | "unavailable";
+
+export interface BackendArtistScaleScoreComponents {
+  streaming: number | null;
+  social: number | null;
+  growth: number | null;
+  liveActivity: number | null;
+}
+
+export type BackendArtistScaleComparisonClassification =
+  | "well_below"
+  | "slightly_below"
+  | "in_line"
+  | "slightly_above"
+  | "well_above";
+
+export type BackendArtistScaleComparisonUnavailableReason =
+  | "main_artist_score_unavailable"
+  | "insufficient_similar_artist_scores";
+
+export interface BackendArtistScaleComparison {
+  available: boolean;
+  reason?: BackendArtistScaleComparisonUnavailableReason;
+  sampleSize: number;
+  median: number | null;
+  average: number | null;
+  minimum: number | null;
+  maximum: number | null;
+  percentile: number | null;
+  differenceToMedian: number | null;
+  differenceToAverage: number | null;
+  classification: BackendArtistScaleComparisonClassification | null;
+}
+
+export interface BackendArtistScale {
+  artistScaleScore: number | null;
+  artistScaleBand: BackendArtistScaleBand | null;
+  confidence: BackendArtistScaleScoreConfidence;
+  coverage: number;
+  components: BackendArtistScaleScoreComponents;
+  missingSignals: string[];
+  explanation: string;
+  comparison: BackendArtistScaleComparison;
+}
+
 export interface BackendSimilarArtist {
   name: string;
   genres: string[];
@@ -158,6 +218,13 @@ export interface BackendSimilarArtist {
   commercialScoreBreakdown?: BackendCommercialScoreBreakdown;
   commercialScoreExplanation?: string;
   chartmetricDiagnostics?: BackendChartmetricDiagnostics;
+  // Issue #219: cross-platform artistScaleScore for this candidate, computed
+  // the same way as the analyzed artist's own score so the two are directly
+  // comparable. Null (not omitted) when computed with zero coverage.
+  artistScaleScore?: number | null;
+  artistScaleBand?: BackendArtistScaleBand | null;
+  artistScaleScoreConfidence?: BackendArtistScaleScoreConfidence;
+  artistScaleScoreCoverage?: number;
 }
 
 export interface BackendOpportunityRelatedArtist {
@@ -338,4 +405,10 @@ export interface BackendPipelineResult {
   // independently of the concert-oriented booking pipeline since labels
   // aren't event-based (see src/pipeline.ts OpportunitySearchRunResult).
   labelOpportunities?: BackendLabelOpportunity[];
+  // Cross-platform artistScaleScore for the analyzed artist plus its
+  // comparison against the similar-artist sample (issue #219). Always
+  // populated by the backend (with `artistScaleScore: null`/
+  // `comparison.available: false` rather than an exception whenever there
+  // isn't enough underlying data).
+  artistScale?: BackendArtistScale;
 }

@@ -105,6 +105,81 @@ export const SimilarArtistAbsoluteScaleSchema = z.enum(["emerging", "developing"
 
 export const SimilarArtistCommercialScoreConfidenceSchema = z.enum(["high", "medium", "low", "unavailable"]);
 
+// Issue #219: cross-platform commercial-scale band/confidence vocabulary —
+// mirrors (but doesn't import, to keep this file dependency-free) the
+// equivalent TS unions in src/scoring/artistScaleScore.ts. Deliberately
+// separate from SimilarArtistCommercialTierSchema/SimilarArtistAbsoluteScaleSchema
+// above: those describe a *relationship*/absolute-stage classification
+// derived largely from Chartmetric candidate data, while artistScaleScore is
+// an independent, always-computable (main artist included) cross-platform
+// scale reading used to compare the analyzed artist against its similar
+// artists.
+export const ArtistScaleBandSchema = z.enum([
+  "emerging",
+  "developing",
+  "established_local",
+  "regional",
+  "national",
+  "major"
+]);
+
+export const ArtistScaleScoreConfidenceSchema = z.enum(["high", "medium", "low", "unavailable"]);
+
+// Null whenever the underlying signal is missing — never a fabricated
+// neutral value. See scoreArtistScale() for how each component is derived.
+export const ArtistScaleScoreComponentsSchema = z.object({
+  streaming: z.number().int().min(0).max(100).nullable(),
+  social: z.number().int().min(0).max(100).nullable(),
+  growth: z.number().int().min(0).max(100).nullable(),
+  liveActivity: z.number().int().min(0).max(100).nullable()
+});
+
+export const ArtistScaleComparisonClassificationSchema = z.enum([
+  "well_below",
+  "slightly_below",
+  "in_line",
+  "slightly_above",
+  "well_above"
+]);
+
+export const ArtistScaleComparisonUnavailableReasonSchema = z.enum([
+  "main_artist_score_unavailable",
+  "insufficient_similar_artist_scores"
+]);
+
+// Position of the analyzed artist's artistScaleScore relative to its similar
+// artists (issue #219). `available` is false — with every percentile/
+// classification figure left null — whenever there aren't enough real
+// similar-artist scores or the analyzed artist has no score at all; the
+// descriptive stats (median/average/minimum/maximum) may still be populated
+// from whatever real similar-artist scores do exist.
+export const ArtistScaleComparisonSchema = z.object({
+  available: z.boolean(),
+  reason: ArtistScaleComparisonUnavailableReasonSchema.optional(),
+  sampleSize: z.number().int().nonnegative(),
+  median: z.number().nullable(),
+  average: z.number().nullable(),
+  minimum: z.number().nullable(),
+  maximum: z.number().nullable(),
+  percentile: z.number().min(0).max(100).nullable(),
+  differenceToMedian: z.number().nullable(),
+  differenceToAverage: z.number().nullable(),
+  classification: ArtistScaleComparisonClassificationSchema.nullable()
+});
+
+// Full artistScaleScore result for the analyzed artist, plus its comparison
+// against similar artists (issue #219 API requirements).
+export const ArtistScaleSchema = z.object({
+  artistScaleScore: z.number().int().min(0).max(100).nullable(),
+  artistScaleBand: ArtistScaleBandSchema.nullable(),
+  confidence: ArtistScaleScoreConfidenceSchema,
+  coverage: z.number().min(0).max(1),
+  components: ArtistScaleScoreComponentsSchema,
+  missingSignals: z.array(z.string().trim().min(1)).default([]),
+  explanation: z.string().trim().min(1),
+  comparison: ArtistScaleComparisonSchema
+});
+
 export const ConfidenceScoreSchema = z.number().min(0).max(1);
 export const ImageSourceSchema = z.enum([
   "spotify",
@@ -427,7 +502,18 @@ export const SimilarArtistSchema = z.object({
   // execution") — never rendered in standard production UI, see
   // frontend/src/components/dashboard/SimilarArtistDetail.tsx's existing
   // productFeatures.rawJson-gated debug panel.
-  chartmetricDiagnostics: SimilarArtistChartmetricDiagnosticsSchema.optional()
+  chartmetricDiagnostics: SimilarArtistChartmetricDiagnosticsSchema.optional(),
+  // Issue #219: cross-platform artistScaleScore for this candidate, computed
+  // the same way as the analyzed artist's own score (see
+  // src/scoring/artistScaleScore.ts) so the two are directly comparable.
+  // Null (not omitted) when no signal at all was available, distinguishing
+  // "computed but zero coverage" from "never attempted". Optional as a whole
+  // for candidates outside this run's enrichment scope, same as
+  // `commercialScore` above.
+  artistScaleScore: z.number().int().min(0).max(100).nullable().optional(),
+  artistScaleBand: ArtistScaleBandSchema.nullable().optional(),
+  artistScaleScoreConfidence: ArtistScaleScoreConfidenceSchema.optional(),
+  artistScaleScoreCoverage: z.number().min(0).max(1).optional()
 });
 
 export const OpportunityInternalReviewSchema = z.object({
@@ -975,6 +1061,13 @@ export type SimilarArtistCommercialScoreComponents = z.infer<typeof SimilarArtis
 export type SimilarArtistChartmetricResult = z.infer<typeof SimilarArtistChartmetricResultSchema>;
 export type SimilarArtistChartmetricDiagnostics = z.infer<typeof SimilarArtistChartmetricDiagnosticsSchema>;
 export type ChartmetricCandidateMetrics = z.infer<typeof ChartmetricCandidateMetricsSchema>;
+export type ArtistScaleBand = z.infer<typeof ArtistScaleBandSchema>;
+export type ArtistScaleScoreConfidence = z.infer<typeof ArtistScaleScoreConfidenceSchema>;
+export type ArtistScaleScoreComponents = z.infer<typeof ArtistScaleScoreComponentsSchema>;
+export type ArtistScaleComparisonClassification = z.infer<typeof ArtistScaleComparisonClassificationSchema>;
+export type ArtistScaleComparisonUnavailableReason = z.infer<typeof ArtistScaleComparisonUnavailableReasonSchema>;
+export type ArtistScaleComparison = z.infer<typeof ArtistScaleComparisonSchema>;
+export type ArtistScale = z.infer<typeof ArtistScaleSchema>;
 export type Opportunity = z.infer<typeof OpportunitySchema>;
 export type OpportunityInternalReview = z.infer<typeof OpportunityInternalReviewSchema>;
 export type OpportunityDateRange = z.infer<typeof OpportunityDateRangeSchema>;

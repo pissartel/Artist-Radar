@@ -63,4 +63,47 @@ describe("classifyBookingTarget", () => {
     });
     expect(target.category).toBe("venue");
   });
+
+  describe("venue opportunity URL invariant", () => {
+    it("never uses an explicitly-provided event URL as a venue opportunity's primary sourceUrl", () => {
+      // Backend invariant from the venue-opportunity fix: even when a
+      // producer sets category: "venue" directly (bypassing classifyCategory
+      // entirely), the concert's own event-page URL must never end up as the
+      // venue opportunity's primary link — this is the last-resort funnel
+      // every RawBookingSource passes through.
+      const target = classifyBookingTarget({
+        name: "Quai M",
+        category: "venue",
+        venueName: "Quai M",
+        text: "Quai M",
+        url: "https://example.com/events/artist-a-quai-m",
+        sourceType: "event_page"
+      });
+      expect(target.category).toBe("venue");
+      expect(target.sourceUrl).toBeNull();
+    });
+
+    it("keeps a venue opportunity's genuine official-site sourceUrl untouched", () => {
+      const target = classifyBookingTarget({
+        name: "Quai M",
+        category: "venue",
+        venueName: "Quai M",
+        text: "Quai M",
+        url: "https://quai-m.fr",
+        sourceType: "official_site"
+      });
+      expect(target.sourceUrl).toBe("https://quai-m.fr");
+    });
+
+    it("does not null out an event opportunity's own event-page sourceUrl", () => {
+      const target = classifyBookingTarget({
+        name: "Artist A at Quai M",
+        category: "event",
+        text: "Artist A at Quai M",
+        url: "https://example.com/events/artist-a-quai-m",
+        eventDate: "2026-05-12"
+      });
+      expect(target.sourceUrl).toBe("https://example.com/events/artist-a-quai-m");
+    });
+  });
 });

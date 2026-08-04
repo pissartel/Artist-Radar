@@ -9,6 +9,7 @@ import type {
 import type { SimilarArtist } from "../schemas.js";
 import { toDateOnlyString } from "../utils/dateOnly.js";
 import { mapWithConcurrency } from "../utils/concurrency.js";
+import { resolveVenueOfficialUrl } from "./venueUrl.js";
 
 // Configurable limits (issue #182). Keep every magic number for this
 // pipeline here rather than scattered across providers, and allow env
@@ -137,7 +138,11 @@ export function buildVenueTargetsFromArtistEventHistory(
     name: string;
     city: string | null;
     country: string | null;
-    sourceUrl: string;
+    // Every matching event's own sourceUrl, kept only as a candidate pool —
+    // the venue's primary URL is resolved from these via
+    // resolveVenueOfficialUrl below, never assigned directly, so a concert's
+    // event/ticket page is never used as the venue opportunity's link.
+    sourceUrlCandidates: string[];
     genres: string[];
     pastProgramming: string[];
     evidence: VenueArtistEvidence[];
@@ -181,6 +186,7 @@ export function buildVenueTargetsFromArtistEventHistory(
       existing.genres = uniqueStrings([...existing.genres, ...artist.genres, ...genreMatch.matchedGenres]);
       existing.pastProgramming = uniqueStrings([...existing.pastProgramming, artist.name, ...(event.lineup ?? [])]);
       existing.textEvidence = uniqueStrings([...existing.textEvidence, ...textEvidence]);
+      existing.sourceUrlCandidates.push(event.sourceUrl);
       continue;
     }
 
@@ -189,7 +195,7 @@ export function buildVenueTargetsFromArtistEventHistory(
       name: event.venueName,
       city: event.city ?? null,
       country: event.country ?? input.artistProfile?.country ?? null,
-      sourceUrl: event.sourceUrl,
+      sourceUrlCandidates: [event.sourceUrl],
       genres: uniqueStrings([...artist.genres, ...genreMatch.matchedGenres]),
       pastProgramming: uniqueStrings([artist.name, ...(event.lineup ?? [])]),
       evidence: [evidence],
@@ -205,6 +211,12 @@ export function buildVenueTargetsFromArtistEventHistory(
 
   return [...venues.values()].map((venue): BookingTarget => {
     const confidence = scoreVenueCandidateConfidence(venue.evidence, now, lookbackMonths);
+    // None of these candidates are independently verified as the venue's own
+    // site — they're all concert-discovery source URLs — so
+    // resolveVenueOfficialUrl only ever accepts one that doesn't itself look
+    // like a specific event/ticket/artist/aggregator page. `null` (never a
+    // concert URL) when nothing qualifies.
+    const resolvedUrl = resolveVenueOfficialUrl(venue.sourceUrlCandidates.map((url) => ({ url, verified: false })));
     return {
       name: venue.name,
       category: "venue",
@@ -214,8 +226,8 @@ export function buildVenueTargetsFromArtistEventHistory(
         `${venue.name} has historical programming evidence from compatible similar artists.`,
         ...venue.textEvidence
       ]).join(" "),
-      sourceUrl: venue.sourceUrl,
-      sourceType: "similar_artist_live_history",
+      sourceUrl: resolvedUrl,
+      sourceType: resolvedUrl ? "venue_official_programming_page" : "similar_artist_live_history",
       sourceProvider: "similar_artist_event_history",
       genres: venue.genres,
       estimatedCapacity: null,
@@ -412,7 +424,7 @@ function isOfficialSource(sourceUrl: string): boolean {
   }
 }
 
-function venueIdentity(venueName: string, city: string | null, country: string | null): string {
+export function venueIdentity(venueName: string, city: string | null, country: string | null): string {
   return [normalizeVenueName(venueName, city), normalizeKey(city ?? ""), normalizeKey(country ?? "")].filter(Boolean).join(":");
 }
 
@@ -433,7 +445,7 @@ function normalizeVenueName(venueName: string, city: string | null): string {
   return withoutCitySuffix || withoutArticle;
 }
 
-function similarArtistId(name: string): string {
+export function similarArtistId(name: string): string {
   return normalizeKey(name).replace(/\s+/g, "-");
 }
 

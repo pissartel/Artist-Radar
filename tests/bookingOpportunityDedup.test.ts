@@ -114,3 +114,73 @@ describe("cross-provider booking target deduplication", () => {
     expect(result.targets).toHaveLength(2);
   });
 });
+
+function venueTarget(overrides: Partial<BookingTarget> = {}): BookingTarget {
+  return {
+    name: "Quai M",
+    category: "venue",
+    city: "Nantes",
+    country: "France",
+    sourceUrl: null,
+    sourceType: "similar_artist_live_history",
+    sourceProvider: "similar_artist_event_history",
+    genres: ["pop punk"],
+    venueName: "Quai M",
+    eventDate: null,
+    isFutureEvent: null,
+    isPastEvent: null,
+    dateConfidence: null,
+    opportunityKind: "actionable",
+    contacts: [],
+    confidence: 0.85,
+    evidence: [],
+    ...overrides
+  };
+}
+
+describe("venue opportunities discovered from similar-artist concerts", () => {
+  it("merges multiple concerts at the same venue into a single deduplicated venue opportunity", async () => {
+    const providerA = providerReturning("provider-a", [
+      venueTarget({ sourceUrl: null, evidence: ["Similar artist Artist A played here."] })
+    ]);
+    const providerB = providerReturning("provider-b", [
+      venueTarget({ sourceUrl: null, evidence: ["Similar artist Artist B played here."] })
+    ]);
+
+    const result = await searchBookingOpportunities(input, { providers: [providerA, providerB] });
+
+    const venues = result.targets.filter((t) => t.category === "venue");
+    expect(venues).toHaveLength(1);
+    expect(venues[0]?.evidence.join(" ")).toContain("Artist A");
+    expect(venues[0]?.evidence.join(" ")).toContain("Artist B");
+  });
+
+  it("does not overwrite an existing official venue website when a concert-derived candidate for the same venue merges in later", async () => {
+    const officialSite = providerReturning("provider-official", [
+      venueTarget({ sourceUrl: "https://quai-m.fr", sourceType: "official_site", sourceProvider: "web_search_booking" })
+    ]);
+    const concertDerived = providerReturning("provider-concert-history", [
+      venueTarget({ sourceUrl: null, sourceType: "similar_artist_live_history", evidence: ["Similar artist Artist A played here."] })
+    ]);
+
+    const result = await searchBookingOpportunities(input, { providers: [officialSite, concertDerived] });
+
+    const venue = result.targets.find((t) => t.category === "venue");
+    expect(venue?.sourceUrl).toBe("https://quai-m.fr");
+
+    // Order must not matter — the official site must win even if the
+    // concert-derived candidate is discovered first.
+    const reversedResult = await searchBookingOpportunities(input, { providers: [concertDerived, officialSite] });
+    const reversedVenue = reversedResult.targets.find((t) => t.category === "venue");
+    expect(reversedVenue?.sourceUrl).toBe("https://quai-m.fr");
+  });
+
+  it("has no primary URL, rather than an event URL, when no candidate for the venue can be verified", async () => {
+    const providerA = providerReturning("provider-a", [venueTarget({ sourceUrl: null })]);
+
+    const result = await searchBookingOpportunities(input, { providers: [providerA] });
+
+    const venue = result.targets.find((t) => t.category === "venue");
+    expect(venue?.sourceUrl).toBeNull();
+  });
+});

@@ -26,6 +26,7 @@ import {
 import { warnLog } from "../utils/logger.js";
 import { toDateOnlyString } from "../utils/dateOnly.js";
 import { normalizeKey, normalizeVenueName } from "../utils/venueNameNormalization.js";
+import { isLikelyEventUrl } from "./venueUrl.js";
 
 export interface SearchBookingOpportunitiesOptions {
   providers?: BookingSourceProvider[];
@@ -253,11 +254,35 @@ function isVerifiedVenueSource(target: BookingTarget): boolean {
   return VERIFIED_VENUE_SOURCE_TYPES.has(target.sourceType);
 }
 
+// Backend invariant: a venue opportunity's primary sourceUrl must represent
+// the venue itself, never an individual event. Every producer of a
+// category:"venue" BookingTarget is expected to already resolve this
+// correctly (see resolveVenueOfficialUrl in venueUrl.ts), and the shared
+// classifyBookingTarget funnel (classifyTarget.ts) enforces it for
+// RawBookingSource-based producers — this is the final, universal
+// enforcement point where every provider's targets converge regardless of
+// which path produced them, so no future producer can slip past it.
+function enforceVenueUrlInvariant(target: BookingTarget): BookingTarget {
+  if (target.category !== "venue" || !target.sourceUrl || !isLikelyEventUrl(target.sourceUrl)) {
+    return target;
+  }
+  return { ...target, sourceUrl: null, sourceType: "similar_artist_live_history" };
+}
+
 function dedupeTargets(targets: BookingTarget[]): { targets: BookingTarget[]; duplicateCount: number } {
   const seen = new Set<string>();
   let duplicateCount = 0;
-  const firstPass = targets.filter((target) => {
-    const key = `${target.sourceUrl ?? ""}:${target.name}:${target.category}`;
+  const firstPass = targets.map(enforceVenueUrlInvariant).filter((target) => {
+    // No sourceUrl to naively key on — most commonly a venue opportunity
+    // with no verified official site (the invariant above, or a producer
+    // that never found one). Silently dropping same-name/same-category
+    // targets here would lose each one's own evidence; let the smarter
+    // second pass below (which merges venue-identity matches rather than
+    // dropping them) handle any real duplicate instead.
+    if (!target.sourceUrl) {
+      return true;
+    }
+    const key = `${target.sourceUrl}:${target.name}:${target.category}`;
     if (seen.has(key)) {
       duplicateCount += 1;
       return false;

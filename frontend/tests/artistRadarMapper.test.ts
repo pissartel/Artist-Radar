@@ -662,6 +662,54 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     ]);
   });
 
+  // Reproduces the issue's own worked example end-to-end through the
+  // frontend mapper: a venue discovered from a similar artist's concert
+  // (Artist A at Quai M) must surface as the venue itself — title "Quai M",
+  // primary link the venue's official site — with the concert preserved
+  // only as evidence, never as the opportunity's main link.
+  it("maps a venue discovered from a similar artist's concert to the venue's own official site, never the concert URL", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Quai M",
+          type: "venue",
+          city: "Nantes",
+          country: "France",
+          source_url: "https://quai-m.fr",
+          contact: null,
+          reason: "Similar artists played this venue.",
+          score: 70,
+          suggested_message: "Reach out.",
+          venueName: "Quai M",
+          venueArtistEvidence: [
+            {
+              similarArtistName: "Artist A",
+              sourceUrl: "https://example.com/events/artist-a-quai-m",
+              eventDate: "2026-05-12",
+              eventName: "Artist A at Quai M",
+            },
+          ],
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const opportunity = response.bookingOpportunities[0];
+
+    expect(opportunity?.title).toBe("Quai M");
+    expect(opportunity?.venueWebsite).toBe("https://quai-m.fr");
+    expect(opportunity?.sourceUrls).toEqual(["https://quai-m.fr"]);
+    expect(opportunity?.sourceUrls).not.toContain("https://example.com/events/artist-a-quai-m");
+    expect(opportunity?.venueArtistEvidence).toEqual([
+      {
+        similarArtistName: "Artist A",
+        sourceUrl: "https://example.com/events/artist-a-quai-m",
+        eventDate: "2026-05-12",
+        eventName: "Artist A at Quai M",
+      },
+    ]);
+  });
+
   it("omits venueId when the backend didn't resolve a venue name", () => {
     const result = buildResult({
       opportunities: [

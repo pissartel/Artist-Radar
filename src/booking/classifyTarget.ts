@@ -1,13 +1,22 @@
 import { extractPublicContactSignals } from "./contactExtraction.js";
 import { normalizeLocationParts } from "../utils/location.js";
 import type { BookingTarget, BookingTargetCategory, RawBookingSource } from "./types.js";
+import { isLikelyEventUrl } from "./venueUrl.js";
 
 export function classifyBookingTarget(rawSource: RawBookingSource): BookingTarget {
   const text = buildSourceText(rawSource);
-  const sourceUrl = rawSource.sourceUrl ?? rawSource.url ?? null;
+  const rawSourceUrl = rawSource.sourceUrl ?? rawSource.url ?? null;
   const sourceType = rawSource.sourceType ?? "search_result";
   const category =
     rawSource.category ?? classifyCategory(text, { hasVenueName: Boolean(rawSource.venueName), isUnverifiedSearchResult: sourceType === "search_result" });
+  // Invariant: a venue opportunity represents the venue itself, never the
+  // individual concert that surfaced it — its primary sourceUrl must never
+  // be an event/ticket/artist/aggregator page. Every producer of a
+  // category:"venue" BookingTarget is expected to already resolve this
+  // correctly (see resolveVenueOfficialUrl in venueUrl.ts), but this is the
+  // single funnel every RawBookingSource passes through, so it's enforced
+  // here too as a last-resort safety net rather than trusted per-producer.
+  const sourceUrl = category === "venue" && rawSourceUrl && isLikelyEventUrl(rawSourceUrl) ? null : rawSourceUrl;
   const contacts = rawSource.contacts ?? extractPublicContactSignals(text, rawSource.links ?? []);
   const location = normalizeLocationParts(rawSource.city, rawSource.country);
 

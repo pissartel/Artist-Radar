@@ -1,6 +1,6 @@
 import type { SimilarArtist } from "../../schemas.js";
 import { selectTopCompatibleSimilarArtists } from "../similarArtistSelection.js";
-import type { BookingSearchInput, BookingTarget, BookingTargetCategory } from "../types.js";
+import type { BookingSearchInput, BookingTarget, BookingTargetCategory, VenueArtistEvidence } from "../types.js";
 import type { BookingSourceProvider, BookingSourceProviderResult } from "./BookingSourceProvider.js";
 import { debugLog, warnLog } from "../../utils/logger.js";
 import { OpenAIConcertClient, normalizeUrlForComparison, type ConcertSearchOutcome } from "../../providers/openaiConcerts/OpenAIConcertClient.js";
@@ -15,6 +15,8 @@ import {
   type OpenAIWebConcert,
   type VerifiedConcert
 } from "../../providers/openaiConcerts/types.js";
+import { similarArtistId, venueIdentity } from "../artistEventHistory.js";
+import { resolveVenueOfficialUrl } from "../venueUrl.js";
 
 export interface OpenAIWebSearchConcertProviderEnv {
   ENABLE_OPENAI_CONCERT_DISCOVERY?: string;
@@ -346,6 +348,7 @@ interface VenueLeadMatch {
   artistName: string;
   compatibilityScore: number;
   date: string;
+  eventName: string | null;
   sourceUrl: string | null;
 }
 
@@ -363,6 +366,13 @@ const VENUE_LEAD_MIN_CONFIDENCE = 0.85;
  * request, without re-adding the past show as an event opportunity (which
  * the shared pipeline already excludes via opportunityKind
  * "historical_signal" — unaffected by this).
+ *
+ * The venue opportunity's primary link must represent the venue itself,
+ * never the concert that surfaced it (venue-opportunity URL fix): only
+ * `venue.website` — or, failing that, a concert source URL that itself
+ * plausibly looks like the venue's own page rather than a specific event —
+ * is ever used as the primary sourceUrl; every concert is preserved as
+ * structured `venueArtistEvidence` regardless.
  */
 function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[]): BookingTarget[] {
   const venues = new Map<string, { venue: VerifiedConcert["venue"]; genres: Set<string>; matches: VenueLeadMatch[] }>();
@@ -384,6 +394,7 @@ function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[]): BookingT
         artistName: outcome.artist.name,
         compatibilityScore: outcome.artist.totalRelevance,
         date: concert.date,
+        eventName: concert.eventName,
         sourceUrl: concert.sources[0]?.url ?? null
       };
 
@@ -403,6 +414,10 @@ function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[]): BookingT
 
   return [...venues.values()].map(({ venue, genres, matches }) => {
     const confidence = Math.min(0.95, VENUE_LEAD_MIN_CONFIDENCE + (matches.length - 1) * 0.03);
+    const resolvedUrl = resolveVenueOfficialUrl([
+      { url: venue.website, verified: true },
+      ...matches.map((match) => ({ url: match.sourceUrl, verified: false }))
+    ]);
     const evidence = uniqueStrings([
       ...matches.map(
         (match) =>
@@ -410,18 +425,35 @@ function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[]): BookingT
       ),
       ...matches.map((match) => match.sourceUrl)
     ]);
+    const collectedAt = new Date().toISOString();
+    const venueId = venueIdentity(venue.name, venue.city, venue.country);
+    const venueArtistEvidence: VenueArtistEvidence[] = matches
+      .filter((match): match is VenueLeadMatch & { sourceUrl: string } => Boolean(match.sourceUrl))
+      .map((match) => ({
+        venueId,
+        similarArtistId: similarArtistId(match.artistName),
+        similarArtistName: match.artistName,
+        eventName: match.eventName ?? undefined,
+        eventDate: match.date,
+        sourceUrl: match.sourceUrl,
+        collectedAt,
+        sourceProvider: "openai_web_search",
+        confidence: Math.min(1, match.compatibilityScore / 100)
+      }));
 
     return {
       // The venue itself is the opportunity — not the past show that
-      // surfaced it — so the name and source link must point at the venue,
-      // never at the triggering event page.
+      // surfaced it — so the name and primary link must represent the
+      // venue, never the triggering event page (see resolveVenueOfficialUrl
+      // above). `null` when no venue-shaped URL can be verified, rather than
+      // falling back to a concert URL.
       name: venue.name,
       category: "venue",
       city: venue.city,
       country: venue.country,
       description: `${matches.length} compatible similar artist${matches.length === 1 ? " has" : "s have"} played here.`,
-      sourceUrl: venue.website ?? matches[0].sourceUrl,
-      sourceType: venue.website ? "official_site" : "event_page",
+      sourceUrl: resolvedUrl,
+      sourceType: resolvedUrl === venue.website ? "official_site" : resolvedUrl ? "venue_official_programming_page" : "event_page",
       sourceProvider: "openai_web_search",
       genres: [...genres],
       venueName: venue.name,
@@ -439,6 +471,7 @@ function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[]): BookingT
         matchedGenres: [...genres],
         sourceUrl: matches[0].sourceUrl
       },
+      venueArtistEvidence,
       contacts: [],
       confidence,
       evidence

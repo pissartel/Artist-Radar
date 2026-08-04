@@ -132,6 +132,36 @@ describe("artist event history", () => {
     );
   });
 
+  it("never uses a concert's own event-page URL as the venue target's primary sourceUrl", () => {
+    // Reproduces the reported venue-opportunity bug: a similar artist's
+    // concert is only evidence the venue is compatible, not the opportunity
+    // itself — the venue's primary link must never be the event page.
+    const targets = buildVenueTargetsFromArtistEventHistory(input, input.similarArtists ?? [], [
+      historicalEvent({ artistName: "Paris Peer One", venueName: "Le Sample", city: "Paris", sourceUrl: "https://example.com/events/artist-a-quai-m" })
+    ], {
+      now: new Date("2026-07-01T00:00:00Z"),
+      lookbackMonths: 24
+    });
+
+    expect(targets).toHaveLength(1);
+    expect(targets[0]?.sourceUrl).toBeNull();
+    // The concert is preserved only as structured evidence.
+    expect(targets[0]?.venueArtistEvidence?.[0]?.sourceUrl).toBe("https://example.com/events/artist-a-quai-m");
+  });
+
+  it("uses a candidate event source URL as the venue's primary link only when it plausibly looks like the venue's own page", () => {
+    const targets = buildVenueTargetsFromArtistEventHistory(input, input.similarArtists ?? [], [
+      historicalEvent({ artistName: "Paris Peer One", venueName: "Quai M", city: "Nantes", sourceUrl: "https://quai-m.fr" })
+    ], {
+      now: new Date("2026-07-01T00:00:00Z"),
+      lookbackMonths: 24
+    });
+
+    expect(targets).toHaveLength(1);
+    expect(targets[0]?.sourceUrl).toBe("https://quai-m.fr");
+    expect(targets[0]?.sourceType).toBe("venue_official_programming_page");
+  });
+
   it("rejects historical events without a venue name or a traceable source URL", () => {
     const targets = buildVenueTargetsFromArtistEventHistory(input, input.similarArtists ?? [], [
       historicalEvent({ artistName: "Paris Peer One", venueName: "Le Sample", sourceUrl: "https://lesample.example/events/one" }),

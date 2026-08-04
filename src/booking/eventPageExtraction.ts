@@ -480,23 +480,43 @@ const TICKET_LINK_PATTERN = /<a[^>]+href=["']([^"']+)["'][^>]*>(?:(?!<\/a>)[\s\S
 const CONTACT_LINK_PATTERN = /<a[^>]+href=["']([^"']+)["'][^>]*>(?:(?!<\/a>)[\s\S]){0,80}?(contact|booking|programmation)/i;
 const POSTER_IMG_PATTERN = /<img[^>]+(?:class|id)=["'][^"']*(?:poster|flyer|affiche)[^"']*["'][^>]+src=["']([^"']+)["']|<img[^>]+src=["']([^"']+)["'][^>]+(?:class|id)=["'][^"']*(?:poster|flyer|affiche)[^"']*["']/i;
 
+// Many small/DIY venue pages have no JSON-LD at all, but still lay out their
+// <address> block as "Venue Name, street address, postal code city" (e.g.
+// "GRRRND ZERO, 60 Avenue de Bohlen, Vaulx en Velin 69120") — the venue name
+// was already being read as part of `address` and silently discarded rather
+// than surfaced as its own field. Only fires when the segment before the
+// first comma does NOT itself look like the start of a street address (a
+// French street address conventionally opens with a house number), so a
+// plain "12 rue des Lilas, 75001 Paris" address with no venue name prefix at
+// all is left alone rather than misreading its street number as a name.
+const VENUE_NAME_FROM_ADDRESS_PATTERN = /^([^\d,][^,]{1,60}),\s*\d/;
+
+function extractVenueNameFromAddressText(addressText: string): string | null {
+  const match = addressText.match(VENUE_NAME_FROM_ADDRESS_PATTERN);
+  if (!match) return null;
+  const candidate = match[1].trim();
+  return candidate.length > 0 ? candidate : null;
+}
+
 function extractFromSemanticHtml(html: string): Partial<EventEnrichmentData> | null {
   const eventDate = html.match(TIME_TAG_PATTERN)?.[1] ?? null;
   const addressMatch = html.match(ADDRESS_TAG_PATTERN)?.[1];
   const address = addressMatch ? stripTags(addressMatch) : null;
+  const venueName = address ? extractVenueNameFromAddressText(address) : null;
   const contactEmail = html.match(MAILTO_PATTERN)?.[1]?.trim() ?? null;
   const ticketUrl = html.match(TICKET_LINK_PATTERN)?.[1] ?? null;
   const contactFormUrl = html.match(CONTACT_LINK_PATTERN)?.[1] ?? null;
   const posterMatch = html.match(POSTER_IMG_PATTERN);
   const posterImageUrl = posterMatch ? posterMatch[1] ?? posterMatch[2] ?? null : null;
 
-  if (!eventDate && !address && !contactEmail && !ticketUrl && !contactFormUrl && !posterImageUrl) {
+  if (!eventDate && !address && !venueName && !contactEmail && !ticketUrl && !contactFormUrl && !posterImageUrl) {
     return null;
   }
 
   return {
     eventDate,
     address,
+    venueName,
     contactEmail,
     ticketUrl,
     contactFormUrl,

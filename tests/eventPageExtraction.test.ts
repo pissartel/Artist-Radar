@@ -88,6 +88,25 @@ const GENERIC_VENUE_EVENT_HTML = `
 </html>
 `;
 
+// A small DIY venue event page with no JSON-LD and no Open Graph venue
+// signal at all — the venue name is only ever present as the leading
+// segment of the <address> block, e.g. "GRRRND ZERO, 60 Avenue de Bohlen,
+// Vaulx en Velin 69120" (reported bug: the address itself was already being
+// extracted, but the venue name leading it was silently discarded).
+const ADDRESS_ONLY_VENUE_NAME_HTML = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Fossilization / Phobocosm / Grotesquerie le 16 août 2026 à Vaulx-en-Velin (69)</title>
+</head>
+<body>
+  <h1>Fossilization / Phobocosm / Grotesquerie</h1>
+  <p>Rendez-vous <time datetime="2026-08-16T20:00:00+02:00">16 août 2026</time>.</p>
+  <address>GRRRND ZERO, 60 Avenue de Bohlen, Vaulx en Velin 69120</address>
+</body>
+</html>
+`;
+
 describe("extractEventPageData", () => {
   it("preserves the specific JSON-LD title instead of the generic agenda title (Razibus fixture)", () => {
     const result = extractEventPageData(RAZIBUS_EVENT_HTML, "https://razibus.net/evenements/vulgar-display", {
@@ -176,6 +195,26 @@ describe("extractEventPageData", () => {
     expect(result.ticketUrl).toBe("https://larampe.example/billetterie");
     expect(result.contactFormUrl).toBe("https://larampe.example/contact");
     expect(result.contactEmail).toBeNull();
+  });
+
+  it("does not invent a venue name from an address with no name prefix (non-Razibus fixture)", () => {
+    const result = extractEventPageData(GENERIC_VENUE_EVENT_HTML, "https://larampe.example/agenda/iron-resolve", {
+      referenceDate: REFERENCE_DATE
+    });
+
+    expect(result.venueName).toBeNull();
+  });
+
+  it("extracts the venue name from an <address> block's leading segment when no JSON-LD is present", () => {
+    const result = extractEventPageData(
+      ADDRESS_ONLY_VENUE_NAME_HTML,
+      "https://razibus.net/16-08-2026-fossilization-phobocosm-grotesquerie-vaulx-en-velin-35773.html",
+      { referenceDate: REFERENCE_DATE }
+    );
+
+    expect(result.venueName).toBe("GRRRND ZERO");
+    expect(result.address).toBe("GRRRND ZERO, 60 Avenue de Bohlen, Vaulx en Velin 69120");
+    expect(result.fieldSources.venueName).toBe("page_content");
   });
 
   it("generates a generic title only when no usable title exists anywhere", () => {

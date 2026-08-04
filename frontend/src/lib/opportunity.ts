@@ -425,6 +425,16 @@ function normalizeUrlForComparison(url: string): string {
   }
 }
 
+// Two URLs pointing at the same resource (ignoring hash/trailing slash/case)
+// — used to hide a source link that's already shown elsewhere on the page
+// under a different label (e.g. a venue's "Website" row and the event's
+// "Source and ticketing" link resolving to the same URL, PR #218 review
+// feedback: "no identical source shown twice").
+export function isSameUrl(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false;
+  return normalizeUrlForComparison(a) === normalizeUrlForComparison(b);
+}
+
 // Source evidence with anything already shown elsewhere on the page (e.g.
 // the event/ticket link in "Source and ticketing") filtered out, so the
 // same source is never displayed twice (PR #218 review feedback: "Source

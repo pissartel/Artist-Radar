@@ -29,6 +29,7 @@ import {
   getSourceEvidenceExcluding,
   getTicketAction,
   getVenueTypeLabel,
+  isSameUrl,
   LINEUP_POSITION_LABELS,
   type OpportunitySignalKind,
 } from "@/lib/opportunity";
@@ -483,7 +484,12 @@ function MatchFactorSection({
 // venue's own official site.
 function SourceAndTicketingSection({ opportunity }: { opportunity: Opportunity }) {
   const family = getCardFamily(opportunity);
-  const eventUrl = getOpportunitySourceUrl(opportunity);
+  const rawEventUrl = getOpportunitySourceUrl(opportunity);
+  // For a venue opportunity, the source URL and the venue's official
+  // website (rendered above in the Venue/Event information section) are
+  // often the exact same link — never show it a second time here (PR #218
+  // review feedback: "no identical source shown twice").
+  const eventUrl = isSameUrl(rawEventUrl, opportunity.venueWebsite) ? null : rawEventUrl;
   const sourceProvider = getOpportunitySource(opportunity);
   const ticketAction = getTicketAction(opportunity);
 
@@ -651,6 +657,12 @@ export default function OpportunityDetail({
                 <InfoRow key={row.label} label={row.label} value={row.value} />
               ))}
             </div>
+            {/* A venue-type opportunity IS the venue (VenueSection below only
+                covers a live event that resolved a separate venue), so its
+                own confirming similar artists must be listed here instead
+                (PR #218 review feedback: "explicitly mention which similar
+                artist(s) played the venue"). */}
+            {family === "venue" && <VenueArtistEvidenceList evidence={opportunity.venueArtistEvidence} />}
           </div>
         )}
 

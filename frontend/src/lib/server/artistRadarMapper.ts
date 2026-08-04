@@ -202,7 +202,10 @@ function mapOpportunityCategory(opportunity: BackendOpportunity): OpportunityCat
 
 // Domains that are always an aggregator/discovery source, never a venue's
 // own official site (PR #218 review feedback): a concert found through one
-// of these must never be surfaced as "the venue's website".
+// of these must never be surfaced as "the venue's website". Includes the
+// backend's own isSocialOrTicketingUrl domains (src/booking/
+// eventPageExtraction.ts) — a social-media post about a show at a venue is
+// never that venue's own site either, same reasoning as a ticketing link.
 const NON_VENUE_WEBSITE_DOMAINS = [
   "songkick.com",
   "bandsintown.com",
@@ -216,6 +219,12 @@ const NON_VENUE_WEBSITE_DOMAINS = [
   "eventbrite.com",
   "eventbrite.fr",
   "facebook.com",
+  "instagram.com",
+  "youtube.com",
+  "youtu.be",
+  "tiktok.com",
+  "x.com",
+  "twitter.com",
   "last.fm",
   "allevents.in",
   "wegow.com",

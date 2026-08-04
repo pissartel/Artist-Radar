@@ -321,7 +321,7 @@ describe("OpenAIWebSearchConcertProvider", () => {
       expect(venueLead.sourceUrl).not.toBe("https://bandsintown.com/event/12345");
     });
 
-    it("falls back to the event source URL for a venue lead when no venue website is known", async () => {
+    it("leaves sourceUrl null (never the triggering event URL) when no venue website can be verified", async () => {
       const client = clientWithFixedResult(
         concertResult({ venueName: "Le Klub", sourceUrl: "https://bandsintown.com/event/12345" }),
         ["https://bandsintown.com/event/12345"]
@@ -335,7 +335,13 @@ describe("OpenAIWebSearchConcertProvider", () => {
       const result = await provider.search({ input: { ...input, similarArtists: [baseSimilarArtist()] } });
 
       const venueLead = result.targets.find((t) => t.category === "venue")!;
-      expect(venueLead.sourceUrl).toBe("https://bandsintown.com/event/12345");
+      // Do not invent/guess a venue website — a bandsintown.com event URL is
+      // never the venue's own page, so the venue opportunity has no primary
+      // link rather than pointing at the concert that surfaced it.
+      expect(venueLead.sourceUrl).toBeNull();
+      // The concert is preserved only as structured evidence, never promoted
+      // to the venue's primary link.
+      expect(venueLead.venueArtistEvidence?.[0]?.sourceUrl).toBe("https://bandsintown.com/event/12345");
     });
 
     it("does not create a venue lead for a venue outside France", async () => {

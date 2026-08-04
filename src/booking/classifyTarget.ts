@@ -4,8 +4,10 @@ import type { BookingTarget, BookingTargetCategory, RawBookingSource } from "./t
 
 export function classifyBookingTarget(rawSource: RawBookingSource): BookingTarget {
   const text = buildSourceText(rawSource);
-  const category = rawSource.category ?? classifyCategory(text);
   const sourceUrl = rawSource.sourceUrl ?? rawSource.url ?? null;
+  const sourceType = rawSource.sourceType ?? "search_result";
+  const category =
+    rawSource.category ?? classifyCategory(text, { hasVenueName: Boolean(rawSource.venueName), isUnverifiedSearchResult: sourceType === "search_result" });
   const contacts = rawSource.contacts ?? extractPublicContactSignals(text, rawSource.links ?? []);
   const location = normalizeLocationParts(rawSource.city, rawSource.country);
 
@@ -16,7 +18,7 @@ export function classifyBookingTarget(rawSource: RawBookingSource): BookingTarge
     country: location.country,
     description: rawSource.text ?? rawSource.snippet ?? null,
     sourceUrl,
-    sourceType: rawSource.sourceType ?? "search_result",
+    sourceType,
     sourceProvider: rawSource.sourceProvider ?? null,
     genres: rawSource.genres ?? [],
     estimatedCapacity: rawSource.estimatedCapacity ?? null,
@@ -42,7 +44,7 @@ export function classifyBookingTarget(rawSource: RawBookingSource): BookingTarge
   };
 }
 
-function classifyCategory(text: string): BookingTargetCategory {
+function classifyCategory(text: string, context: { hasVenueName: boolean; isUnverifiedSearchResult: boolean }): BookingTargetCategory {
   if (/\b(open call|appel à candidature|appel a candidature|candidatures?|application|apply)\b/i.test(text)) {
     return "open_call";
   }
@@ -75,6 +77,23 @@ function classifyCategory(text: string): BookingTargetCategory {
   }
   if (/\b(venue|salle de concert|concert hall|club)\b/i.test(text)) {
     return "venue";
+  }
+  // Nothing in the text names a venue, and this is a bare, unverified web-
+  // search result (no page extraction ever ran or resolved a real venue
+  // identity for it — see extractVenuePageData in eventPageExtraction.ts,
+  // whose output always sets venueName when it succeeds). Defaulting to
+  // "venue" here would (a) let the raw search-result title/URL — often a
+  // social-media post or a third-party listing page about one specific show,
+  // e.g. an Instagram post or a generic "lagenda"-style aggregator — be
+  // shown as if it were a real venue's own name/website downstream (see
+  // mapVenueWebsite in the frontend mapper), and (b) let it bypass the
+  // ordinary event-date relevance filter by being treated as an evergreen
+  // venue that needs no date. Falling through to "event" instead means it's
+  // judged like any other one-off event lead: it simply won't surface at all
+  // without a real date or high confidence, rather than surfacing under a
+  // fabricated venue identity.
+  if (!context.hasVenueName && context.isUnverifiedSearchResult) {
+    return "event";
   }
   return "venue";
 }

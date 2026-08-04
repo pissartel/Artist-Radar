@@ -586,6 +586,10 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     ["a Shotgun artist profile page", "https://shotgun.live/en/users/artists/minawarren"],
     ["a Bandsintown event/ticketing page", "https://bandsintown.com/e/neon-riot-monsters-art"],
     ["a generic /events/ listing page", "https://agenda.example/events/monsters-art-night"],
+    // Reported bug: an Instagram post about a show at the venue was being
+    // shown as if it were the venue's own official website.
+    ["an Instagram post", "https://www.instagram.com/p/DTizQeyCNWO/"],
+    ["a YouTube video page", "https://www.youtube.com/watch?v=abc123"],
   ])("never maps %s to venueWebsite", (_label, sourceUrl) => {
     const result = buildResult({
       opportunities: [

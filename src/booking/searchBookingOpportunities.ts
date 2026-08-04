@@ -15,7 +15,8 @@ import type {
   BookingTarget,
   BookingTargetCategory,
   ContactCandidate,
-  OpportunityInternalReview
+  OpportunityInternalReview,
+  VenueArtistEvidence
 } from "./types.js";
 import {
   buildDefaultBookingSourceProviders,
@@ -224,11 +225,33 @@ function buildFitSummary(action: string): string {
 }
 
 // Venue-ish categories eligible for the cross-provider merge pass below.
-// Organizations without a date (e.g. a recurring venue profile with no
-// specific show) are intentionally excluded — same-date matching would be
-// meaningless for them, and the sourceUrl-based pass above already
-// deduplicates exact repeats.
 const VENUE_DEDUPE_CATEGORIES: ReadonlySet<BookingTargetCategory> = new Set(["venue", "bar", "event", "festival"]);
+
+// Recurring-organization categories (a venue or bar profile, as opposed to a
+// one-off dated event/festival) can be matched purely on venue identity
+// (name+city), without requiring an event date on either side. This is what
+// lets a venue discovered via VenueDiscoveryBookingSourceProvider (real
+// official page, no single event date — see that file) merge with the same
+// venue discovered via similar-artist concert history (dated evidence, but
+// whose only "source" is the similar artist's concert page) into one
+// opportunity carrying the real website plus the full evidence trail (PR
+// #218 review feedback: "extract the actual venue... official venue
+// website... do not map the similar artist's profile/calendar URL into
+// venueWebsite").
+const ORGANIZATION_DEDUPE_CATEGORIES: ReadonlySet<BookingTargetCategory> = new Set(["venue", "bar"]);
+
+// A venue's own official page is a more trustworthy website than a similar
+// artist's concert-history source (their Songkick/Bandsintown/etc. page) —
+// used by mergeBookingTargets to decide which sourceUrl becomes the merged
+// target's primary sourceUrl/website.
+const VERIFIED_VENUE_SOURCE_TYPES: ReadonlySet<BookingSourceType> = new Set([
+  "venue_official_programming_page",
+  "official_site"
+]);
+
+function isVerifiedVenueSource(target: BookingTarget): boolean {
+  return VERIFIED_VENUE_SOURCE_TYPES.has(target.sourceType);
+}
 
 function dedupeTargets(targets: BookingTarget[]): { targets: BookingTarget[]; duplicateCount: number } {
   const seen = new Set<string>();
@@ -266,18 +289,32 @@ function dedupeTargets(targets: BookingTarget[]): { targets: BookingTarget[]; du
 }
 
 function isVenueDedupeEligible(target: BookingTarget): boolean {
+  if (ORGANIZATION_DEDUPE_CATEGORIES.has(target.category) && Boolean(target.venueName)) {
+    return true;
+  }
   return VENUE_DEDUPE_CATEGORIES.has(target.category) && Boolean(toDateOnlyString(target.eventDate ?? ""));
 }
 
 function isSameVenueEvent(left: BookingTarget, right: BookingTarget): boolean {
+  const leftVenue = left.venueName ? normalizeVenueName(left.venueName, left.city) : null;
+  const rightVenue = right.venueName ? normalizeVenueName(right.venueName, right.city) : null;
+  const leftCity = left.city ? normalizeKey(left.city) : null;
+  const rightCity = right.city ? normalizeKey(right.city) : null;
+  const sameVenueIdentity = Boolean(leftVenue && rightVenue && leftVenue === rightVenue && leftCity === rightCity);
+
+  // Organizations (venue/bar) can be matched purely on venue identity: a
+  // venue's own official page (no single event date) must still be able to
+  // merge with a dated concert-history candidate for the same place.
+  if (sameVenueIdentity && ORGANIZATION_DEDUPE_CATEGORIES.has(left.category) && ORGANIZATION_DEDUPE_CATEGORIES.has(right.category)) {
+    return true;
+  }
+
   const leftDate = toDateOnlyString(left.eventDate ?? "");
   const rightDate = toDateOnlyString(right.eventDate ?? "");
   if (!leftDate || !rightDate || leftDate !== rightDate) {
     return false;
   }
 
-  const leftVenue = left.venueName ? normalizeVenueName(left.venueName, left.city) : null;
-  const rightVenue = right.venueName ? normalizeVenueName(right.venueName, right.city) : null;
   if (leftVenue && rightVenue) {
     return leftVenue === rightVenue;
   }
@@ -285,8 +322,6 @@ function isSameVenueEvent(left: BookingTarget, right: BookingTarget): boolean {
   // Neither side has usable venue-name evidence: only fall back to
   // city+event-name, otherwise two unrelated same-day events in the same
   // city would incorrectly merge.
-  const leftCity = left.city ? normalizeKey(left.city) : null;
-  const rightCity = right.city ? normalizeKey(right.city) : null;
   return Boolean(leftCity && rightCity && leftCity === rightCity && normalizeKey(left.name) === normalizeKey(right.name));
 }
 
@@ -295,27 +330,68 @@ function isSameVenueEvent(left: BookingTarget, right: BookingTarget): boolean {
 // URL/provider is preserved as an evidence line rather than dropped, since
 // BookingTarget carries a single primary sourceUrl (issue #189: "preserve
 // all source URLs").
+//
+// A venue's own official page (isVerifiedVenueSource) always wins as the
+// primary sourceUrl/website, even when it arrives second — a similar
+// artist's concert-history source must never end up as the merged
+// opportunity's website (PR #218 review feedback). The loser's URL is kept
+// only as an evidence line, and venueArtistEvidence/address are merged
+// rather than dropped, so "which similar artists played here" and venue
+// facts survive the merge regardless of which candidate arrived first.
 function mergeBookingTargets(existing: BookingTarget, incoming: BookingTarget): BookingTarget {
-  const additionalSourceNote = incoming.sourceUrl && incoming.sourceUrl !== existing.sourceUrl
-    ? `Also listed via ${incoming.sourceProvider ?? incoming.sourceType}: ${incoming.sourceUrl}`
+  const preferIncomingAsPrimary = isVerifiedVenueSource(incoming) && !isVerifiedVenueSource(existing);
+  const primary = preferIncomingAsPrimary ? incoming : existing;
+  const secondary = preferIncomingAsPrimary ? existing : incoming;
+  const additionalSourceNote = secondary.sourceUrl && secondary.sourceUrl !== primary.sourceUrl
+    ? `Also listed via ${secondary.sourceProvider ?? secondary.sourceType}: ${secondary.sourceUrl}`
     : null;
 
   return {
     ...existing,
+    sourceUrl: primary.sourceUrl,
+    sourceType: primary.sourceType,
+    sourceProvider: primary.sourceProvider,
     description: existing.description ?? incoming.description,
     genres: uniqueStrings([...existing.genres, ...incoming.genres]),
     estimatedCapacity: existing.estimatedCapacity ?? incoming.estimatedCapacity,
     estimatedArtistTier: existing.estimatedArtistTier ?? incoming.estimatedArtistTier,
     pastProgramming: uniqueStrings([...(existing.pastProgramming ?? []), ...(incoming.pastProgramming ?? [])]),
     venueName: existing.venueName ?? incoming.venueName,
+    address: existing.address ?? incoming.address,
     lineup: uniqueStrings([...(existing.lineup ?? []), ...(incoming.lineup ?? [])]),
     imageUrl: existing.imageUrl ?? incoming.imageUrl,
+    imageSource: existing.imageSource ?? incoming.imageSource,
     ticketUrl: existing.ticketUrl ?? incoming.ticketUrl,
     derivedFromSimilarArtist: existing.derivedFromSimilarArtist ?? incoming.derivedFromSimilarArtist,
     contacts: [...existing.contacts, ...incoming.contacts],
     confidence: Math.min(1, Math.max(existing.confidence, incoming.confidence) + 0.05),
+    venueArtistEvidence: mergeVenueArtistEvidence(existing.venueArtistEvidence, incoming.venueArtistEvidence),
     evidence: uniqueStrings([...existing.evidence, ...incoming.evidence, additionalSourceNote].filter((value): value is string => Boolean(value)))
   };
+}
+
+// One evidence record per (similar artist, source) pair — a venue found via
+// both discovery paths must list every contributing similar artist exactly
+// once each, not lose the ones from whichever side didn't become primary
+// (PR #218 acceptance criterion: "all contributing artists are listed").
+function mergeVenueArtistEvidence(
+  left?: VenueArtistEvidence[],
+  right?: VenueArtistEvidence[]
+): VenueArtistEvidence[] | undefined {
+  if (!left && !right) {
+    return undefined;
+  }
+  const seen = new Set<string>();
+  const combined: VenueArtistEvidence[] = [];
+  for (const item of [...(left ?? []), ...(right ?? [])]) {
+    const key = `${item.similarArtistId}:${item.sourceUrl}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    combined.push(item);
+  }
+  return combined;
 }
 
 function collectSourcesUsed(targets: BookingTarget[]): string[] {

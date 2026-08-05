@@ -344,7 +344,10 @@ describe("OpenAIWebSearchConcertProvider", () => {
       expect(venueLead.venueArtistEvidence?.[0]?.sourceUrl).toBe("https://bandsintown.com/event/12345");
     });
 
-    it("also creates a venue lead for a venue outside France (no longer France-restricted)", async () => {
+    it("does not create a venue lead outside the artist's own target booking market", async () => {
+      // `input` (top of file) has target: "France" / artistProfile.country:
+      // "France" — a venue in Germany isn't a useful suggestion for this
+      // artist's booking search, even though the concert itself is real.
       const client = clientWithFixedResult(
         concertResult({ venueName: "Some Club", city: "Berlin", country: "Germany", sourceUrl: "https://venue.example/event" }),
         ["https://venue.example/event"]
@@ -357,10 +360,45 @@ describe("OpenAIWebSearchConcertProvider", () => {
 
       const result = await provider.search({ input: { ...input, similarArtists: [baseSimilarArtist()] } });
 
+      expect(result.targets.some((t) => t.category === "venue")).toBe(false);
+    });
+
+    it("creates a venue lead when the venue's country matches the artist's own target booking market", async () => {
+      const client = clientWithFixedResult(
+        concertResult({ venueName: "Le Klub", city: "Paris", country: "France", sourceUrl: "https://venue.example/event" }),
+        ["https://venue.example/event"]
+      );
+      const provider = buildOpenAIWebSearchConcertProvider({
+        env: { ENABLE_OPENAI_CONCERT_DISCOVERY: "true", OPENAI_API_KEY: "test" },
+        client,
+        now: new Date("2026-07-24T00:00:00Z")
+      });
+
+      const result = await provider.search({ input: { ...input, target: "France", similarArtists: [baseSimilarArtist()] } });
+
+      const venueLead = result.targets.find((t) => t.category === "venue");
+      expect(venueLead).toBeDefined();
+      expect(venueLead!.venueName).toBe("Le Klub");
+    });
+
+    it("does not filter by country at all when the artist has no known target market or country", async () => {
+      const client = clientWithFixedResult(
+        concertResult({ venueName: "Some Club", city: "Berlin", country: "Germany", sourceUrl: "https://venue.example/event" }),
+        ["https://venue.example/event"]
+      );
+      const provider = buildOpenAIWebSearchConcertProvider({
+        env: { ENABLE_OPENAI_CONCERT_DISCOVERY: "true", OPENAI_API_KEY: "test" },
+        client,
+        now: new Date("2026-07-24T00:00:00Z")
+      });
+
+      const result = await provider.search({
+        input: { ...input, target: null, artistProfile: null, similarArtists: [baseSimilarArtist()] }
+      });
+
       const venueLead = result.targets.find((t) => t.category === "venue");
       expect(venueLead).toBeDefined();
       expect(venueLead!.venueName).toBe("Some Club");
-      expect(venueLead!.country).toBe("Germany");
     });
 
     it("merges the same venue found via two different similar artists into one venue lead", async () => {

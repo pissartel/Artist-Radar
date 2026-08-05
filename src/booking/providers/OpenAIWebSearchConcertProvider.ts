@@ -140,8 +140,14 @@ export function buildOpenAIWebSearchConcertProvider(options: OpenAIWebSearchConc
         }
       }
 
-      const venueLeadTargets = buildVenueLeadTargets(perArtistOutcomes);
-      debugLog("openai-concerts", `[venue-leads] ${venueLeadTargets.length} venue lead(s) from confirmed/probable past or upcoming concerts`);
+      // The artist's own target booking market, when known — never a
+      // hardcoded country. Only used to filter which venue leads are
+      // relevant to *this* artist's booking search; a target market that
+      // isn't known at all means no country filter is applied, rather than
+      // guessing one.
+      const targetCountry = input.target ?? input.artistProfile?.country ?? null;
+      const venueLeadTargets = buildVenueLeadTargets(perArtistOutcomes, targetCountry);
+      debugLog("openai-concerts", `[venue-leads] ${venueLeadTargets.length} venue lead(s) from confirmed/probable past or upcoming concerts${targetCountry ? ` in ${targetCountry}` : ""}`);
       targets.push(...venueLeadTargets);
 
       logSummary(perArtistOutcomes, diagnostics);
@@ -361,15 +367,20 @@ interface VenueLeadMatch {
 const VENUE_LEAD_MIN_CONFIDENCE = 0.85;
 
 /**
- * A confirmed/probable concert — past OR upcoming, any country — by a
- * compatible similar artist is evidence that a venue is compatible,
- * independently of the concert opportunity toBookingTarget() already
- * creates for it. This surfaces the *venue* itself as its own opportunity,
- * without re-adding the concert as a second event opportunity (the shared
- * pipeline already excludes a *past* show from becoming its own opportunity
- * via opportunityKind "historical_signal"; an *upcoming* show still gets
- * its own "event" opportunity from toBookingTarget() too — the venue lead
- * here is additive, not a replacement).
+ * A confirmed/probable concert — past OR upcoming — by a compatible similar
+ * artist is evidence that a venue is compatible, independently of the
+ * concert opportunity toBookingTarget() already creates for it. This
+ * surfaces the *venue* itself as its own opportunity, without re-adding the
+ * concert as a second event opportunity (the shared pipeline already
+ * excludes a *past* show from becoming its own opportunity via
+ * opportunityKind "historical_signal"; an *upcoming* show still gets its
+ * own "event" opportunity from toBookingTarget() too — the venue lead here
+ * is additive, not a replacement).
+ *
+ * Only surfaces venues in `targetCountry` — the artist's own booking
+ * market — when that's known; a venue lead in an unrelated country is not
+ * a useful booking suggestion. Left unfiltered (every country kept) when
+ * no target market is known at all, rather than guessing one.
  *
  * The venue opportunity's primary link must represent the venue itself,
  * never the concert that surfaced it (venue-opportunity URL fix): only
@@ -378,8 +389,9 @@ const VENUE_LEAD_MIN_CONFIDENCE = 0.85;
  * is ever used as the primary sourceUrl; every concert is preserved as
  * structured `venueArtistEvidence` regardless.
  */
-function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[]): BookingTarget[] {
+function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[], targetCountry: string | null): BookingTarget[] {
   const venues = new Map<string, { venue: VerifiedConcert["venue"]; genres: Set<string>; matches: VenueLeadMatch[] }>();
+  const normalizedTargetCountry = targetCountry?.trim().toLowerCase() || null;
 
   for (const outcome of outcomes) {
     for (const concert of outcome.concerts) {
@@ -387,6 +399,9 @@ function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[]): BookingT
         continue; // cancelled/postponed/unknown are not usable venue-compatibility evidence
       }
       if (concert.verificationStatus !== "confirmed" && concert.verificationStatus !== "probable") {
+        continue;
+      }
+      if (normalizedTargetCountry && concert.venue.country?.trim().toLowerCase() !== normalizedTargetCountry) {
         continue;
       }
 

@@ -139,6 +139,14 @@ function isListingPageUrl(url: string): boolean {
   }
 }
 
+// A venue-type opportunity IS the venue, not an event, so its facts card
+// must never be labeled "Event information" (reported bug).
+export const INFO_SECTION_TITLES: Record<OpportunityCardFamily, string> = {
+  event: "Event information",
+  venue: "Venue information",
+  organization: "Organization information",
+};
+
 export function getSourceLinkLabel(sourceUrl: string, family: OpportunityCardFamily): string {
   if (family === "venue" || family === "organization") {
     return isListingPageUrl(sourceUrl) ? "View venue programme ↗" : "Visit website ↗";
@@ -647,11 +655,14 @@ export default function OpportunityDetail({
       <div className="mt-6 flex flex-col gap-4">
         <OpportunitySignalBanner opportunity={opportunity} />
 
-        {/* 3. Event information — a single consolidated section replacing
-            the previous duplicated "Details"/"Event details" cards. */}
+        {/* 3. Event/venue/organization information — a single consolidated
+            section replacing the previous duplicated "Details"/"Event
+            details" cards. Titled per family: a venue-type opportunity IS
+            the venue, not an event, so its facts must never be labeled
+            "Event information". */}
         {eventInfoRows.length > 0 && (
           <div className={family === "event" ? buildCardClassName("stat", "border-border-accent bg-accent-tint") : cardClassName}>
-            <SectionTitle>Event information</SectionTitle>
+            <SectionTitle>{INFO_SECTION_TITLES[family]}</SectionTitle>
             <div className="flex flex-col gap-1.5">
               {eventInfoRows.map((row) => (
                 <InfoRow key={row.label} label={row.label} value={row.value} />

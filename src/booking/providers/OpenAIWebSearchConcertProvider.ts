@@ -141,7 +141,7 @@ export function buildOpenAIWebSearchConcertProvider(options: OpenAIWebSearchConc
       }
 
       const venueLeadTargets = buildVenueLeadTargets(perArtistOutcomes);
-      debugLog("openai-concerts", `[venue-leads] ${venueLeadTargets.length} France-based venue lead(s) from past confirmed/probable concerts`);
+      debugLog("openai-concerts", `[venue-leads] ${venueLeadTargets.length} France-based venue lead(s) from confirmed/probable past or upcoming concerts`);
       targets.push(...venueLeadTargets);
 
       logSummary(perArtistOutcomes, diagnostics);
@@ -350,6 +350,7 @@ interface VenueLeadMatch {
   date: string;
   eventName: string | null;
   sourceUrl: string | null;
+  status: VerifiedConcert["status"];
 }
 
 // Matches the shared relevance pipeline's HIGH_CONFIDENCE_WITHOUT_DATE
@@ -360,12 +361,16 @@ interface VenueLeadMatch {
 const VENUE_LEAD_MIN_CONFIDENCE = 0.85;
 
 /**
- * A past confirmed/probable concert is opportunistic evidence that a venue
- * is compatible — not itself a bookable event (it already happened). This
- * surfaces the *venue* as a lead, restricted to France per the user's
- * request, without re-adding the past show as an event opportunity (which
- * the shared pipeline already excludes via opportunityKind
- * "historical_signal" — unaffected by this).
+ * A confirmed/probable concert — past OR upcoming — by a compatible similar
+ * artist is evidence that a venue is compatible, independently of the
+ * concert opportunity toBookingTarget() already creates for it. This
+ * surfaces the *venue* itself as its own opportunity, restricted to France
+ * per the user's request, without re-adding the concert as a second event
+ * opportunity (the shared pipeline already excludes a *past* show from
+ * becoming its own opportunity via opportunityKind "historical_signal";
+ * an *upcoming* show still gets its own "event" opportunity from
+ * toBookingTarget() too — the venue lead here is additive, not a
+ * replacement).
  *
  * The venue opportunity's primary link must represent the venue itself,
  * never the concert that surfaced it (venue-opportunity URL fix): only
@@ -379,8 +384,8 @@ function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[]): BookingT
 
   for (const outcome of outcomes) {
     for (const concert of outcome.concerts) {
-      if (concert.status !== "past") {
-        continue; // upcoming concerts already produce their own actionable event opportunity
+      if (concert.status !== "past" && concert.status !== "upcoming") {
+        continue; // cancelled/postponed/unknown are not usable venue-compatibility evidence
       }
       if (concert.verificationStatus !== "confirmed" && concert.verificationStatus !== "probable") {
         continue;
@@ -395,7 +400,8 @@ function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[]): BookingT
         compatibilityScore: outcome.artist.totalRelevance,
         date: concert.date,
         eventName: concert.eventName,
-        sourceUrl: concert.sources[0]?.url ?? null
+        sourceUrl: concert.sources[0]?.url ?? null,
+        status: concert.status
       };
 
       const existing = venues.get(key);
@@ -419,9 +425,10 @@ function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[]): BookingT
       ...matches.map((match) => ({ url: match.sourceUrl, verified: false }))
     ]);
     const evidence = uniqueStrings([
-      ...matches.map(
-        (match) =>
-          `Similar artist ${match.artistName} played here on ${match.date} (compatibility ${match.compatibilityScore}/100) — opportunistic evidence from a past show, not a current booking opportunity itself.`
+      ...matches.map((match) =>
+        match.status === "upcoming"
+          ? `Similar artist ${match.artistName} is scheduled to play here on ${match.date} (compatibility ${match.compatibilityScore}/100) — opportunistic evidence, not a current booking opportunity itself.`
+          : `Similar artist ${match.artistName} played here on ${match.date} (compatibility ${match.compatibilityScore}/100) — opportunistic evidence from a past show, not a current booking opportunity itself.`
       ),
       ...matches.map((match) => match.sourceUrl)
     ]);
@@ -451,7 +458,7 @@ function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[]): BookingT
       category: "venue",
       city: venue.city,
       country: venue.country,
-      description: `${matches.length} compatible similar artist${matches.length === 1 ? " has" : "s have"} played here.`,
+      description: `${matches.length} compatible similar artist${matches.length === 1 ? " has" : "s have"} played or are scheduled to play here.`,
       sourceUrl: resolvedUrl,
       sourceType: resolvedUrl === venue.website ? "official_site" : resolvedUrl ? "venue_official_programming_page" : "event_page",
       sourceProvider: "openai_web_search",

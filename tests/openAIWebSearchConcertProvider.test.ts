@@ -271,7 +271,7 @@ describe("OpenAIWebSearchConcertProvider", () => {
     expect(result.targets.every((t) => t.derivedFromSimilarArtist?.name === "Working Artist")).toBe(true);
   });
 
-  describe("venue leads from past concerts", () => {
+  describe("venue leads from similar-artist concerts (past or upcoming)", () => {
     it("adds a France-based venue as a lead without re-adding the past show as an event opportunity", async () => {
       const client = clientWithFixedResult(
         concertResult({ venueName: "Le Klub", city: "Villeurbanne", sourceUrl: "https://venue.example/event" }),
@@ -382,7 +382,12 @@ describe("OpenAIWebSearchConcertProvider", () => {
       expect(venueLeads[0].evidence.some((line) => line.includes("Artist B"))).toBe(true);
     });
 
-    it("does not create a venue lead from an upcoming concert (it already becomes its own event opportunity)", async () => {
+    it("also creates a venue lead from an upcoming concert, alongside its own event opportunity", async () => {
+      // Fix for the reported gap: a venue was only ever created from a past
+      // concert, even though an upcoming similar-artist concert is at least
+      // as strong evidence of venue compatibility — the two concerns are
+      // additive, not exclusive: the event opportunity for the upcoming show
+      // itself must still exist too.
       const upcomingResult = {
         artist: { requestedName: "x", resolvedName: "x", identityConfidence: 0.9, identityNotes: null },
         pastConcerts: [],
@@ -410,8 +415,103 @@ describe("OpenAIWebSearchConcertProvider", () => {
 
       const result = await provider.search({ input: { ...input, similarArtists: [baseSimilarArtist()] } });
 
-      expect(result.targets.some((t) => t.category === "venue")).toBe(false);
+      const venueLead = result.targets.find((t) => t.category === "venue");
+      expect(venueLead).toBeDefined();
+      expect(venueLead!.venueName).toBe("Le Klub");
+      expect(venueLead!.evidence.some((line) => line.includes("is scheduled to play"))).toBe(true);
       expect(result.targets.some((t) => t.category === "event" && t.isFutureEvent)).toBe(true);
+    });
+
+    it("keeps the concert as its own event opportunity alongside the venue lead it produced", async () => {
+      const client = clientWithFixedResult(
+        concertResult({ eventName: "The Suicide Machines + Faintest Idea @ Glazart", venueName: "Glazart", city: "Paris", sourceUrl: "https://razibus.net/06-08-2026-the-suicide-machines" }),
+        ["https://razibus.net/06-08-2026-the-suicide-machines"]
+      );
+      const provider = buildOpenAIWebSearchConcertProvider({
+        env: { ENABLE_OPENAI_CONCERT_DISCOVERY: "true", OPENAI_API_KEY: "test" },
+        client,
+        now: new Date("2026-07-24T00:00:00Z")
+      });
+
+      const result = await provider.search({ input: { ...input, similarArtists: [baseSimilarArtist()] } });
+
+      // Two distinct objects: the concert opportunity is untouched...
+      const concertOpportunity = result.targets.find((t) => t.category === "event");
+      expect(concertOpportunity).toBeDefined();
+      expect(concertOpportunity!.name).toBe("The Suicide Machines + Faintest Idea @ Glazart");
+      expect(concertOpportunity!.sourceUrl).toBe("https://razibus.net/06-08-2026-the-suicide-machines");
+      // ...and the venue is its own separate opportunity, titled after the
+      // venue, not the concert, with the concert URL only as evidence.
+      const venueLead = result.targets.find((t) => t.category === "venue");
+      expect(venueLead).toBeDefined();
+      expect(venueLead!.name).toBe("Glazart");
+      expect(venueLead!.sourceUrl).not.toBe("https://razibus.net/06-08-2026-the-suicide-machines");
+      expect(venueLead!.venueArtistEvidence?.[0]?.sourceUrl).toBe("https://razibus.net/06-08-2026-the-suicide-machines");
+    });
+
+    it("merges several concerts at the same venue (Glazart) by different similar artists into a single venue opportunity", async () => {
+      const create = vi.fn().mockResolvedValue(
+        fakeResponse(
+          concertResult({ venueName: "Glazart", city: "Paris", sourceUrl: "https://razibus.net/glazart-show" }),
+          ["https://razibus.net/glazart-show"]
+        )
+      );
+      const client = new OpenAIConcertClient({ apiKey: "test", model: "test-model", client: { responses: { create } } });
+      const provider = buildOpenAIWebSearchConcertProvider({
+        env: { ENABLE_OPENAI_CONCERT_DISCOVERY: "true", OPENAI_API_KEY: "test" },
+        client,
+        now: new Date("2026-07-24T00:00:00Z")
+      });
+
+      const similarArtists = [
+        baseSimilarArtist({ name: "The Suicide Machines", totalRelevance: 90 }),
+        baseSimilarArtist({ name: "Faintest Idea", totalRelevance: 85 }),
+        baseSimilarArtist({ name: "Antiskapitalista", totalRelevance: 80 })
+      ];
+
+      const result = await provider.search({ input: { ...input, similarArtists } });
+
+      const venueLeads = result.targets.filter((t) => t.category === "venue" && t.venueName === "Glazart");
+      expect(venueLeads).toHaveLength(1);
+      expect(venueLeads[0].venueArtistEvidence).toHaveLength(3);
+    });
+
+    it("does not create a venue opportunity from a concert with no traceable venue name", async () => {
+      // A concert missing a venue name is rejected outright by validateEvent
+      // before it ever reaches venue-lead construction — there is nothing
+      // reliable to extract, so no venue opportunity (or concert
+      // opportunity) is produced from it at all, never a guessed name.
+      const client = clientWithFixedResult(
+        {
+          artist: { requestedName: "x", resolvedName: "x", identityConfidence: 0.9, identityNotes: null },
+          pastConcerts: [
+            {
+              eventName: "Mystery show",
+              date: "2026-03-01",
+              venue: { name: "", city: "Paris", region: null, country: "France", website: null },
+              lineup: ["Headliner"],
+              eventType: "concert",
+              status: "past",
+              sources: [{ url: "https://venue.example/event", title: "Venue programme", sourceType: "venue_official" }],
+              evidenceSummary: "No venue name reported.",
+              modelConfidence: 0.9
+            }
+          ],
+          upcomingConcerts: [],
+          searchSummary: { pastConcertsFound: 1, upcomingConcertsFound: 0, noUpcomingConcertsFoundInCheckedSources: true, notes: null }
+        },
+        ["https://venue.example/event"]
+      );
+      const provider = buildOpenAIWebSearchConcertProvider({
+        env: { ENABLE_OPENAI_CONCERT_DISCOVERY: "true", OPENAI_API_KEY: "test" },
+        client,
+        now: new Date("2026-07-24T00:00:00Z")
+      });
+
+      const result = await provider.search({ input: { ...input, similarArtists: [baseSimilarArtist()] } });
+
+      expect(result.targets.some((t) => t.category === "venue")).toBe(false);
+      expect(result.targets.some((t) => t.category === "event")).toBe(false);
     });
   });
 });

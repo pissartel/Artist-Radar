@@ -183,4 +183,29 @@ describe("venue opportunities discovered from similar-artist concerts", () => {
     const venue = result.targets.find((t) => t.category === "venue");
     expect(venue?.sourceUrl).toBeNull();
   });
+
+  it("does not create a venue opportunity from a generic genre-matched concert with no similar-artist link", async () => {
+    // A concert surfaced only by genre/location search (e.g. a broad
+    // "punk hardcore concerts France" query), with no derivedFromSimilarArtist
+    // — the frontend would render this as relatedArtist: null. Matching
+    // genre alone is not sufficient evidence to also spawn a venue
+    // opportunity for it (only the dedicated similar-artist-concert
+    // discovery paths do that, and only for a concert they resolved
+    // against one of the selected similar artists).
+    const genericConcert = providerReturning("provider-generic-search", [
+      target({
+        name: "Fossilization / Phobocosm / Grotesquerie le 16 août 2026 à Vaulx-en-Velin",
+        venueName: null,
+        sourceUrl: "https://razibus.net/16-08-2026-fossilization-phobocosm-grotesquerie",
+        derivedFromSimilarArtist: null
+      })
+    ]);
+
+    const result = await searchBookingOpportunities(input, { providers: [genericConcert] });
+
+    expect(result.targets.some((t) => t.category === "venue")).toBe(false);
+    const concert = result.targets.find((t) => t.category === "event");
+    expect(concert).toBeDefined();
+    expect(concert?.derivedFromSimilarArtist).toBeNull();
+  });
 });

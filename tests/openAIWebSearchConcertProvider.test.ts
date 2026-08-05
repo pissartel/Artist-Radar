@@ -344,7 +344,7 @@ describe("OpenAIWebSearchConcertProvider", () => {
       expect(venueLead.venueArtistEvidence?.[0]?.sourceUrl).toBe("https://bandsintown.com/event/12345");
     });
 
-    it("does not create a venue lead for a venue outside France", async () => {
+    it("also creates a venue lead for a venue outside France (no longer France-restricted)", async () => {
       const client = clientWithFixedResult(
         concertResult({ venueName: "Some Club", city: "Berlin", country: "Germany", sourceUrl: "https://venue.example/event" }),
         ["https://venue.example/event"]
@@ -357,7 +357,10 @@ describe("OpenAIWebSearchConcertProvider", () => {
 
       const result = await provider.search({ input: { ...input, similarArtists: [baseSimilarArtist()] } });
 
-      expect(result.targets.some((t) => t.category === "venue")).toBe(false);
+      const venueLead = result.targets.find((t) => t.category === "venue");
+      expect(venueLead).toBeDefined();
+      expect(venueLead!.venueName).toBe("Some Club");
+      expect(venueLead!.country).toBe("Germany");
     });
 
     it("merges the same venue found via two different similar artists into one venue lead", async () => {

@@ -17,6 +17,7 @@ import {
 } from "../../providers/openaiConcerts/types.js";
 import { similarArtistId, venueIdentity } from "../artistEventHistory.js";
 import { resolveVenueOfficialUrl } from "../venueUrl.js";
+import { toDateOnlyString } from "../../utils/dateOnly.js";
 
 export interface OpenAIWebSearchConcertProviderEnv {
   ENABLE_OPENAI_CONCERT_DISCOVERY?: string;
@@ -136,6 +137,18 @@ export function buildOpenAIWebSearchConcertProvider(options: OpenAIWebSearchConc
 
         for (const concert of outcome.concerts) {
           diagnostics.sourceCount += concert.sources.length;
+          // A past concert is only ever evidence that the venue is
+          // compatible (see buildVenueLeadTargets below, unaffected by this
+          // skip) — it must never become its own concert opportunity.
+          if (concert.status === "past") {
+            continue;
+          }
+          // An upcoming concert less than a month away doesn't leave enough
+          // time to pitch the organizer and join the lineup — it still
+          // feeds the venue lead, just not its own concert opportunity.
+          if (concert.status === "upcoming" && !isEligibleConcertLeadTime(concert.date, now)) {
+            continue;
+          }
           targets.push(toBookingTarget(input, outcome.artist, concert, venueEvidenceCounts));
         }
       }
@@ -310,6 +323,21 @@ async function searchArtistConcerts(
 
 function verificationRank(status: VerifiedConcert["verificationStatus"]): number {
   return status === "confirmed" ? 2 : status === "probable" ? 1 : 0;
+}
+
+const MIN_CONCERT_LEAD_TIME_MONTHS = 1;
+
+// "At least one month away" per the venue/concert-opportunity spec: a
+// show happening sooner than that doesn't leave enough time to pitch the
+// organizer and join the lineup, so it's excluded from becoming its own
+// concert opportunity — the venue lead is unaffected by this and still
+// gets created/enriched regardless of how soon the show is.
+function isEligibleConcertLeadTime(eventDate: string, now: Date): boolean {
+  const eventIso = toDateOnlyString(eventDate);
+  if (!eventIso) return false;
+  const threshold = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + MIN_CONCERT_LEAD_TIME_MONTHS, now.getUTCDate()));
+  const thresholdIso = toDateOnlyString(threshold);
+  return Boolean(thresholdIso) && eventIso >= thresholdIso!;
 }
 
 /** Returns a rejection reason string, or null when the event is acceptable. */

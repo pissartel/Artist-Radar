@@ -612,4 +612,56 @@ describe("OpenAIWebSearchConcertProvider", () => {
       expect(venueLead!.venueName).toBe("Glazart");
     });
   });
+
+  describe("concert search scoped to the artist's own target market", () => {
+    it("does not produce a concert opportunity (or a venue lead) for a show outside the artist's target market", async () => {
+      const client = clientWithFixedResult(
+        concertResult({
+          venueName: "Ippodromo SNAI San Siro",
+          city: "Milano",
+          country: "Italy",
+          date: "2026-09-10",
+          sourceUrl: "https://venue.example/event",
+          status: "upcoming"
+        }),
+        ["https://venue.example/event"]
+      );
+      const provider = buildOpenAIWebSearchConcertProvider({
+        env: { ENABLE_OPENAI_CONCERT_DISCOVERY: "true", OPENAI_API_KEY: "test" },
+        client,
+        now: new Date("2026-07-24T00:00:00Z")
+      });
+
+      // `input` (top of file) targets France.
+      const result = await provider.search({ input: { ...input, similarArtists: [baseSimilarArtist()] } });
+
+      expect(result.targets).toHaveLength(0);
+    });
+
+    it("produces both when no target market or artist country is known at all (no country guessed)", async () => {
+      const client = clientWithFixedResult(
+        concertResult({
+          venueName: "Ippodromo SNAI San Siro",
+          city: "Milano",
+          country: "Italy",
+          date: "2026-09-10",
+          sourceUrl: "https://venue.example/event",
+          status: "upcoming"
+        }),
+        ["https://venue.example/event"]
+      );
+      const provider = buildOpenAIWebSearchConcertProvider({
+        env: { ENABLE_OPENAI_CONCERT_DISCOVERY: "true", OPENAI_API_KEY: "test" },
+        client,
+        now: new Date("2026-07-24T00:00:00Z")
+      });
+
+      const result = await provider.search({
+        input: { ...input, target: null, artistProfile: null, similarArtists: [baseSimilarArtist()] }
+      });
+
+      expect(result.targets.some((t) => t.category === "event")).toBe(true);
+      expect(result.targets.some((t) => t.category === "venue")).toBe(true);
+    });
+  });
 });

@@ -128,6 +128,13 @@ export function buildOpenAIWebSearchConcertProvider(options: OpenAIWebSearchConc
       const venueEvidenceCounts = buildVenueEvidenceCounts(perArtistOutcomes);
       const targets: BookingTarget[] = [];
 
+      // The artist's own target booking market, when known — never a
+      // hardcoded country. A concert (and the venue it produces) outside
+      // this market isn't a useful booking suggestion; left unfiltered when
+      // no target market is known at all, rather than guessing one.
+      const targetCountry = input.target ?? input.artistProfile?.country ?? null;
+      const normalizedTargetCountry = targetCountry?.trim().toLowerCase() || null;
+
       for (const outcome of perArtistOutcomes) {
         diagnostics.rawEvents += outcome.rawEventCount;
         diagnostics.confirmedEvents += outcome.confirmedCount;
@@ -137,6 +144,9 @@ export function buildOpenAIWebSearchConcertProvider(options: OpenAIWebSearchConc
 
         for (const concert of outcome.concerts) {
           diagnostics.sourceCount += concert.sources.length;
+          if (normalizedTargetCountry && concert.venue.country?.trim().toLowerCase() !== normalizedTargetCountry) {
+            continue;
+          }
           // A past concert is only ever evidence that the venue is
           // compatible (see buildVenueLeadTargets below, unaffected by this
           // skip) — it must never become its own concert opportunity.
@@ -153,12 +163,6 @@ export function buildOpenAIWebSearchConcertProvider(options: OpenAIWebSearchConc
         }
       }
 
-      // The artist's own target booking market, when known — never a
-      // hardcoded country. Only used to filter which venue leads are
-      // relevant to *this* artist's booking search; a target market that
-      // isn't known at all means no country filter is applied, rather than
-      // guessing one.
-      const targetCountry = input.target ?? input.artistProfile?.country ?? null;
       const venueLeadTargets = buildVenueLeadTargets(perArtistOutcomes, targetCountry);
       debugLog("openai-concerts", `[venue-leads] ${venueLeadTargets.length} venue lead(s) from confirmed/probable past or upcoming concerts${targetCountry ? ` in ${targetCountry}` : ""}`);
       targets.push(...venueLeadTargets);

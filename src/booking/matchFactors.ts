@@ -51,7 +51,7 @@ export function buildMatchFactors(
   overallScore: number
 ): OpportunityMatchBreakdown {
   const factors: MatchFactor[] = [
-    buildGenreFactor(score),
+    buildGenreFactor(target, score),
     buildLocationFactor(input, target, score),
     dateProximity.factor,
     buildCapacityFactor(target, score),
@@ -73,7 +73,7 @@ export function buildMatchFactors(
   };
 }
 
-function buildGenreFactor(score: BookingScore): MatchFactor | null {
+function buildGenreFactor(target: BookingTarget, score: BookingScore): MatchFactor | null {
   if (score.genreLevel === "exact") {
     return { code: "genre_match", label: "Genre matches the artist", impact: "positive", scoreContribution: score.genreFit };
   }
@@ -85,16 +85,26 @@ function buildGenreFactor(score: BookingScore): MatchFactor | null {
       scoreContribution: score.genreFit
     };
   }
+  if (target.category === "venue" && !hasExplicitVenueGenreEvidence(target, score)) {
+    return null;
+  }
   if (score.genreFit < 50) {
     return {
       code: "genre_match",
-      label: "Genre match is uncertain",
-      detail: "Genre fit is weak or unconfirmed for this opportunity.",
+      label: target.category === "venue" ? "Venue may focus on a different genre" : "Genre match is uncertain",
+      detail: target.category === "venue"
+        ? "Available venue evidence points to a different genre than the artist's."
+        : "Genre fit is weak or unconfirmed for this opportunity.",
       impact: "negative",
       scoreContribution: score.genreFit
     };
   }
   return null;
+}
+
+function hasExplicitVenueGenreEvidence(target: BookingTarget, score: BookingScore): boolean {
+  if (target.category !== "venue") return true;
+  return score.genreLevel === "incompatible";
 }
 
 function buildLocationFactor(input: BookingSearchInput, target: BookingTarget, score: BookingScore): MatchFactor | null {

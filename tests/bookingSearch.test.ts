@@ -319,7 +319,7 @@ describe("Booking Search core", () => {
           return [{
             title: "Pop Punk Venue",
             url: "https://example.test/pop-punk-venue",
-            snippet: "Paris venue programmation pop punk booking@example.test 2026-07-01",
+            snippet: "Paris, France venue programmation pop punk booking@example.test 2026-07-01",
             sourceProvider: "test-search",
             confidence: 0.7,
             links: []
@@ -332,8 +332,8 @@ describe("Booking Search core", () => {
           return {
             url,
             title: "Pop Punk Venue",
-            text: "Official venue page with pop punk concerts. 2026-07-01",
-            markdown: "Official venue page with pop punk concerts. 2026-07-01",
+            text: "Official venue page in Paris, France with pop punk concerts. 2026-07-01",
+            markdown: "Official venue page in Paris, France with pop punk concerts. 2026-07-01",
             sourceProvider: "test-extract",
             statusCode: 200
           };
@@ -737,7 +737,7 @@ describe("Booking Search core", () => {
           metadata: {},
           targets: [
             baseTarget({ name: "Future Pop Punk", genres: ["pop punk"], eventDate: "2026-08-01", confidence: 0.8 }),
-            baseTarget({ name: "Recent Emo", genres: ["emo"], eventDate: "2025-06-01", confidence: 0.8 }),
+            baseTarget({ name: "Recent Emo", category: "event", genres: ["emo"], eventDate: "2025-06-01", confidence: 0.8 }),
             // category "event" (not the default "venue"): this row tests that an
             // old *dated event* gets rejected. Venue/organization candidates are
             // evergreen and are deliberately exempt from date-based rejection
@@ -761,7 +761,8 @@ describe("Booking Search core", () => {
     expect(result.warnings).toEqual(expect.arrayContaining([
       "Booking relevance rejected 1 events older than 24 months.",
       "Booking relevance excluded 1 past events from actionable opportunities (kept as historical signals).",
-      "Booking relevance rejected 2 genre-mismatch candidates."
+      "Booking relevance rejected 1 genre-mismatch candidates.",
+      "Booking quality floor rejected 1 low-quality candidates."
     ]));
   });
 
@@ -1653,7 +1654,7 @@ function baseSimilarArtist(overrides: Partial<SimilarArtist> = {}): SimilarArtis
     reason: "Comparable pop punk artist.",
     confidence: 0.9,
     artistTier: "small",
-    bookingCategory: "local_peer",
+    bookingCategory: "regional_peer",
     estimatedFollowers: 1500,
     estimatedPopularity: 18,
     sizeSignalSource: "manual",

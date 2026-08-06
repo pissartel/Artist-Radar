@@ -10,6 +10,9 @@ import type { SimilarArtist } from "../schemas.js";
 import { toDateOnlyString } from "../utils/dateOnly.js";
 import { mapWithConcurrency } from "../utils/concurrency.js";
 import { resolveVenueOfficialUrl } from "./venueUrl.js";
+import {
+  isEligibleSimilarArtistForBookingVenueDiscovery
+} from "./similarArtistEligibility.js";
 
 // Configurable limits (issue #182). Keep every magic number for this
 // pipeline here rather than scattered across providers, and allow env
@@ -78,20 +81,12 @@ export function selectSimilarArtistsForLiveHistory(input: BookingSearchInput, li
     .filter((artist) => isCompatibleSimilarArtistForLiveHistory(input, artist))
     .sort((left, right) => scoreSimilarArtistSelection(input, right) - scoreSimilarArtistSelection(input, left));
 
-  const peerFirst = useful.filter((artist) => artist.bookingCategory !== "reference");
-  const references = useful.filter((artist) => artist.bookingCategory === "reference");
-  return [...peerFirst, ...references].slice(0, limit);
+  return useful.slice(0, limit);
 }
 
 function isCompatibleSimilarArtistForLiveHistory(input: BookingSearchInput, artist: SimilarArtist): boolean {
-  const genreMatch = matchBookingGenres([input.genre, ...(input.artistProfile?.genres ?? [])], artist.genres, artist.reason);
-  if (genreMatch.level !== "exact" && genreMatch.level !== "related") {
-    return false;
-  }
-  if (artist.bookingCategory === "reference") {
-    return compareArtistPopularity(input, artist).score >= 50;
-  }
-  return compareArtistPopularity(input, artist).score >= 40 || artist.artistTier === "small" || artist.artistTier === "medium";
+  void input;
+  return isEligibleSimilarArtistForBookingVenueDiscovery(artist);
 }
 
 export function dedupeHistoricalArtistEvents(events: HistoricalArtistEvent[]): HistoricalArtistEvent[] {
@@ -145,6 +140,7 @@ export function buildVenueTargetsFromArtistEventHistory(
     sourceUrlCandidates: string[];
     genres: string[];
     pastProgramming: string[];
+    programmingEvidence: NonNullable<BookingTarget["programmingEvidence"]>;
     evidence: VenueArtistEvidence[];
     textEvidence: string[];
     derivedFromSimilarArtist: DerivedFromSimilarArtist | null;
@@ -185,6 +181,10 @@ export function buildVenueTargetsFromArtistEventHistory(
       existing.evidence.push(evidence);
       existing.genres = uniqueStrings([...existing.genres, ...artist.genres, ...genreMatch.matchedGenres]);
       existing.pastProgramming = uniqueStrings([...existing.pastProgramming, artist.name, ...(event.lineup ?? [])]);
+      existing.programmingEvidence = mergeProgrammingEvidence([
+        ...existing.programmingEvidence,
+        programmingEvidenceFromEvent(event, artist, genreMatch.matchedGenres)
+      ]);
       existing.textEvidence = uniqueStrings([...existing.textEvidence, ...textEvidence]);
       existing.sourceUrlCandidates.push(event.sourceUrl);
       continue;
@@ -198,6 +198,7 @@ export function buildVenueTargetsFromArtistEventHistory(
       sourceUrlCandidates: [event.sourceUrl],
       genres: uniqueStrings([...artist.genres, ...genreMatch.matchedGenres]),
       pastProgramming: uniqueStrings([artist.name, ...(event.lineup ?? [])]),
+      programmingEvidence: [programmingEvidenceFromEvent(event, artist, genreMatch.matchedGenres)],
       evidence: [evidence],
       textEvidence,
       derivedFromSimilarArtist: {
@@ -235,6 +236,7 @@ export function buildVenueTargetsFromArtistEventHistory(
       pastProgramming: venue.pastProgramming,
       venueName: venue.name,
       lineup: venue.pastProgramming,
+      programmingEvidence: venue.programmingEvidence,
       imageUrl: null,
       ticketUrl: null,
       eventDate: mostRecentEventDate(venue.evidence),
@@ -383,6 +385,38 @@ function scoreVenueCandidateConfidence(evidence: VenueArtistEvidence[], now: Dat
     Math.min(0.08, recentCount * 0.02) +
     Math.min(0.08, officialCount * 0.02)
   );
+}
+
+function programmingEvidenceFromEvent(
+  event: HistoricalArtistEvent,
+  artist: SimilarArtist,
+  matchedGenres: string[]
+): NonNullable<BookingTarget["programmingEvidence"]>[number] {
+  return {
+    artistName: artist.name,
+    artistNames: uniqueStrings([artist.name, ...(event.lineup ?? [])]),
+    eventName: event.eventName ?? null,
+    eventDate: toDateOnlyString(event.eventDate ?? "") ?? event.eventDate ?? null,
+    sourceUrl: event.sourceUrl,
+    genres: uniqueStrings([...artist.genres, ...matchedGenres])
+  };
+}
+
+function mergeProgrammingEvidence(values: NonNullable<BookingTarget["programmingEvidence"]>): NonNullable<BookingTarget["programmingEvidence"]> {
+  const byArtist = new Map<string, NonNullable<BookingTarget["programmingEvidence"]>[number]>();
+  for (const value of values) {
+    const key = similarArtistId(value.artistName);
+    const existing = byArtist.get(key);
+    byArtist.set(key, {
+      artistName: existing?.artistName ?? value.artistName,
+      artistNames: uniqueStrings([...(existing?.artistNames ?? []), ...(value.artistNames ?? [])]),
+      eventName: existing?.eventName ?? value.eventName ?? null,
+      eventDate: existing?.eventDate ?? value.eventDate ?? null,
+      sourceUrl: existing?.sourceUrl ?? value.sourceUrl ?? null,
+      genres: uniqueStrings([...(existing?.genres ?? []), ...value.genres])
+    });
+  }
+  return [...byArtist.values()];
 }
 
 function mostRecentEventDate(evidence: VenueArtistEvidence[]): string | null {

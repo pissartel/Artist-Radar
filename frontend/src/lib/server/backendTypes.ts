@@ -229,8 +229,13 @@ export interface BackendOpportunity {
   genres?: string[];
   venueCapacity?: number | null;
   address?: string | null;
+  postalCode?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  providerVenueId?: string | null;
   // Venue identity fields (issue #213). Never guessed.
   venueName?: string | null;
+  venueOpportunityId?: string | null;
   venueType?: string | null;
   venueImageUrl?: string | null;
   venueConfidence?: number | null;
@@ -299,10 +304,25 @@ export interface BackendBookingSourceMetadata {
   targetCount: number;
 }
 
+export interface BackendBookingDiagnostics {
+  stages?: Record<string, number>;
+  providers?: Record<string, number>;
+  environment?: Record<string, boolean>;
+  similarArtistEligibility?: Array<{
+    artistName: string;
+    bookingCategory: string | null;
+    genreRelevance: number | null;
+    estimatedFollowers: number | null;
+    artistTier: string | null;
+    rejectedReason: string | null;
+  }>;
+}
+
 export interface BackendBookingSearchResult {
   sourcesUsed: string[];
   warnings: string[];
   sourceMetadata: BackendBookingSourceMetadata[];
+  diagnostics?: BackendBookingDiagnostics;
 }
 
 // Keyed by BookingCategory ("local_peer" | "regional_peer" | "support_target" |

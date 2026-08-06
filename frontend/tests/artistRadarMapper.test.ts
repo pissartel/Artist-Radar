@@ -80,6 +80,50 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     ]);
   });
 
+  it("preserves multiple valid backend venue opportunities and reports mapper drop counts", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "L'OLYMPIA",
+          type: "venue",
+          city: "Paris",
+          country: "France",
+          source_url: "https://www.ticketmaster.fr/fr/salle/l-olympia/idsite/34",
+          contact: null,
+          reason: "Structured Ticketmaster venue.",
+          score: 74,
+          suggested_message: "Research this venue.",
+        },
+        {
+          name: "La Maroquinerie",
+          type: "venue",
+          city: "Paris",
+          country: "France",
+          source_url: "https://www.lamaroquinerie.fr",
+          contact: null,
+          reason: "Compatible programming evidence.",
+          score: 72,
+          suggested_message: "Research this venue.",
+        },
+      ],
+      bookingSearch: {
+        sourcesUsed: [],
+        warnings: [],
+        sourceMetadata: [],
+        diagnostics: {
+          stages: { finalApiOpportunities: 2 },
+        },
+      },
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+
+    expect(response.bookingOpportunities.map((opportunity) => opportunity.title)).toEqual(["L'OLYMPIA", "La Maroquinerie"]);
+    expect(response.bookingDiagnostics?.backendOpportunityCount).toBe(2);
+    expect(response.bookingDiagnostics?.frontendMappedOpportunityCount).toBe(2);
+    expect(response.bookingDiagnostics?.droppedDuringFrontendMapping).toEqual([]);
+  });
+
   it("maps the new Chartmetric commercial-scale fields through (issue #201), keeping musical match/scale/overall relevance distinct", () => {
     const result = buildResult({
       similarArtists: {
@@ -509,12 +553,40 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
 
     expect(opportunity?.venue).toBe("Le Point Ephemere");
     expect(opportunity?.venueId).toBeTruthy();
+    expect(opportunity?.venueOpportunityId).toBeUndefined();
     expect(opportunity?.venueType).toBe("venue");
     expect(opportunity?.venueImageUrl).toBe("https://le-point-ephemere.example/logo.png");
     expect(opportunity?.venueConfidence).toBe(80);
     // The event's own source (a listing page) must never be mislabeled as
     // the venue's own official website (issue #213 acceptance criterion).
     expect(opportunity?.venueWebsite).toBeUndefined();
+  });
+
+  it("prefers the backend venueOpportunityId for a concert's internal venue link", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "The Suicide Machines + Faintest Idea at Glazart",
+          type: "concert",
+          city: "Paris",
+          country: "France",
+          source_url: "https://razibus.net/06-08-2026-the-suicide-machines",
+          contact: null,
+          reason: "Strong genre match.",
+          score: 82,
+          suggested_message: "Reach out.",
+          venueName: "Glazart",
+          venueOpportunityId: "venue-glazart-paris-france",
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const opportunity = response.bookingOpportunities[0];
+
+    expect(opportunity?.venue).toBe("Glazart");
+    expect(opportunity?.venueId).toBe("venue-glazart-paris-france");
+    expect(opportunity?.venueOpportunityId).toBe("venue-glazart-paris-france");
   });
 
   it("gives two concerts at the same venue the same venueId, so they link to one canonical venue page", () => {

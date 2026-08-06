@@ -61,11 +61,13 @@ describe("searchBookingOpportunities past-event filtering", () => {
         const targets: BookingTarget[] = [
           baseTarget({
             name: "Upcoming Pop Punk Show",
-            eventDate: "2026-08-01",
+            category: "event",
+            eventDate: "2026-08-15",
             sourceUrl: "https://example.test/upcoming-show"
           }),
           baseTarget({
             name: "Past Pop Punk Show",
+            category: "event",
             eventDate: "2025-05-24",
             sourceUrl: "https://example.test/past-show"
           })

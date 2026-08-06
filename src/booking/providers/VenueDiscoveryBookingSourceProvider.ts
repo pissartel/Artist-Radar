@@ -198,6 +198,7 @@ export function buildVenueDiscoveryBookingSourceProvider(
         metadata: {
           searchProvider: options.webSearchProvider.providerName,
           extractProvider: options.webExtractProvider?.providerName ?? null,
+          extractProviderDiagnostics: (options.webExtractProvider as { diagnostics?: unknown } | null | undefined)?.diagnostics ?? null,
           organizationQueryCount: organizationQueries.length,
           similarArtistQueryCount: similarArtistQueries.length,
           rawCandidateCount: rawSources.length,

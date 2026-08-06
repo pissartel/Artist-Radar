@@ -375,7 +375,6 @@ export function getLineupCompletenessLabel(opportunity: Opportunity): string | n
 }
 
 const VENUE_TYPE_LABELS: Record<string, string> = {
-  venue: "Venue",
   bar: "Bar",
   association: "Association",
   festival: "Festival",
@@ -384,6 +383,7 @@ const VENUE_TYPE_LABELS: Record<string, string> = {
 
 export function getVenueTypeLabel(opportunity: Opportunity): string | null {
   if (!opportunity.venueType) return null;
+  if (opportunity.venueType === "venue") return null;
   return VENUE_TYPE_LABELS[opportunity.venueType] ?? opportunity.venueType;
 }
 

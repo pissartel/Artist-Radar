@@ -656,6 +656,7 @@ function openAgendaEventToRawSource(event: OpenAgendaEvent, fallbackCity: string
     sourceType: "openagenda",
     city: firstText(event.location?.city) ?? fallbackCity,
     country: firstText(event.location?.country),
+    venueName: event.location?.name?.trim() || null,
     text: description,
     links: [registrationUrl, eventUrl, canonicalUrl].filter((url): url is string => Boolean(url)),
     genres: [...keywords, ...tags],

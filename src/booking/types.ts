@@ -35,7 +35,7 @@ export type BookingSourceType =
 export type ContactCandidateType = "email" | "contact_form" | "social" | "phone" | "unknown";
 
 export type DateConfidence = "verified" | "unclear";
-export type OpportunityKind = "actionable" | "historical_signal";
+export type OpportunityKind = "actionable" | "historical_signal" | "prospecting_target" | "monitor";
 
 export interface BookingSearchInput {
   artist: string;
@@ -71,6 +71,8 @@ export interface BookingTarget {
   pastProgramming?: string[];
   /** Venue name, when a source reports it. Never guessed. */
   venueName?: string | null;
+  /** Internal canonical venue opportunity/detail id for this venue, when resolved. */
+  venueOpportunityId?: string | null;
   /** Full announced lineup (headliner + support), when a source lists it. Never guessed. */
   lineup?: string[];
   /** Poster/event image URL, extracted from source page metadata. Never guessed. */
@@ -79,8 +81,14 @@ export interface BookingTarget {
   imageSource?: "structured_data" | "og_image" | "header_logo" | "favicon" | "hero_image" | null;
   /** Full street address, when a source reports it. Never guessed. */
   address?: string | null;
+  /** Postal code, when a provider reports it. Never guessed. */
+  postalCode?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  providerVenueId?: string | null;
   /** Ticket/booking purchase URL, when a source reports it (e.g. schema.org Offer). Never guessed. */
   ticketUrl?: string | null;
+  programmingEvidence?: ProgrammingEvidence[];
   eventDate?: string | null;
   eventDateRange?: { start: string; end: string } | null;
   isFutureEvent?: boolean | null;
@@ -119,6 +127,15 @@ export interface VenueArtistEvidence {
   collectedAt: string;
   sourceProvider: string;
   confidence: number;
+}
+
+export interface ProgrammingEvidence {
+  artistName: string;
+  artistNames?: string[];
+  eventName?: string | null;
+  eventDate?: string | null;
+  sourceUrl?: string | null;
+  genres: string[];
 }
 
 export interface BookingSourceMetadata {
@@ -218,6 +235,7 @@ export interface BookingOpportunity {
   dateConfidence: DateConfidence;
   opportunityKind: OpportunityKind;
   ageMonths: number | null;
+  venueOpportunityId?: string | null;
   derivedFromSimilarArtist?: DerivedFromSimilarArtist | null;
   target: BookingTarget;
   bookingScore: BookingScore;
@@ -230,10 +248,142 @@ export interface BookingOpportunity {
 
 export interface BookingRejectedByReason {
   pastEvent: number;
+  tooSoonEvent: number;
   missingDate: number;
   genreMismatch: number;
+  country: number;
   duplicate: number;
   lowConfidence: number;
+  qualityFloor: number;
+}
+
+export interface BookingStageDiagnostics {
+  rawProviderTargets: number;
+  normalizedTargets: number;
+  venueTargetsCreated: number;
+  eventTargetsCreated: number;
+  rejectedBySimilarArtistEligibility: number;
+  rejectedByCountry: number;
+  rejectedByGenre: number;
+  rejectedByDate: number;
+  rejectedByConfidence: number;
+  deduplicatedTargets: number;
+  rankedTargets: number;
+  finalApiOpportunities: number;
+}
+
+export interface BookingProviderDiagnostics {
+  ticketmasterRawEvents: number;
+  ticketmasterVenueOpportunitiesCreated: number;
+  ticketmasterEventOpportunitiesCreated: number;
+  similarArtistHistoryVenues: number;
+  openAiWebSearchResults: number;
+  exaResults: number;
+  openAgendaResults: number;
+}
+
+export interface BookingEnvironmentDiagnostics {
+  ticketmasterEnabled: boolean;
+  openAiWebSearchEnabled: boolean;
+  tavilyEnabled: boolean;
+  exaEnabled: boolean;
+  firecrawlEnabled: boolean;
+  openAgendaEnabled: boolean;
+  concertsPunkEnabled: boolean;
+}
+
+export interface BookingDiagnostics {
+  stages: BookingStageDiagnostics;
+  providers: BookingProviderDiagnostics;
+  environment: BookingEnvironmentDiagnostics;
+  providerAvailability: {
+    searchProviders: {
+      tavily: "available" | "no_results" | "failed";
+      exa: "available" | "no_results" | "failed";
+      openAiWebSearch: "available" | "no_results" | "failed";
+    };
+    extractionProviders: {
+      nativeFetch: "available" | "failed";
+      jina: "available" | "failed";
+      firecrawl: "available" | "quota_exhausted" | "failed";
+      browser: "available" | "disabled" | "failed";
+    };
+    structuredProviders: {
+      ticketmaster: "available" | "failed";
+      openAgenda: "available" | "failed";
+    };
+  };
+  venueLoss: {
+    rawTicketmasterEvents: number;
+    structuredTicketmasterVenuesFound: number;
+    venueCandidatesBeforeFiltering: number;
+    venueCandidatesRejectedByDate: number;
+    venueCandidatesRejectedByGenre: number;
+    venueCandidatesRejectedByCountry: number;
+    venueCandidatesRejectedByConfidence: number;
+    venueCandidatesAfterFiltering: number;
+    eventCandidatesAfterFiltering: number;
+    finalVenueOpportunities: number;
+    finalEventOpportunities: number;
+    rejectedVenueSamples: Array<{
+      name: string;
+      type: string;
+      city: string | null;
+      country: string | null;
+      genres: string[];
+      programmingEvidenceCount: number;
+      rejectionReason: string;
+    }>;
+  };
+  similarArtistEligibility: Array<{
+    artistName: string;
+    bookingCategory: string | null;
+    genreRelevance: number | null;
+    estimatedFollowers: number | null;
+    artistTier: string | null;
+    rejectedReason: string | null;
+  }>;
+  qualityFloorRejectedCandidates: Array<{
+    name: string;
+    type: string;
+    category: string;
+    city: string | null;
+    country: string | null;
+    sourceProvider: string | null;
+    score: number;
+    genreFit: number;
+    sourceConfidence: number;
+    programmingEvidenceCount: number;
+    hasStructuredVenue: boolean;
+    rejectionReasons: string[];
+  }>;
+  openAiOpportunityDiscovery: {
+    mode: "standard" | "expanded" | "disabled";
+    searches: {
+      festivalQueries: number;
+      venueQueries: number;
+      similarArtistQueries: number;
+      upcomingEventQueries: number;
+      organizationQueries: number;
+    };
+    candidates: {
+      rawOpenAiCandidates: number;
+      festivals: number;
+      venues: number;
+      events: number;
+      promoters: number;
+      associations: number;
+      mergedWithOtherProviders: number;
+      rejected: number;
+      final: number;
+    };
+    rejectedCandidates: Array<{
+      name: string;
+      candidateType: string;
+      discoveryMethod: string;
+      rejectionReason: string;
+    }>;
+  };
 }
 
 export interface BookingSearchResult {
@@ -244,4 +394,5 @@ export interface BookingSearchResult {
   warnings: string[];
   sourceMetadata: BookingSourceMetadata[];
   rejectedByReason: BookingRejectedByReason;
+  diagnostics: BookingDiagnostics;
 }

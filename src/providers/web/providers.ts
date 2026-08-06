@@ -23,6 +23,7 @@ export interface WebProviderEnv {
   DEBUG_WEB_SEARCH?: string;
   WEB_PROVIDER_TIMEOUT_MS?: string;
   WEB_PROVIDER_DAILY_BUDGET_GUARD?: string;
+  ENABLE_BROWSER_EXTRACTOR?: string;
 }
 
 export class NoopSearchProvider implements WebSearchProvider {
@@ -204,8 +205,132 @@ export class JinaExtractProvider implements WebExtractProvider {
   }
 }
 
+export class NativeFetchExtractProvider implements WebExtractProvider {
+  providerName = "nativeFetch";
+
+  constructor(private readonly fetchImpl: FetchLike = fetch) {}
+
+  async extract(url: string, options: { timeoutMs?: number } = {}): Promise<WebExtractResult | null> {
+    const response = await fetchWithTimeout(
+      url,
+      { method: "GET", headers: { "User-Agent": "ArtistRadarBot/1.0 (+https://artist-radar.local)" } },
+      parseTimeout(undefined, options.timeoutMs),
+      this.fetchImpl
+    );
+    if (!response.ok) {
+      logProviderFailure("nativeFetch", "extract", url, response.status);
+      return null;
+    }
+    const contentType = response.headers.get("content-type") ?? "";
+    const html = await response.text();
+    if (!isSufficientExtractedContent(html)) return null;
+    return {
+      url,
+      title: extractHtmlTitle(html),
+      text: stripHtml(html),
+      markdown: null,
+      html: contentType.includes("html") ? html : null,
+      links: extractLinks(html, url),
+      sourceProvider: this.providerName,
+      statusCode: response.status
+    };
+  }
+}
+
+export class BrowserExtractProvider implements WebExtractProvider {
+  providerName = "browser";
+
+  async extract(url: string, options: { timeoutMs?: number } = {}): Promise<WebExtractResult | null> {
+    let chromium: unknown;
+    try {
+      ({ chromium } = await import("playwright"));
+    } catch {
+      return null;
+    }
+    const browser = await (chromium as { launch: (options: { headless: boolean }) => Promise<{ newPage: () => Promise<{ goto: (url: string, options: { waitUntil: string; timeout: number }) => Promise<unknown>; title: () => Promise<string>; content: () => Promise<string>; close: () => Promise<void> }>; close: () => Promise<void> }> }).launch({ headless: true });
+    const page = await browser.newPage();
+    try {
+      await page.goto(url, { waitUntil: "networkidle", timeout: options.timeoutMs ?? 10_000 });
+      const html = await page.content();
+      if (!isSufficientExtractedContent(html)) return null;
+      return {
+        url,
+        title: await page.title(),
+        text: stripHtml(html),
+        markdown: null,
+        html,
+        links: extractLinks(html, url),
+        sourceProvider: this.providerName,
+        statusCode: 200
+      };
+    } finally {
+      await page.close().catch(() => undefined);
+      await browser.close().catch(() => undefined);
+    }
+  }
+}
+
+export interface FallbackExtractDiagnostics {
+  extractionProviders: Record<string, "available" | "disabled" | "failed" | "quota_exhausted">;
+  attempts: Array<{ url: string; providerName: string; status: "success" | "empty" | "failed" | "skipped"; reason?: string }>;
+}
+
+export class FallbackExtractProvider implements WebExtractProvider {
+  providerName: string;
+  readonly diagnostics: FallbackExtractDiagnostics;
+  private firecrawlQuotaExhausted = false;
+
+  constructor(private readonly providers: WebExtractProvider[], providerName = "fallback_extract") {
+    this.providerName = providerName;
+    this.diagnostics = {
+      extractionProviders: {
+        nativeFetch: providers.some((provider) => provider.providerName === "nativeFetch") ? "available" : "disabled",
+        jina: providers.some((provider) => provider.providerName === "jina") ? "available" : "disabled",
+        firecrawl: providers.some((provider) => provider.providerName === "firecrawl") ? "available" : "disabled",
+        browser: providers.some((provider) => provider.providerName === "browser") ? "available" : "disabled"
+      },
+      attempts: []
+    };
+  }
+
+  async extract(url: string, options: { timeoutMs?: number } = {}): Promise<WebExtractResult | null> {
+    for (const provider of this.providers) {
+      if (provider.providerName === "firecrawl" && this.firecrawlQuotaExhausted) {
+        this.diagnostics.attempts.push({ url, providerName: provider.providerName, status: "skipped", reason: "quota_exhausted" });
+        continue;
+      }
+      try {
+        const result = await provider.extract(url, options);
+        const quotaReason = firecrawlQuotaReason(provider);
+        if (provider.providerName === "firecrawl" && quotaReason) {
+          this.firecrawlQuotaExhausted = true;
+          this.diagnostics.extractionProviders.firecrawl = "quota_exhausted";
+          this.diagnostics.attempts.push({ url, providerName: provider.providerName, status: "failed", reason: quotaReason });
+          continue;
+        }
+        if (isUsableExtractResult(result)) {
+          this.diagnostics.attempts.push({ url, providerName: provider.providerName, status: "success" });
+          return result;
+        }
+        this.diagnostics.attempts.push({ url, providerName: provider.providerName, status: "empty" });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (provider.providerName === "firecrawl" && isFirecrawlQuotaMessage(message)) {
+          this.firecrawlQuotaExhausted = true;
+          this.diagnostics.extractionProviders.firecrawl = "quota_exhausted";
+        } else {
+          this.diagnostics.extractionProviders[provider.providerName] = "failed";
+        }
+        this.diagnostics.attempts.push({ url, providerName: provider.providerName, status: "failed", reason: message });
+      }
+    }
+    return null;
+  }
+}
+
 export class FirecrawlExtractProvider implements WebExtractProvider {
   providerName = "firecrawl";
+  lastFailureReason: string | null = null;
 
   constructor(private readonly env: WebProviderEnv, private readonly fetchImpl: FetchLike = fetch) {}
 
@@ -234,9 +359,14 @@ export class FirecrawlExtractProvider implements WebExtractProvider {
     );
 
     if (!response.ok) {
+      const body = await response.clone().text().catch(() => "");
+      this.lastFailureReason = response.status === 402 || isFirecrawlQuotaMessage(body)
+        ? `quota_exhausted_http_${response.status}`
+        : `http_${response.status}`;
       logProviderFailure("firecrawl", "extract", url, response.status);
       return null;
     }
+    this.lastFailureReason = null;
 
     const data = (await response.json()) as {
       data?: { markdown?: string; content?: string; rawHtml?: string; links?: string[]; metadata?: { title?: string } };
@@ -271,7 +401,7 @@ export function buildDefaultWebSearchProvider(env: WebProviderEnv = process.env,
 
 export function buildDefaultWebExtractProvider(env: WebProviderEnv = process.env, fetchImpl: FetchLike = fetch): WebExtractProvider | null {
   const providers = getEnabledExtractProviders(env, fetchImpl);
-  const provider = providers[0] ?? null;
+  const provider = providers.length > 0 ? new FallbackExtractProvider(providers) : null;
   debugLog("web-search", "web extract provider selected", {
     providersEnabled: providers.map((entry) => entry.providerName),
     selectedProvider: provider?.providerName ?? null,
@@ -308,11 +438,15 @@ export function getEnabledBookingSearchProviders(env: WebProviderEnv = process.e
 
 export function getEnabledExtractProviders(env: WebProviderEnv = process.env, fetchImpl: FetchLike = fetch): WebExtractProvider[] {
   const providers: WebExtractProvider[] = [];
+  providers.push(new NativeFetchExtractProvider(fetchImpl));
   if (env.ENABLE_JINA_READER !== "false") {
     providers.push(new JinaExtractProvider(env, fetchImpl));
   }
   if (env.ENABLE_FIRECRAWL_CONSOLIDATION === "true" && env.FIRECRAWL_API_KEY) {
     providers.push(new FirecrawlExtractProvider(env, fetchImpl));
+  }
+  if (env.ENABLE_BROWSER_EXTRACTOR === "true") {
+    providers.push(new BrowserExtractProvider());
   }
   return providers;
 }
@@ -342,6 +476,48 @@ function normalizeSearchResult(result: WebSearchResult): WebSearchResult[] {
     confidence: clampConfidence(result.confidence),
     links: result.links ?? []
   }];
+}
+
+function isUsableExtractResult(result: WebExtractResult | null): result is WebExtractResult {
+  if (!result) return false;
+  return isSufficientExtractedContent([result.html, result.text, result.markdown].filter(Boolean).join(" "));
+}
+
+function isSufficientExtractedContent(value: string | null | undefined): boolean {
+  return Boolean(value && value.replace(/<[^>]+>/g, " ").trim().length >= 80);
+}
+
+function firecrawlQuotaReason(provider: WebExtractProvider): string | null {
+  const reason = (provider as { lastFailureReason?: string | null }).lastFailureReason ?? null;
+  return reason && reason.includes("quota_exhausted") ? reason : null;
+}
+
+function isFirecrawlQuotaMessage(value: string): boolean {
+  return /\b(402|quota|credits?|payment required|billing|insufficient credits?)\b/i.test(value);
+}
+
+function extractHtmlTitle(html: string): string | null {
+  return html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim() ?? null;
+}
+
+function stripHtml(html: string): string {
+  return html.replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractLinks(html: string, baseUrl: string): string[] {
+  const links = new Set<string>();
+  for (const match of html.matchAll(/href=["']([^"']+)["']/gi)) {
+    try {
+      links.add(new URL(match[1], baseUrl).toString());
+    } catch {
+      // ignore malformed hrefs
+    }
+  }
+  return [...links];
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number, fetchImpl: FetchLike): Promise<Response> {

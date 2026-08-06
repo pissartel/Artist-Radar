@@ -59,13 +59,13 @@ describe("OpportunityDetail content (issue #132 review feedback)", () => {
 
   it("renders a dedicated Venue section linking to the canonical venue page (issue #213)", () => {
     expect(source).toMatch(/<SectionTitle>Venue<\/SectionTitle>/);
-    expect(source).toMatch(/href={`\/venues\/\$\{opportunity\.venueId\}`}/);
+    expect(source).toMatch(/href={`\/venues\/\$\{opportunity\.venueOpportunityId\}`}/);
     expect(source).toMatch(/View venue details/);
   });
 
-  it("only renders the Venue section for a live event opportunity with a resolved venueId", () => {
+  it("only renders the Venue section for a live event opportunity with a resolved venueOpportunityId", () => {
     expect(source).toMatch(
-      /if \(!isLiveEventOpportunity\(opportunity\) \|\| !opportunity\.venueId \|\| !opportunity\.venue\) return null;/,
+      /if \(!isLiveEventOpportunity\(opportunity\) \|\| !opportunity\.venueOpportunityId \|\| !opportunity\.venue\) return null;/,
     );
   });
 
@@ -97,11 +97,11 @@ describe("OpportunityDetail content (issue #132 review feedback)", () => {
     expect(source).toMatch(/getSourceEvidenceExcluding\(opportunity, \[eventUrl, ticketAction\?\.href\]\)/);
   });
 
-  // PR #218 review feedback: a venue opportunity discovered from similar
-  // artists' live history must explicitly list every contributing artist.
-  it("lists every similar artist confirmed at the venue, each linking to its own concert source", () => {
-    expect(source).toMatch(/Similar artists who played here/);
-    expect(source).toMatch(/href={item\.sourceUrl}/);
+  it("shows venue similar-artist evidence in Why it matches and links artist names internally", () => {
+    expect(source).toMatch(/<WhyItMatchesSection factors={positiveFactors} opportunity={opportunity} similarArtists={similarArtists} \/>/);
+    expect(source).toMatch(/Similar artist evidence/);
+    expect(source).toMatch(/href={`\/similar-artists\/\$\{artist\.id\}`}/);
+    expect(source).not.toMatch(/href={item\.sourceUrl}/);
   });
 });
 

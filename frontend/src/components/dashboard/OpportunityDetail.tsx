@@ -39,6 +39,7 @@ import { useProductFeatures } from "@/components/providers/ProductFeaturesProvid
 interface OpportunityDetailProps {
   opportunity: Opportunity;
   relatedArtists: SimilarArtist[];
+  similarArtists: SimilarArtist[];
 }
 
 const cardClassName = buildCardClassName("stat");
@@ -57,6 +58,24 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 // links themselves must work now.
 function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value.trim());
+}
+
+function normalizeArtistKey(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function findSimilarArtistByEvidenceName(artists: SimilarArtist[], name: string): SimilarArtist | undefined {
+  const evidenceKey = normalizeArtistKey(name);
+  if (!evidenceKey) return undefined;
+  const exact = artists.find((artist) => normalizeArtistKey(artist.name) === evidenceKey);
+  if (exact) return exact;
+  const singularEvidenceKey = evidenceKey.replace(/s$/, "");
+  return artists.find((artist) => normalizeArtistKey(artist.name).replace(/s$/, "") === singularEvidenceKey);
 }
 
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
@@ -283,7 +302,7 @@ function SupportSlotPotentialSection({ opportunity }: { opportunity: Opportunity
 // rendering this too would just duplicate it. Missing fields are omitted
 // individually rather than hiding the whole section.
 function VenueSection({ opportunity }: { opportunity: Opportunity }) {
-  if (!isLiveEventOpportunity(opportunity) || !opportunity.venueId || !opportunity.venue) return null;
+  if (!isLiveEventOpportunity(opportunity) || !opportunity.venueOpportunityId || !opportunity.venue) return null;
 
   const location = [opportunity.city, opportunity.country].filter(Boolean).join(", ");
   const venueTypeLabel = getVenueTypeLabel(opportunity);
@@ -296,7 +315,7 @@ function VenueSection({ opportunity }: { opportunity: Opportunity }) {
         <OpportunityImage src={opportunity.venueImageUrl} alt={opportunity.venue} variant="thumbnail" className="w-11 h-11" />
         <div className="min-w-0 flex-1">
           <Link
-            href={`/venues/${opportunity.venueId}`}
+            href={`/venues/${opportunity.venueOpportunityId}`}
             className="text-sm font-semibold text-foreground hover:text-accent-text transition-colors"
           >
             {opportunity.venue}
@@ -336,44 +355,47 @@ function VenueSection({ opportunity }: { opportunity: Opportunity }) {
               </a>
             )}
             <Link
-              href={`/venues/${opportunity.venueId}`}
+              href={`/venues/${opportunity.venueOpportunityId}`}
               className="text-xs text-accent-text hover:text-foreground transition-colors"
             >
               View venue details →
             </Link>
           </div>
-          <VenueArtistEvidenceList evidence={opportunity.venueArtistEvidence} />
         </div>
       </div>
     </div>
   );
 }
 
-// Every similar artist confirmed at this venue (issue #213 review feedback:
-// "Explicitly mention which similar artist(s) played the venue"), each name
-// linking to its own concert source as evidence — never presented as the
-// venue's own website.
 function VenueArtistEvidenceList({
   evidence,
+  similarArtists,
 }: {
   evidence?: Opportunity["venueArtistEvidence"];
+  similarArtists: SimilarArtist[];
 }) {
   if (!evidence || evidence.length === 0) return null;
 
   return (
-    <p className="text-xs text-foreground-muted mt-3">
-      Similar artists who played here:{" "}
+    <p className="text-sm text-foreground-secondary">
+      Similar artist evidence:{" "}
       {evidence.map((item, index) => (
         <span key={`${item.similarArtistName}-${item.sourceUrl}`}>
           {index > 0 && ", "}
-          <a
-            href={item.sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-accent-text hover:text-foreground transition-colors"
-          >
-            {item.similarArtistName}
-          </a>
+          {(() => {
+            const artist = findSimilarArtistByEvidenceName(similarArtists, item.similarArtistName);
+            return artist ? (
+              <Link
+                href={`/similar-artists/${artist.id}`}
+                className="text-accent-text hover:text-foreground transition-colors"
+              >
+                {item.similarArtistName}
+              </Link>
+            ) : (
+              <span>{item.similarArtistName}</span>
+            );
+          })()}
+          {item.eventName && <span className="text-foreground-muted"> ({item.eventName})</span>}
         </span>
       ))}
     </p>
@@ -486,6 +508,45 @@ function MatchFactorSection({
   );
 }
 
+function WhyItMatchesSection({
+  factors,
+  opportunity,
+  similarArtists,
+}: {
+  factors: MatchFactor[];
+  opportunity: Opportunity;
+  similarArtists: SimilarArtist[];
+}) {
+  const hasVenueEvidence = Boolean(opportunity.venueArtistEvidence?.length);
+  if (factors.length === 0 && !hasVenueEvidence) return null;
+
+  return (
+    <div className={cardClassName}>
+      <SectionTitle>Why it matches</SectionTitle>
+      {factors.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {factors.map((factor) => (
+            <li key={factor.code} className="flex items-start gap-2 text-sm">
+              <span className="text-success-text flex-shrink-0" aria-hidden="true">✓</span>
+              <span className="text-foreground-secondary">
+                {factor.label}
+                {factor.detail && factor.detail !== factor.label && (
+                  <span className="block text-xs text-foreground-muted mt-0.5">{factor.detail}</span>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {hasVenueEvidence && (
+        <div className={factors.length > 0 ? "mt-3" : undefined}>
+          <VenueArtistEvidenceList evidence={opportunity.venueArtistEvidence} similarArtists={similarArtists} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Official event URL, source provider, and ticket URL — kept separate from
 // the Venue section above and from the detailed Source evidence list below
 // (issue #213), so the event's own source is never confused with the
@@ -578,6 +639,7 @@ function SourceEvidenceSection({ opportunity }: { opportunity: Opportunity }) {
 export default function OpportunityDetail({
   opportunity,
   relatedArtists,
+  similarArtists,
 }: OpportunityDetailProps) {
   const { debugUIVisible } = useProductFeatures();
   const formattedDate = formatOpportunityDate(opportunity.date);
@@ -668,12 +730,6 @@ export default function OpportunityDetail({
                 <InfoRow key={row.label} label={row.label} value={row.value} />
               ))}
             </div>
-            {/* A venue-type opportunity IS the venue (VenueSection below only
-                covers a live event that resolved a separate venue), so its
-                own confirming similar artists must be listed here instead
-                (PR #218 review feedback: "explicitly mention which similar
-                artist(s) played the venue"). */}
-            {family === "venue" && <VenueArtistEvidenceList evidence={opportunity.venueArtistEvidence} />}
           </div>
         )}
 
@@ -693,7 +749,7 @@ export default function OpportunityDetail({
 
         {/* 6. Match analysis: why it matches, things to consider, missing or
             unverified information, recommended action. */}
-        <MatchFactorSection title="Why it matches" factors={positiveFactors} tone="success" />
+        <WhyItMatchesSection factors={positiveFactors} opportunity={opportunity} similarArtists={similarArtists} />
         <MatchFactorSection title="Things to consider" factors={negativeFactors} tone="warning" />
         <MatchFactorSection title="Missing or unverified information" factors={neutralFactors} tone="neutral" />
 

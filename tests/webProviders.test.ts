@@ -3,6 +3,7 @@ import { consolidateArtistCandidate } from "../src/services/artistConsolidationS
 import {
   buildDefaultWebExtractProvider,
   buildDefaultWebSearchProvider,
+  FallbackExtractProvider,
   FirecrawlExtractProvider
 } from "../src/providers/web/providers.js";
 import type { WebExtractProvider } from "../src/providers/web/WebExtractProvider.js";
@@ -211,5 +212,86 @@ describe("FirecrawlExtractProvider", () => {
 
     expect(result).toBeNull();
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("marks Firecrawl quota exhaustion so a fallback chain can skip it for the rest of the run", async () => {
+    const firecrawl = new FirecrawlExtractProvider(
+      { FIRECRAWL_API_KEY: "test-key" },
+      async () => new Response("quota exhausted - payment required", { status: 402 }) as unknown as Response
+    );
+    const jina: WebExtractProvider = {
+      providerName: "jina",
+      async extract(url) {
+        return {
+          url,
+          title: "Jina page",
+          text: "Jina fallback extracted a sufficiently long venue page with pop punk programming in Paris, France.",
+          markdown: "Jina fallback extracted a sufficiently long venue page with pop punk programming in Paris, France.",
+          sourceProvider: "jina",
+          statusCode: 200
+        };
+      }
+    };
+    const chain = new FallbackExtractProvider([firecrawl, jina]);
+
+    const first = await chain.extract("https://example.test/venue");
+    const second = await chain.extract("https://example.test/venue-2");
+
+    expect(first?.sourceProvider).toBe("jina");
+    expect(second?.sourceProvider).toBe("jina");
+    expect(chain.diagnostics.extractionProviders.firecrawl).toBe("quota_exhausted");
+    expect(chain.diagnostics.attempts.some((attempt) => attempt.providerName === "firecrawl" && attempt.status === "skipped")).toBe(true);
+  });
+
+  it("falls back from native fetch to Jina when native content is insufficient", async () => {
+    const native: WebExtractProvider = {
+      providerName: "nativeFetch",
+      async extract() {
+        return null;
+      }
+    };
+    const jina: WebExtractProvider = {
+      providerName: "jina",
+      async extract(url) {
+        return {
+          url,
+          title: "Jina venue",
+          text: "Jina Reader returned enough text about a Paris venue programming pop punk and punk rock concerts.",
+          markdown: "Jina Reader returned enough text about a Paris venue programming pop punk and punk rock concerts.",
+          sourceProvider: "jina",
+          statusCode: 200
+        };
+      }
+    };
+
+    const result = await new FallbackExtractProvider([native, jina]).extract("https://example.test/venue");
+
+    expect(result?.sourceProvider).toBe("jina");
+  });
+
+  it("uses browser extraction only after lighter extractors fail", async () => {
+    const calls: string[] = [];
+    const native: WebExtractProvider = { providerName: "nativeFetch", async extract() { calls.push("nativeFetch"); return null; } };
+    const jina: WebExtractProvider = { providerName: "jina", async extract() { calls.push("jina"); return null; } };
+    const browser: WebExtractProvider = {
+      providerName: "browser",
+      async extract(url) {
+        calls.push("browser");
+        return {
+          url,
+          title: "Rendered venue",
+          text: "Browser rendered enough dynamic page content for a Paris venue with pop punk programming evidence.",
+          markdown: null,
+          html: "<html><body>Browser rendered enough dynamic page content for a Paris venue with pop punk programming evidence.</body></html>",
+          sourceProvider: "browser",
+          statusCode: 200
+        };
+      }
+    };
+
+    const result = await new FallbackExtractProvider([native, jina, browser]).extract("https://example.test/dynamic");
+
+    expect(result?.sourceProvider).toBe("browser");
+    expect(calls).toEqual(["nativeFetch", "jina", "browser"]);
   });
 });

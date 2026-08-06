@@ -1,4 +1,5 @@
 import type { SimilarArtist } from "../../schemas.js";
+import type { SimilarArtistEligibilityDiagnostic } from "../../booking/similarArtistEligibility.js";
 import type { TicketmasterArtistResolution } from "./attractionResolution.js";
 import type { TicketmasterConcert } from "./normalizeTicketmasterEvent.js";
 import type { TicketmasterDiagnostics } from "./TicketmasterClient.js";
@@ -19,4 +20,5 @@ export interface TicketmasterSearchOutcome {
   genreLocationEvents: TicketmasterConcert[];
   similarArtistEvents: SimilarArtistTicketmasterEvents[];
   diagnostics: TicketmasterDiagnostics;
+  similarArtistEligibilityDiagnostics?: SimilarArtistEligibilityDiagnostic[];
 }

@@ -353,6 +353,10 @@ export interface Opportunity {
   country?: string;
   venue?: string;
   address?: string;
+  postalCode?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  providerVenueId?: string;
   // Kind of venue when known (e.g. "venue", "bar", "association", "festival",
   // "cultural_centre"), distinct from the opportunity's own `type`.
   venueType?: string;
@@ -362,6 +366,8 @@ export interface Opportunity {
   // was actually resolved — never guessed. Opportunities that share a
   // venueId link to the same canonical venue page.
   venueId?: string;
+  // Backend-provided canonical id of the venue opportunity/detail page.
+  venueOpportunityId?: string;
   // Venue's own logo/branding image, distinct from `imageUrl` (the event
   // poster) — only ever set from a source explicitly identified as venue
   // branding, never from an event-specific image.
@@ -476,4 +482,14 @@ export interface DashboardData {
   bookingOpportunities: Opportunity[];
   topCities: CityOpportunityStat[];
   sources: BookingSource[];
+  bookingDiagnostics?: {
+    backendOpportunityCount: number;
+    frontendMappedOpportunityCount: number;
+    droppedDuringFrontendMapping: Array<{
+      name: string;
+      type: string;
+      reason: string;
+    }>;
+    backend?: unknown;
+  };
 }

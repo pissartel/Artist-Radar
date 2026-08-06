@@ -30,6 +30,7 @@ const FRENCH_MONTHS: Record<string, number> = {
 
 const ISO_DATE_PATTERN = /\b(20\d{2})[-/](0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01])\b/;
 const EUROPEAN_DATE_PATTERN = /\b(0?[1-9]|[12]\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.](20\d{2})\b/;
+const SHORT_YEAR_EUROPEAN_DATE_PATTERN = /\b(0?[1-9]|[12]\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.](\d{2})\b/;
 const FRENCH_WRITTEN_DATE_PATTERN = /\b(\d{1,2})(?:er)?\s+([a-z]+)\.?(?:\s+(\d{4}))?\b/g;
 const SHORT_EUROPEAN_DATE_PATTERN = /\b(0?[1-9]|[12]\d|3[01])[/.](0?[1-9]|1[0-2])\b(?!\d)/;
 const FRENCH_WRITTEN_DATE_RANGE_PATTERN =
@@ -82,6 +83,13 @@ export function extractEventDate(text: string, referenceDate: Date = new Date())
   if (european) {
     const europeanDate = toIsoDate(Number(european[3]), Number(european[2]), Number(european[1]));
     if (europeanDate) return europeanDate;
+  }
+
+  const shortYearEuropean = text.match(SHORT_YEAR_EUROPEAN_DATE_PATTERN);
+  if (shortYearEuropean) {
+    const literalYear = 2000 + Number(shortYearEuropean[3]);
+    const shortYearDate = toIsoDate(literalYear, Number(shortYearEuropean[2]), Number(shortYearEuropean[1]));
+    if (shortYearDate) return shortYearDate;
   }
 
   const normalized = stripAccents(text).toLowerCase();

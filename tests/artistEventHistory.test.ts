@@ -43,14 +43,14 @@ const input: BookingSearchInput = {
 };
 
 describe("artist event history", () => {
-  it("selects at least five compatible similar artists before large references when available", () => {
+  it("selects only eligible regional peers and support targets, excluding references and local-only peers", () => {
     const selected = selectSimilarArtistsForLiveHistory(input, 10);
 
-    expect(selected).toHaveLength(5);
+    expect(selected).toHaveLength(3);
     expect(selected.map((artist) => artist.name)).not.toContain("Huge Reference");
+    expect(selected.map((artist) => artist.name)).not.toContain("Paris Peer One");
+    expect(selected.map((artist) => artist.name)).not.toContain("Paris Peer Two");
     expect(selected.map((artist) => artist.name)).toEqual(expect.arrayContaining([
-      "Paris Peer One",
-      "Paris Peer Two",
       "National Peer",
       "Scene Support",
       "Small Scene"
@@ -209,7 +209,7 @@ describe("artist event history", () => {
     expect(result.targets.every((target) => (target.venueArtistEvidence?.length ?? 0) > 0)).toBe(true);
     expect(result.warnings.some((warning) => warning.includes("broken_history failed"))).toBe(true);
     expect(result.metadata).toMatchObject({
-      similarArtistsKept: 5,
+      similarArtistsKept: 3,
       historicalVenueTargets: 1
     });
   });

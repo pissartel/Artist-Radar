@@ -1,8 +1,6 @@
 import type { BookingSearchInput, BookingTarget } from "../types.js";
 import {
   buildDefaultWebExtractProvider,
-  FirecrawlExtractProvider,
-  FirecrawlSearchProvider,
   getEnabledBookingSearchProviders,
   type WebProviderEnv
 } from "../../providers/web/providers.js";
@@ -48,6 +46,11 @@ import {
   getOpenAIConcertDiscoveryStatus,
   type OpenAIWebSearchConcertProviderEnv
 } from "./OpenAIWebSearchConcertProvider.js";
+import {
+  buildOpenAIOpportunityDiscoveryProvider,
+  getOpenAIOpportunityDiscoveryStatus,
+  type OpenAIOpportunityDiscoveryEnv
+} from "./OpenAIOpportunityDiscoveryProvider.js";
 import { warnLog } from "../../utils/logger.js";
 import type { ArtistEventHistoryProvider } from "../artistEventHistory.js";
 
@@ -67,6 +70,7 @@ export interface BookingSourceProviderResult {
 export interface BookingSourceProvider {
   providerName: string;
   search(context: BookingSourceProviderContext): Promise<BookingSourceProviderResult>;
+  setDiscoveryMode?(mode: "standard" | "expanded"): void;
 }
 
 export interface DefaultBookingProviderEnv extends
@@ -79,7 +83,8 @@ export interface DefaultBookingProviderEnv extends
   Concerts50BookingSourceProviderEnv,
   FirecrawlBookingEnv,
   TicketmasterBookingProviderEnv,
-  OpenAIWebSearchConcertProviderEnv {
+  OpenAIWebSearchConcertProviderEnv,
+  OpenAIOpportunityDiscoveryEnv {
   MOCK_AI?: string;
 }
 
@@ -95,12 +100,8 @@ export function buildDefaultBookingSourceProviders(
   const webSearchProviders = getEnabledBookingSearchProviders(env, fetchImpl);
   const webExtractProvider = buildDefaultWebExtractProvider(env, fetchImpl);
 
-  const similarArtistSearchProvider = env.ENABLE_FIRECRAWL_CONSOLIDATION === "true" && env.FIRECRAWL_API_KEY
-    ? new FirecrawlSearchProvider(env, fetchImpl)
-    : webSearchProviders[0] ?? null;
-  const similarArtistExtractProvider = env.ENABLE_FIRECRAWL_CONSOLIDATION === "true" && env.FIRECRAWL_API_KEY
-    ? new FirecrawlExtractProvider(env, fetchImpl)
-    : webExtractProvider;
+  const similarArtistSearchProvider = webSearchProviders[0] ?? null;
+  const similarArtistExtractProvider = webExtractProvider;
 
   // Structured concert-history providers (issue #182): OpenAgenda is the
   // default/primary structured source (self-gated by ENABLE_OPENAGENDA, same
@@ -178,6 +179,10 @@ export function buildDefaultBookingSourceProviders(
     providers.push(buildOpenAIWebSearchConcertProvider({ env }));
   }
 
+  if (getOpenAIOpportunityDiscoveryStatus(env).enabled) {
+    providers.push(buildOpenAIOpportunityDiscoveryProvider({ env }));
+  }
+
   for (const webSearchProvider of webSearchProviders) {
     providers.push(buildWebSearchBookingSourceProvider({
       webSearchProvider,
@@ -209,6 +214,7 @@ function logBookingProviderStartup(env: DefaultBookingProviderEnv): void {
   const firecrawl = getFirecrawlProviderStatus(env);
   const ticketmaster = getTicketmasterProviderStatus(env);
   const openaiConcerts = getOpenAIConcertDiscoveryStatus(env);
+  const openaiOpportunityDiscovery = getOpenAIOpportunityDiscoveryStatus(env);
   const mock = getMockProviderStatus(env);
   warnLog("booking", [
     "Booking providers:",
@@ -225,6 +231,7 @@ function logBookingProviderStartup(env: DefaultBookingProviderEnv): void {
     `- Firecrawl: ${firecrawl.enabled ? "enabled" : "disabled"} (${firecrawl.reason})`,
     `- Ticketmaster: ${ticketmaster.enabled ? "enabled" : "disabled"} (${ticketmaster.reason})`,
     `- OpenAIWebSearchConcerts: ${openaiConcerts.enabled ? "enabled" : "disabled"} (${openaiConcerts.reason})`,
+    `- OpenAIOpportunityDiscovery: ${openaiOpportunityDiscovery.enabled ? "enabled" : "disabled"} (${openaiOpportunityDiscovery.reason})`,
     `- Mock: ${mock.enabled ? "enabled" : "disabled"} (${mock.reason})`
   ].join("\n"));
 }

@@ -62,6 +62,44 @@ describe("buildMatchFactors", () => {
     expect(breakdown.positiveFactors.some((f) => f.code === "genre_match")).toBe(true);
   });
 
+  it("does not warn about weak or unknown genre fit for a venue with no clear specialization", () => {
+    const breakdown = buildMatchFactors(
+      input,
+      buildTarget({ category: "venue", genres: [] }),
+      buildScore({ genreFit: 25, genreLevel: "unknown" }),
+      noDateFactor,
+      50
+    );
+
+    expect(breakdown.negativeFactors.some((f) => f.code === "genre_match")).toBe(false);
+  });
+
+  it("does not warn about generic venue genre evidence as if it were a mismatch", () => {
+    const breakdown = buildMatchFactors(
+      input,
+      buildTarget({ category: "venue", genres: ["rock"] }),
+      buildScore({ genreFit: 45, genreLevel: "generic" }),
+      noDateFactor,
+      50
+    );
+
+    expect(breakdown.negativeFactors.some((f) => f.code === "genre_match")).toBe(false);
+  });
+
+  it("keeps a genre warning for venues with explicit incompatible specialization", () => {
+    const breakdown = buildMatchFactors(
+      input,
+      buildTarget({ category: "venue", genres: ["techno"] }),
+      buildScore({ genreFit: 5, genreLevel: "incompatible" }),
+      noDateFactor,
+      45
+    );
+
+    expect(breakdown.negativeFactors.find((f) => f.code === "genre_match")).toMatchObject({
+      label: "Venue may focus on a different genre"
+    });
+  });
+
   it("surfaces a neutral (not negative) contact factor when no contact is found, since this is unknown information, not a confirmed risk", () => {
     const breakdown = buildMatchFactors(input, buildTarget({ contacts: [] }), buildScore(), noDateFactor, 73);
     expect(breakdown.neutralFactors.some((f) => f.code === "contact_available")).toBe(true);

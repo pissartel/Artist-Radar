@@ -12,6 +12,10 @@ describe("extractEventDate", () => {
     expect(extractEventDate("Concert le 12/06/2026", REFERENCE_DATE)).toBe("2026-06-12");
   });
 
+  it("parses DD/MM/YY dates literally before yearless rolling", () => {
+    expect(extractEventDate("ALL TIME LOW @ Salle Pleyel (26/01/26) - Reports", REFERENCE_DATE)).toBe("2026-01-26");
+  });
+
   it("parses DD/MM dates without a year, rolling forward when already past", () => {
     expect(extractEventDate("Concert 12/06 salle X", REFERENCE_DATE)).toBe("2027-06-12");
   });

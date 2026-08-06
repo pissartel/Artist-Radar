@@ -267,4 +267,64 @@ describe("WebSearchBookingSourceProvider — venue identity extraction (quai-m.f
     expect(eventTarget!.category).toBe("event");
     expect(eventTarget!.eventDate).toBe("2026-09-12");
   });
+
+  it("rejects report/review pages as future concert opportunities", async () => {
+    const reportUrl = "https://www.rockurlife.net/reports/all-time-low-salle-pleyel-26-01-26";
+    const provider = buildWebSearchBookingSourceProvider({
+      webSearchProvider: {
+        providerName: "test-search",
+        async search() {
+          return [{
+            title: "ALL TIME LOW @ Salle Pleyel (26/01/26) - Reports - RockUrLife",
+            url: reportUrl,
+            snippet: "Live report and photos from the concert.",
+            sourceProvider: "test-search",
+            confidence: 0.8,
+            links: []
+          }];
+        }
+      },
+      maxQueries: 1
+    });
+
+    const result = await provider.search({ input, maxResults: 10 });
+
+    expect(result.targets.some((target) => target.category === "event")).toBe(false);
+    expect(result.targets.some((target) => target.sourceUrl === reportUrl)).toBe(false);
+  });
+
+  it("keeps extracted event city null when neither event nor venue page reports a location", async () => {
+    const listingUrl = "https://example.test/agenda";
+    const detailUrl = "https://example.test/event/band-a";
+    const extractProvider: WebExtractProvider = {
+      providerName: "test-extract",
+      async extract(url) {
+        if (url === listingUrl) {
+          return {
+            url,
+            title: "Agenda",
+            text: null,
+            markdown: null,
+            html: `<!doctype html><html><head><title>Agenda</title></head><body><a href="${detailUrl}">Band A</a></body></html>`,
+            links: [detailUrl],
+            sourceProvider: "test-extract",
+            statusCode: 200
+          };
+        }
+        if (url === detailUrl) {
+          return { url, title: "Band A", text: null, markdown: null, html: eventHtml("Band A", "2026-11-12"), links: [], sourceProvider: "test-extract", statusCode: 200 };
+        }
+        return null;
+      }
+    };
+    const provider = buildWebSearchBookingSourceProvider({
+      webSearchProvider: buildSearchProvider(listingUrl),
+      webExtractProvider: extractProvider,
+      maxExtractPages: 1
+    });
+
+    const result = await provider.search({ input, maxResults: 10 });
+
+    expect(result.targets.find((target) => target.sourceUrl === detailUrl)?.city).toBeNull();
+  });
 });

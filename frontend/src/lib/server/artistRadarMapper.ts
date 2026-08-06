@@ -273,7 +273,7 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
   // Stable per-session id: two opportunities that resolve to the same venue
   // name + city/country link to the same canonical venue page. Absent
   // whenever no venue name was resolved (issue #213 acceptance criterion).
-  const venueId = venueName ? slugify(`${venueName}-${opportunity.city ?? ""}-${opportunity.country ?? ""}`) : undefined;
+  const venueId = opportunity.venueOpportunityId?.trim() || (venueName ? slugify(`${venueName}-${opportunity.city ?? ""}-${opportunity.country ?? ""}`) : undefined);
 
   return {
     id: slugify(`${opportunity.name}-${opportunity.city ?? "unknown"}`),
@@ -297,8 +297,13 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
     genres: opportunity.genres ?? [],
     venueCapacity: opportunity.venueCapacity ?? null,
     address: opportunity.address ?? undefined,
+    postalCode: opportunity.postalCode ?? undefined,
+    latitude: opportunity.latitude ?? null,
+    longitude: opportunity.longitude ?? null,
+    providerVenueId: opportunity.providerVenueId ?? undefined,
     venue: venueName,
     venueId,
+    venueOpportunityId: opportunity.venueOpportunityId ?? undefined,
     venueType: opportunity.venueType ?? undefined,
     venueWebsite: mapVenueWebsite(opportunity, category),
     venueImageUrl: opportunity.venueImageUrl ?? undefined,
@@ -381,7 +386,20 @@ export function mapPipelineResultToArtistRadarResponse(
 ): ArtistRadarResponse {
   const includeBooking = request.enableBooking !== false;
   const similarArtists = Object.values(result.similarArtists).flat().map(mapSimilarArtist);
-  const bookingOpportunities = includeBooking ? result.opportunities.map(mapOpportunity) : [];
+  const backendOpportunities = includeBooking ? result.opportunities : [];
+  const droppedDuringFrontendMapping: Array<{ name: string; type: string; reason: string }> = [];
+  const bookingOpportunities = backendOpportunities.flatMap((opportunity) => {
+    try {
+      return [mapOpportunity(opportunity)];
+    } catch {
+      droppedDuringFrontendMapping.push({
+        name: opportunity.name,
+        type: opportunity.type,
+        reason: "mapping_error"
+      });
+      return [];
+    }
+  });
   const warnings = includeBooking ? (result.bookingSearch?.warnings ?? []) : [];
 
   return {
@@ -391,6 +409,14 @@ export function mapPipelineResultToArtistRadarResponse(
     bookingOpportunities,
     topCities: includeBooking ? buildTopCities(bookingOpportunities) : [],
     sources: includeBooking ? buildSources(result) : [],
+    bookingDiagnostics: includeBooking
+      ? {
+          backendOpportunityCount: backendOpportunities.length,
+          frontendMappedOpportunityCount: bookingOpportunities.length,
+          droppedDuringFrontendMapping,
+          backend: result.bookingSearch?.diagnostics
+        }
+      : undefined,
     warnings,
   };
 }

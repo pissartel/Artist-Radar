@@ -449,7 +449,22 @@ Expected debug output (abridged):
 [openai-concerts] Found 12 verified concert records for 5 similar artists
 ```
 
-**Known limitations:** no persistent cache (every run re-queries); no cross-provider trigger gating yet (it always searches the top N regardless of what Ticketmaster/OpenAgenda already found — a future enhancement once a structured provider's resolution state is available to check against); promoter/organizer/festival entity extraction is not yet wired into final opportunities.
+### OpenAIOpportunityDiscoveryProvider
+
+Disabled by default. This is the first-class OpenAI Web Search booking discovery provider. It runs alongside structured providers and normal web-search providers, and switches to expanded mode when provider health is degraded (for example Firecrawl quota/402, ConcertsPunk blocked, or Tavily returning no results).
+
+It uses separate structured discovery prompts for festivals, venues, similar-artist concert history, upcoming concerts, and promoters/associations. OpenAI returns sourced discovery candidates only; the existing booking pipeline still normalizes, deduplicates, filters, scores, and decides actionability.
+
+Configuration:
+
+- `OPENAI_BOOKING_DISCOVERY_ENABLED=true` — enables this provider; reuses `OPENAI_API_KEY`
+- `OPENAI_BOOKING_DISCOVERY_MODE` — `standard`, `expanded`, or unset/`auto`; degraded provider health forces expanded mode
+- `OPENAI_BOOKING_DISCOVERY_MODEL` — defaults to `gpt-4.1-mini`
+- `OPENAI_BOOKING_MAX_SEARCH_CALLS` — caps specialized discovery calls; defaults to `5` standard / `10` expanded
+- `OPENAI_BOOKING_MAX_ARTISTS` — caps similar artists included in discovery prompts; defaults to `10`
+- `OPENAI_BOOKING_MAX_CANDIDATES_PER_TYPE` — caps accepted OpenAI candidates per type; defaults to `20`
+
+OpenAI opportunity discovery keeps venues, festivals, promoters and associations even when optional data such as contact, capacity or a future date is missing. Event opportunities remain strict: they need a verified ISO date, at least 30 full days of lead time, target-country fit and compatible source evidence.
 
 ## Provider Priority
 
@@ -463,6 +478,7 @@ For pop punk booking, providers run in this order:
 6. **Ticketmaster** — optional; requires `ENABLE_TICKETMASTER_CONCERTS=true` and `TICKETMASTER_API_KEY`
 7. **Firecrawl** — optional; requires `ENABLE_FIRECRAWL_BOOKING=true` and `FIRECRAWL_API_KEY`
 8. **OpenAI Web Search concert discovery** — optional, complementary; requires `ENABLE_OPENAI_CONCERT_DISCOVERY=true` and `OPENAI_API_KEY`; researches the top N similar artists only
+9. **OpenAI opportunity discovery** — optional, first-class semantic discovery; requires `OPENAI_BOOKING_DISCOVERY_ENABLED=true` and `OPENAI_API_KEY`; covers festivals, venues, similar-artist history, upcoming events, promoters and associations
 
 Booking search works with zero API keys — native scene agenda fetch runs by default for punk genres.
 
@@ -503,6 +519,12 @@ Booking search works with zero API keys — native scene agenda fetch runs by de
 | `OPENAI_CONCERT_UPCOMING_MONTHS` | Upcoming search window (months) | `12` |
 | `OPENAI_CONCERT_MAX_EVENTS_PER_ARTIST` | Max accepted events kept per artist | `10` |
 | `OPENAI_CONCERT_CONCURRENCY` | Concurrent OpenAI calls | `1` |
+| `OPENAI_BOOKING_DISCOVERY_ENABLED` | `true` to enable OpenAI first-class booking opportunity discovery | `false` |
+| `OPENAI_BOOKING_DISCOVERY_MODE` | `standard`, `expanded`, or unset/`auto`; degraded provider health forces expanded mode | `auto` |
+| `OPENAI_BOOKING_DISCOVERY_MODEL` | Model used for OpenAI opportunity discovery | `gpt-4.1-mini` |
+| `OPENAI_BOOKING_MAX_SEARCH_CALLS` | Max specialized OpenAI discovery calls | `5` standard / `10` expanded |
+| `OPENAI_BOOKING_MAX_ARTISTS` | Max similar artists included in discovery prompts | `10` |
+| `OPENAI_BOOKING_MAX_CANDIDATES_PER_TYPE` | Max accepted candidates per opportunity type | `20` |
 
 ## Future Providers
 

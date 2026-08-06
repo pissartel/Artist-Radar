@@ -36,7 +36,7 @@ function target(overrides: Partial<BookingTarget> = {}): BookingTarget {
     sourceProvider: "provider-a",
     genres: ["pop punk"],
     venueName: "La Maroquinerie",
-    eventDate: "2026-09-04",
+    eventDate: "2026-11-04",
     isFutureEvent: true,
     isPastEvent: false,
     dateConfidence: "verified",
@@ -69,13 +69,16 @@ describe("cross-provider booking target deduplication", () => {
 
     const result = await searchBookingOpportunities(input, { providers: [providerA, providerB] });
 
-    expect(result.targets).toHaveLength(1);
-    expect(result.rejectedByReason.duplicate).toBe(1);
+    const events = result.targets.filter((item) => item.category === "event");
+    const venues = result.targets.filter((item) => item.category === "venue");
+    expect(events).toHaveLength(1);
+    expect(venues).toHaveLength(1);
+    expect(result.rejectedByReason.duplicate).toBe(2);
     // Richer fields from the second source are preserved, not discarded.
-    expect(result.targets[0]?.imageUrl).toBe("https://b.example/image.jpg");
-    expect(result.targets[0]?.ticketUrl).toBe("https://b.example/tickets");
+    expect(events[0]?.imageUrl).toBe("https://b.example/image.jpg");
+    expect(events[0]?.ticketUrl).toBe("https://b.example/tickets");
     // The second source's URL is preserved as evidence rather than dropped.
-    expect(result.targets[0]?.evidence.join(" ")).toContain("https://b.example/event");
+    expect(events[0]?.evidence.join(" ")).toContain("https://b.example/event");
   });
 
   it("does not merge the same date at a different venue", async () => {
@@ -84,16 +87,18 @@ describe("cross-provider booking target deduplication", () => {
 
     const result = await searchBookingOpportunities(input, { providers: [providerA, providerB] });
 
-    expect(result.targets).toHaveLength(2);
+    expect(result.targets.filter((item) => item.category === "event")).toHaveLength(2);
+    expect(result.targets.filter((item) => item.category === "venue")).toHaveLength(2);
   });
 
   it("does not merge the same venue on a different date", async () => {
-    const providerA = providerReturning("provider-a", [target({ eventDate: "2026-09-04" })]);
+    const providerA = providerReturning("provider-a", [target({ eventDate: "2026-11-04" })]);
     const providerB = providerReturning("provider-b", [target({ sourceUrl: "https://b.example/event", eventDate: "2026-11-20" })]);
 
     const result = await searchBookingOpportunities(input, { providers: [providerA, providerB] });
 
-    expect(result.targets).toHaveLength(2);
+    expect(result.targets.filter((item) => item.category === "event")).toHaveLength(2);
+    expect(result.targets.filter((item) => item.category === "venue")).toHaveLength(1);
   });
 
   it("normalizes venue-name variants (leading article) across providers before merging", async () => {
@@ -102,7 +107,8 @@ describe("cross-provider booking target deduplication", () => {
 
     const result = await searchBookingOpportunities(input, { providers: [providerA, providerB] });
 
-    expect(result.targets).toHaveLength(1);
+    expect(result.targets.filter((item) => item.category === "event")).toHaveLength(1);
+    expect(result.targets.filter((item) => item.category === "venue")).toHaveLength(1);
   });
 
   it("keeps two different same-day, same-city events separate when neither the venue nor the event name matches (uncertain match)", async () => {
@@ -111,7 +117,8 @@ describe("cross-provider booking target deduplication", () => {
 
     const result = await searchBookingOpportunities(input, { providers: [providerA, providerB] });
 
-    expect(result.targets).toHaveLength(2);
+    expect(result.targets.filter((item) => item.category === "event")).toHaveLength(2);
+    expect(result.targets.filter((item) => item.category === "venue")).toHaveLength(2);
   });
 });
 

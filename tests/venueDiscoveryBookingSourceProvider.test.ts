@@ -90,17 +90,17 @@ describe("classifyVenueDiscoveryCategory", () => {
 });
 
 describe("isEvergreenOrganizationCategory", () => {
-  it("treats venues, bars, associations, collectives and promoters as evergreen", () => {
+  it("treats venues, bars, associations, collectives, festivals and promoters as evergreen", () => {
     expect(isEvergreenOrganizationCategory("venue")).toBe(true);
     expect(isEvergreenOrganizationCategory("bar")).toBe(true);
     expect(isEvergreenOrganizationCategory("association")).toBe(true);
     expect(isEvergreenOrganizationCategory("collective")).toBe(true);
+    expect(isEvergreenOrganizationCategory("festival")).toBe(true);
     expect(isEvergreenOrganizationCategory("promoter")).toBe(true);
   });
 
-  it("does not treat one-off events, festivals, springboards or open calls as evergreen", () => {
+  it("does not treat one-off events, springboards or open calls as evergreen", () => {
     expect(isEvergreenOrganizationCategory("event")).toBe(false);
-    expect(isEvergreenOrganizationCategory("festival")).toBe(false);
     expect(isEvergreenOrganizationCategory("springboard")).toBe(false);
     expect(isEvergreenOrganizationCategory("open_call")).toBe(false);
   });

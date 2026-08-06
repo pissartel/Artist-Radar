@@ -526,8 +526,15 @@ export const OpportunitySchema = z.object({
   venueCapacity: z.number().int().positive().nullable().optional(),
   // Full street address, when a source reports it. Never guessed.
   address: z.string().trim().min(1).nullable().optional(),
+  postalCode: z.string().trim().min(1).nullable().optional(),
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
+  providerVenueId: z.string().trim().min(1).nullable().optional(),
   // Venue name, when a source reports it (issue #213). Never guessed.
   venueName: z.string().trim().min(1).nullable().optional(),
+  // Internal canonical venue opportunity/detail id for events linked to a
+  // generated venue opportunity.
+  venueOpportunityId: z.string().trim().min(1).nullable().optional(),
   // Kind of venue (e.g. "venue", "bar", "association", "festival"), from the
   // target's classified category (issue #213). Never guessed.
   venueType: z.string().trim().min(1).nullable().optional(),

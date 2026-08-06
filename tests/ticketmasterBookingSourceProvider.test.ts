@@ -13,7 +13,7 @@ function similarArtist(name: string, totalRelevance: number): SimilarArtist {
     youtubeUrl: null, youtubeChannelId: null, youtubeSubscribers: null, youtubeTotalViews: null, youtubeVideoCount: null,
     genres: ["pop punk"], city: "Paris", country: "France", source: "mock", sources: ["test"],
     reason: "Compatible artist.", confidence: 0.85, sourceConfidence: 0.85, artistTier: "small",
-    bookingCategory: "local_peer", estimatedFollowers: 3000, estimatedPopularity: null,
+    bookingCategory: "regional_peer", estimatedFollowers: 3000, estimatedPopularity: null,
     topTrackPopularityMax: null, topTrackPopularityAvg: null, topTrackCount: null, sizeSignalSource: "manual",
     genreRelevance: 90, localRelevance: 90, sizeRelevance: 85, sceneRelevance: 88, totalRelevance,
     relevanceToUserArtist: totalRelevance, possibleUse: "booking_research", estimatedLevel: "emerging",
@@ -67,6 +67,7 @@ function eventFixture(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 const enabledEnv = { ENABLE_TICKETMASTER_CONCERTS: "true", TICKETMASTER_API_KEY: "key" };
+const NOW = new Date("2026-08-06T12:00:00Z");
 
 describe("TicketmasterBookingSourceProvider", () => {
   it("skips entirely and does not call fetch when disabled", async () => {
@@ -98,7 +99,7 @@ describe("TicketmasterBookingSourceProvider", () => {
       }
       return responseWithJson({ _embedded: {} });
     });
-    const provider = buildTicketmasterBookingSourceProvider({ env: enabledEnv, fetchImpl });
+    const provider = buildTicketmasterBookingSourceProvider({ env: enabledEnv, fetchImpl, now: NOW });
 
     await provider.search({
       input: baseInput({
@@ -256,6 +257,7 @@ describe("TicketmasterBookingSourceProvider", () => {
             events: [eventFixture({
               id: "festival-1",
               name: "Punk Fest 2026",
+              dates: { start: { localDate: "2026-12-01" }, status: { code: "onsale" } },
               _embedded: {
                 venues: [{ id: "v2", name: "Festival Grounds", city: { name: "Paris" }, country: { name: "France" } }],
                 attractions: [{ id: "K1", name: "Paris Peer One" }, { id: "K3", name: "Support" }]
@@ -266,13 +268,154 @@ describe("TicketmasterBookingSourceProvider", () => {
       }
       return responseWithJson({ _embedded: {} });
     });
-    const provider = buildTicketmasterBookingSourceProvider({ env: enabledEnv, fetchImpl });
+    const provider = buildTicketmasterBookingSourceProvider({ env: enabledEnv, fetchImpl, now: NOW });
 
     const result = await provider.search({ input: baseInput() });
 
     const festival = result.targets.find((target) => target.category === "festival");
     expect(festival).toBeDefined();
     expect(festival?.evidence.some((line) => line.includes("festival"))).toBe(true);
+  });
+
+  it("creates a separate venue opportunity from a Ticketmaster venue page and links the concert to it", async () => {
+    const eventUrl = "https://www.ticketmaster.fr/fr/manifestation/les-3-fromages-billet/idmanif/1";
+    const venueUrl = "https://www.ticketmaster.fr/fr/salle/l-olympia/idsite/34";
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/discovery/v2/events.json" && !url.searchParams.get("attractionId")) {
+        return responseWithJson({
+          _embedded: {
+            events: [eventFixture({
+              id: "les-3-fromages",
+              name: "LES 3 FROMAGES",
+              url: eventUrl,
+              dates: { start: { localDate: "2026-11-07" }, status: { code: "onsale" } },
+              _embedded: {
+                venues: [{
+                  id: "rZkSnyZ7Ae",
+                  name: "L'OLYMPIA",
+                  city: { name: "Paris" },
+                  country: { name: "France" },
+                  address: { line1: "28, BVD DES CAPUCINES" },
+                  postalCode: "75009",
+                  location: { latitude: "48.8706", longitude: "2.3281" },
+                  url: venueUrl
+                }],
+                attractions: [{ id: "K1", name: "LES 3 FROMAGES" }]
+              }
+            })]
+          }
+        });
+      }
+      return responseWithJson({ _embedded: {} });
+    });
+    const provider = buildTicketmasterBookingSourceProvider({ env: enabledEnv, fetchImpl, now: NOW });
+
+    const result = await provider.search({ input: baseInput() });
+
+    const venue = result.targets.find((target) => target.category === "venue" && target.name === "L'OLYMPIA");
+    const concert = result.targets.find((target) => target.category === "event" && target.name === "LES 3 FROMAGES");
+    expect(venue).toBeDefined();
+    expect(venue?.sourceUrl).toBe(venueUrl);
+    expect(venue?.sourceUrl).not.toBe(eventUrl);
+    expect(venue?.venueOpportunityId).toBe("venue-l-olympia-paris-france");
+    expect(venue?.address).toBe("28, BVD DES CAPUCINES");
+    expect(venue?.postalCode).toBe("75009");
+    expect(venue?.providerVenueId).toBe("rZkSnyZ7Ae");
+    expect(concert?.sourceUrl).toBe(eventUrl);
+    expect(concert?.venueOpportunityId).toBe(venue?.venueOpportunityId);
+  });
+
+  it("uses countryCode=FR for French-language target regions", async () => {
+    const queriedCountryCodes: Array<string | null> = [];
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/discovery/v2/events.json" && !url.searchParams.get("attractionId")) {
+        queriedCountryCodes.push(url.searchParams.get("countryCode"));
+      }
+      return responseWithJson({ _embedded: {} });
+    });
+    const provider = buildTicketmasterBookingSourceProvider({ env: enabledEnv, fetchImpl, now: NOW });
+
+    await provider.search({ input: baseInput({ target: "grandes villes françaises" }) });
+
+    expect(queriedCountryCodes).toContain("FR");
+  });
+
+  it("dedupes multiple Ticketmaster concerts at the same venue and links both events to the same venue opportunity", async () => {
+    const venue = {
+      id: "rZkSnyZ7Ae",
+      name: "L'OLYMPIA",
+      city: { name: "Paris" },
+      country: { name: "France" },
+      url: "https://www.ticketmaster.fr/fr/salle/l-olympia/idsite/34"
+    };
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/discovery/v2/events.json" && !url.searchParams.get("attractionId")) {
+        return responseWithJson({
+          _embedded: {
+            events: [
+              eventFixture({ id: "les-3-fromages", name: "LES 3 FROMAGES", dates: { start: { localDate: "2026-11-07" }, status: { code: "onsale" } }, _embedded: { venues: [venue], attractions: [{ id: "K1", name: "LES 3 FROMAGES" }] } }),
+              eventFixture({ id: "tagada-jones", name: "TAGADA JONES", dates: { start: { localDate: "2026-12-12" }, status: { code: "onsale" } }, _embedded: { venues: [venue], attractions: [{ id: "K2", name: "TAGADA JONES" }] } })
+            ]
+          }
+        });
+      }
+      return responseWithJson({ _embedded: {} });
+    });
+    const provider = buildTicketmasterBookingSourceProvider({ env: enabledEnv, fetchImpl, now: NOW });
+
+    const result = await provider.search({ input: baseInput() });
+
+    const venues = result.targets.filter((target) => target.category === "venue" && target.name === "L'OLYMPIA");
+    const concerts = result.targets.filter((target) => target.category === "event");
+    expect(venues).toHaveLength(1);
+    expect(concerts).toHaveLength(2);
+    expect(new Set(concerts.map((target) => target.venueOpportunityId))).toEqual(new Set(["venue-l-olympia-paris-france"]));
+  });
+
+  it("creates only a venue opportunity for a Ticketmaster concert fewer than 30 full days away", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/discovery/v2/events.json" && !url.searchParams.get("attractionId")) {
+        return responseWithJson({ _embedded: { events: [eventFixture({ id: "soon", dates: { start: { localDate: "2026-08-21" }, status: { code: "onsale" } } })] } });
+      }
+      return responseWithJson({ _embedded: {} });
+    });
+    const provider = buildTicketmasterBookingSourceProvider({ env: enabledEnv, fetchImpl, now: NOW });
+
+    const result = await provider.search({ input: baseInput() });
+
+    expect(result.targets.some((target) => target.category === "event")).toBe(false);
+    expect(result.targets.some((target) => target.category === "venue" && target.venueName === "La Maroquinerie")).toBe(true);
+  });
+
+  it("keeps missing Ticketmaster event locations as null instead of the search city", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/discovery/v2/events.json" && !url.searchParams.get("attractionId")) {
+        return responseWithJson({
+          _embedded: {
+            events: [eventFixture({
+              id: "unknown-city",
+              dates: { start: { localDate: "2026-11-07" }, status: { code: "onsale" } },
+              _embedded: {
+                venues: [{ id: "v-no-city", name: "Unknown Hall", country: { name: "France" } }],
+                attractions: [{ id: "K1", name: "Paris Peer One" }]
+              }
+            })]
+          }
+        });
+      }
+      return responseWithJson({ _embedded: {} });
+    });
+    const provider = buildTicketmasterBookingSourceProvider({ env: enabledEnv, fetchImpl, now: NOW });
+
+    const result = await provider.search({ input: baseInput() });
+
+    expect(result.targets.find((target) => target.category === "event")?.city).toBeNull();
+    expect(result.targets.find((target) => target.category === "venue")?.city).toBeNull();
   });
 
   it("produces a confidence score for each target without ever exceeding 1", async () => {

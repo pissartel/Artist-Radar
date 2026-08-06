@@ -144,6 +144,10 @@ describe("getLineupEntries", () => {
 });
 
 describe("getVenueTypeLabel", () => {
+  it("hides the generic venue type label", () => {
+    expect(getVenueTypeLabel(buildOpportunity({ venueType: "venue" }))).toBeNull();
+  });
+
   it("returns a human-readable label for a known venue type", () => {
     expect(getVenueTypeLabel(buildOpportunity({ venueType: "cultural_centre" }))).toBe("Cultural Centre");
   });

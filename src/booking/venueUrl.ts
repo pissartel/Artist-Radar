@@ -50,6 +50,7 @@ export function isLikelyEventUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     const hostname = parsed.hostname.replace(/^www\./i, "");
+    if (isKnownVenuePageUrl(parsed, hostname)) return false;
     if (isSocialOrTicketingUrl(url)) return true;
     if (NON_VENUE_WEBSITE_DOMAINS.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`))) return true;
     if (EVENT_LIKE_PATH_PATTERN.test(parsed.pathname)) return true;
@@ -58,6 +59,13 @@ export function isLikelyEventUrl(url: string): boolean {
   } catch {
     return true;
   }
+}
+
+function isKnownVenuePageUrl(parsed: URL, hostname: string): boolean {
+  if ((hostname === "ticketmaster.fr" || hostname.endsWith(".ticketmaster.fr")) && /\/salle\/[^/]+\/idsite\/\d+/i.test(parsed.pathname)) {
+    return true;
+  }
+  return false;
 }
 
 /** True when a URL is plausibly a venue's own page — the inverse of isLikelyEventUrl, plus a null/undefined guard. Never a guarantee the URL is correct, only that it isn't an obviously-wrong event/ticket/social link. */

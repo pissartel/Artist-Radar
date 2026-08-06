@@ -132,4 +132,21 @@ describe("mapBookingOpportunityToLegacyOpportunity (issue #213 review feedback)"
     const mapped = mapBookingOpportunityToLegacyOpportunity(buildOpportunity());
     expect(mapped.venueArtistEvidence).toEqual([]);
   });
+
+  it("preserves the internal venue opportunity id for linked concert opportunities", () => {
+    const mapped = mapBookingOpportunityToLegacyOpportunity(
+      buildOpportunity({
+        type: "event",
+        category: "event",
+        target: buildTarget({
+          category: "event",
+          venueName: "Glazart",
+          venueOpportunityId: "venue-glazart-paris-france"
+        }),
+        venueOpportunityId: "venue-glazart-paris-france"
+      })
+    );
+
+    expect(mapped.venueOpportunityId).toBe("venue-glazart-paris-france");
+  });
 });

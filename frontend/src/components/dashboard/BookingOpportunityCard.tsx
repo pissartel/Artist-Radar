@@ -68,8 +68,9 @@ function EventCardMeta({ opportunity }: { opportunity: Opportunity }) {
   );
 }
 
-// Venue layout: capacity, genres hosted, and contact availability are what
-// tell an artist whether it's worth reaching out.
+// Venue layout: capacity and contact availability are what tell an artist
+// whether it's worth reaching out. Genre evidence belongs in match analysis,
+// not as a venue fact.
 function VenueCardMeta({ opportunity }: { opportunity: Opportunity }) {
   return (
     <div className="mb-1.5">
@@ -78,9 +79,6 @@ function VenueCardMeta({ opportunity }: { opportunity: Opportunity }) {
         {opportunity.venueCapacity != null && (
           <FactPill>~{opportunity.venueCapacity.toLocaleString()} capacity</FactPill>
         )}
-        {opportunity.genres.slice(0, 3).map((genre) => (
-          <FactPill key={genre}>{genre}</FactPill>
-        ))}
         <FactPill>{opportunity.contact ? "Contact available" : "No contact found"}</FactPill>
       </div>
       {opportunity.recentEvents.length > 0 && (

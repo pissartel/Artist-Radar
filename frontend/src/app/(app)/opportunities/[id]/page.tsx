@@ -56,5 +56,5 @@ export default function OpportunityDetailPage({ params }: OpportunityDetailPageP
     opportunity.relatedSimilarArtistIds?.includes(artist.id),
   );
 
-  return <OpportunityDetail opportunity={opportunity} relatedArtists={relatedArtists} />;
+  return <OpportunityDetail opportunity={opportunity} relatedArtists={relatedArtists} similarArtists={similarArtists} />;
 }

@@ -15,7 +15,10 @@ import { extractEventDate } from "../dateParsing.js";
 import { extractEventPageData, sanitizeRawTitle } from "../eventPageExtraction.js";
 import { matchBookingGenres } from "../genreMatching.js";
 import { normalizeBookingSource } from "../normalizeBookingTarget.js";
-import { compareArtistPopularity, isStrongSimilarArtistForBooking } from "../relevance.js";
+import { compareArtistPopularity } from "../relevance.js";
+import {
+  selectEligibleSimilarArtistsForBookingVenueDiscovery
+} from "../similarArtistEligibility.js";
 import type { BookingSearchInput, BookingTarget, RawBookingSource } from "../types.js";
 import type { BookingSourceProvider } from "./BookingSourceProvider.js";
 import type { SimilarArtist } from "../../schemas.js";
@@ -51,7 +54,8 @@ export function buildSimilarArtistLiveHistoryBookingSourceProvider(
     providerName: `similar_artist_live_history:${options.webSearchProvider?.providerName ?? "structured_only"}`,
     async search({ input, maxResults }) {
       const webSearchProvider = options.webSearchProvider ?? null;
-      const similarArtists = webSearchProvider ? selectSimilarArtistsForBooking(input, options.maxSimilarArtists ?? 6) : [];
+      const similarArtistSelection = selectEligibleSimilarArtistsForBookingVenueDiscovery(input.similarArtists ?? [], options.maxSimilarArtists ?? 6);
+      const similarArtists = webSearchProvider ? similarArtistSelection.artists : [];
       const rawSources: RawBookingSource[] = [];
       const searchedQueries: string[] = [];
       const extractQueue: Array<{ url: string; artist: SimilarArtist | null }> = [];
@@ -206,9 +210,11 @@ export function buildSimilarArtistLiveHistoryBookingSourceProvider(
           similarArtistsConsidered: input.similarArtists?.length ?? 0,
           similarArtistsKept: historyResult ? historyResult.similarArtistsKept : similarArtists.length,
           similarArtistsKeptForFreeTextSearch: similarArtists.length,
+          similarArtistEligibilityDiagnostics: similarArtistSelection.diagnostics,
           rawSourceCount: rawSources.length,
           searchProvider: webSearchProvider?.providerName ?? null,
           extractProvider: options.webExtractProvider?.providerName ?? null,
+          extractProviderDiagnostics: (options.webExtractProvider as { diagnostics?: unknown } | null | undefined)?.diagnostics ?? null,
           generatedQueryCount: cityQueriesGenerated + countryQueriesGenerated + supportSlotQueryList.length,
           rawSearchResultCount: rawSimilarArtistResultCount + rawSupportSlotResultCount,
           extractedCandidateCount: extractItems.length,
@@ -301,14 +307,12 @@ function logStructuredEventHistorySummary(result: StructuredEventHistorySearchRe
 }
 
 function selectSimilarArtistsForBooking(input: BookingSearchInput, limit: number): SimilarArtist[] {
-  return [...(input.similarArtists ?? [])]
-    .filter((artist) => isStrongSimilarArtistForBooking(input, artist))
+  return selectEligibleSimilarArtistsForBookingVenueDiscovery(input.similarArtists ?? [], limit).artists
     .sort((left, right) => {
       const leftPopularity = compareArtistPopularity(input, left).score;
       const rightPopularity = compareArtistPopularity(input, right).score;
       return (right.genreRelevance + rightPopularity) - (left.genreRelevance + leftPopularity);
-    })
-    .slice(0, limit);
+    });
 }
 
 function buildSimilarArtistCityQueries(artist: SimilarArtist, city: string): string[] {

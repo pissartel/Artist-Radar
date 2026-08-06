@@ -1,11 +1,10 @@
 import type { SimilarArtist } from "../../schemas.js";
-import { selectTopCompatibleSimilarArtists } from "../similarArtistSelection.js";
 import type { BookingSearchInput, BookingTarget, BookingTargetCategory, VenueArtistEvidence } from "../types.js";
 import type { BookingSourceProvider, BookingSourceProviderResult } from "./BookingSourceProvider.js";
 import { debugLog, warnLog } from "../../utils/logger.js";
 import { OpenAIConcertClient, normalizeUrlForComparison, type ConcertSearchOutcome } from "../../providers/openaiConcerts/OpenAIConcertClient.js";
 import { buildDateWindows, classifyStatusFromDate, isValidEventDate, isWithinWindow, type ConcertDateWindows } from "../../providers/openaiConcerts/dateWindows.js";
-import { buildConcertSearchPrompt, type ConcertSearchArtistIdentity } from "../../providers/openaiConcerts/prompt.js";
+import { buildConcertSearchPrompt, type ConcertSearchArtistIdentity, type ConcertSearchMarket } from "../../providers/openaiConcerts/prompt.js";
 import { assessArtistIdentity, normalizeArtistName } from "../../providers/openaiConcerts/identity.js";
 import { classifyVerification } from "../../providers/openaiConcerts/verification.js";
 import {
@@ -17,7 +16,8 @@ import {
 } from "../../providers/openaiConcerts/types.js";
 import { similarArtistId, venueIdentity } from "../artistEventHistory.js";
 import { resolveVenueOfficialUrl } from "../venueUrl.js";
-import { toDateOnlyString } from "../../utils/dateOnly.js";
+import { isEligibleConcertLeadTime } from "../concertLeadTime.js";
+import { selectEligibleSimilarArtistsForBookingVenueDiscovery } from "../similarArtistEligibility.js";
 
 export interface OpenAIWebSearchConcertProviderEnv {
   ENABLE_OPENAI_CONCERT_DISCOVERY?: string;
@@ -74,6 +74,51 @@ interface ArtistConcertSearchOutcome {
   noUpcomingFoundInCheckedSources: boolean;
 }
 
+interface TargetMarket extends ConcertSearchMarket {
+  country: string | null;
+}
+
+const TARGET_COUNTRY_PATTERNS: Array<{ country: string; pattern: RegExp }> = [
+  { country: "France", pattern: /\b(france|french|francais|francaise|francaises|français|française|françaises)\b/i },
+  { country: "Belgium", pattern: /\b(belgium|belgian|belgique|belge)\b/i },
+  { country: "Switzerland", pattern: /\b(switzerland|swiss|suisse)\b/i },
+  { country: "Germany", pattern: /\b(germany|german|allemagne|allemand)\b/i },
+  { country: "Italy", pattern: /\b(italy|italian|italie|italien)\b/i },
+  { country: "Spain", pattern: /\b(spain|spanish|espagne|espagnol)\b/i },
+  { country: "United Kingdom", pattern: /\b(united kingdom|uk|britain|british|royaume-uni)\b/i },
+  { country: "United States", pattern: /\b(united states|usa|us|american|etats-unis|états-unis)\b/i },
+  { country: "Canada", pattern: /\b(canada|canadian|canadien)\b/i }
+];
+
+function resolveTargetMarket(input: BookingSearchInput): TargetMarket {
+  const target = input.target?.trim() || null;
+  const profileCountry = input.artistProfile?.country?.trim() || null;
+  const matchedTargetCountry = target ? inferCountryFromText(target) : null;
+  const country = matchedTargetCountry ?? profileCountry;
+  const label = target ?? country ?? input.city;
+  return { label, country };
+}
+
+function inferCountryFromText(value: string): string | null {
+  const normalized = value.normalize("NFD").replace(/\p{Diacritic}/gu, "");
+  return TARGET_COUNTRY_PATTERNS.find((entry) => entry.pattern.test(normalized))?.country ?? null;
+}
+
+function isConcertInTargetMarket(concert: VerifiedConcert, targetMarket: TargetMarket): boolean {
+  if (!targetMarket.country) {
+    return true;
+  }
+  return normalizeCountry(concert.venue.country) === normalizeCountry(targetMarket.country);
+}
+
+function normalizeCountry(value: string | null | undefined): string | null {
+  const normalized = value?.trim().normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  return inferCountryFromText(normalized) ?? normalized;
+}
+
 export function buildOpenAIWebSearchConcertProvider(options: OpenAIWebSearchConcertProviderOptions = {}): BookingSourceProvider {
   const env = options.env ?? process.env;
   const providerName = "openai_web_search_concerts";
@@ -106,14 +151,16 @@ export function buildOpenAIWebSearchConcertProvider(options: OpenAIWebSearchConc
       const maxEventsPerArtist = parsePositiveInt(env.OPENAI_CONCERT_MAX_EVENTS_PER_ARTIST, DEFAULT_MAX_EVENTS_PER_ARTIST);
       const concurrency = parsePositiveInt(env.OPENAI_CONCERT_CONCURRENCY, DEFAULT_CONCURRENCY);
 
-      const similarArtists = selectTopCompatibleSimilarArtists(input.similarArtists ?? [], limit);
+      const similarArtistSelection = selectEligibleSimilarArtistsForBookingVenueDiscovery(input.similarArtists ?? [], limit);
+      const similarArtists = similarArtistSelection.artists;
       debugLog("openai-concerts", `Selected ${similarArtists.length} similar artists`);
       similarArtists.forEach((artist, index) => {
         debugLog("openai-concerts", `${index + 1}. ${artist.name} — compatibility: ${(artist.totalRelevance / 100).toFixed(2)}`);
       });
+      const targetMarket = resolveTargetMarket(input);
 
       const perArtistOutcomes = await mapWithConcurrency(similarArtists, concurrency, (artist) =>
-        searchArtistConcerts(client, artist, now, pastMonths, upcomingMonths, maxEventsPerArtist)
+        searchArtistConcerts(client, artist, now, pastMonths, upcomingMonths, maxEventsPerArtist, targetMarket)
       );
 
       const diagnostics = createOpenAIConcertDiagnostics(true);
@@ -125,15 +172,8 @@ export function buildOpenAIWebSearchConcertProvider(options: OpenAIWebSearchConc
       diagnostics.cacheHits = client.diagnostics.cacheHits;
       diagnostics.cacheMisses = client.diagnostics.cacheMisses;
 
-      const venueEvidenceCounts = buildVenueEvidenceCounts(perArtistOutcomes);
+      const venueEvidenceCounts = buildVenueEvidenceCounts(perArtistOutcomes, targetMarket);
       const targets: BookingTarget[] = [];
-
-      // The artist's own target booking market, when known — never a
-      // hardcoded country. A concert (and the venue it produces) outside
-      // this market isn't a useful booking suggestion; left unfiltered when
-      // no target market is known at all, rather than guessing one.
-      const targetCountry = input.target ?? input.artistProfile?.country ?? null;
-      const normalizedTargetCountry = targetCountry?.trim().toLowerCase() || null;
 
       for (const outcome of perArtistOutcomes) {
         diagnostics.rawEvents += outcome.rawEventCount;
@@ -144,7 +184,7 @@ export function buildOpenAIWebSearchConcertProvider(options: OpenAIWebSearchConc
 
         for (const concert of outcome.concerts) {
           diagnostics.sourceCount += concert.sources.length;
-          if (normalizedTargetCountry && concert.venue.country?.trim().toLowerCase() !== normalizedTargetCountry) {
+          if (!isConcertInTargetMarket(concert, targetMarket)) {
             continue;
           }
           // A past concert is only ever evidence that the venue is
@@ -163,8 +203,8 @@ export function buildOpenAIWebSearchConcertProvider(options: OpenAIWebSearchConc
         }
       }
 
-      const venueLeadTargets = buildVenueLeadTargets(perArtistOutcomes, targetCountry);
-      debugLog("openai-concerts", `[venue-leads] ${venueLeadTargets.length} venue lead(s) from confirmed/probable past or upcoming concerts${targetCountry ? ` in ${targetCountry}` : ""}`);
+      const venueLeadTargets = buildVenueLeadTargets(perArtistOutcomes, targetMarket.country);
+      debugLog("openai-concerts", `[venue-leads] ${venueLeadTargets.length} venue lead(s) from confirmed/probable past or upcoming concerts${targetMarket.label ? ` in ${targetMarket.label}` : ""}`);
       targets.push(...venueLeadTargets);
 
       logSummary(perArtistOutcomes, diagnostics);
@@ -174,7 +214,7 @@ export function buildOpenAIWebSearchConcertProvider(options: OpenAIWebSearchConc
         searchedQueries: similarArtists.map((artist) => artist.name),
         targets,
         warnings: [],
-        metadata: { enabled: true, diagnostics }
+        metadata: { enabled: true, diagnostics, similarArtistEligibilityDiagnostics: similarArtistSelection.diagnostics }
       };
     }
   };
@@ -186,7 +226,8 @@ async function searchArtistConcerts(
   now: Date,
   pastMonths: number,
   upcomingMonths: number,
-  maxEventsPerArtist: number
+  maxEventsPerArtist: number,
+  targetMarket: TargetMarket
 ): Promise<ArtistConcertSearchOutcome> {
   const windows = buildDateWindows(now, pastMonths, upcomingMonths);
   debugLog("openai-concerts", `[${artist.name}] Search triggered`);
@@ -205,8 +246,8 @@ async function searchArtistConcerts(
     instagramUrl: artist.instagramUrl ?? null,
     youtubeUrl: artist.youtubeUrl ?? null
   };
-  const prompt = buildConcertSearchPrompt(identity, windows);
-  const cacheKey = `${normalizeArtistName(artist.name)}|${windows.pastStart}|${windows.upcomingEnd}`;
+  const prompt = buildConcertSearchPrompt(identity, windows, targetMarket);
+  const cacheKey = `${normalizeArtistName(artist.name)}|${targetMarket.label}|${targetMarket.country ?? "unknown"}|${windows.pastStart}|${windows.upcomingEnd}`;
 
   const outcome = await client.search(cacheKey, prompt);
   const empty = (): ArtistConcertSearchOutcome => ({
@@ -329,21 +370,6 @@ function verificationRank(status: VerifiedConcert["verificationStatus"]): number
   return status === "confirmed" ? 2 : status === "probable" ? 1 : 0;
 }
 
-const MIN_CONCERT_LEAD_TIME_MONTHS = 1;
-
-// "At least one month away" per the venue/concert-opportunity spec: a
-// show happening sooner than that doesn't leave enough time to pitch the
-// organizer and join the lineup, so it's excluded from becoming its own
-// concert opportunity — the venue lead is unaffected by this and still
-// gets created/enriched regardless of how soon the show is.
-function isEligibleConcertLeadTime(eventDate: string, now: Date): boolean {
-  const eventIso = toDateOnlyString(eventDate);
-  if (!eventIso) return false;
-  const threshold = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + MIN_CONCERT_LEAD_TIME_MONTHS, now.getUTCDate()));
-  const thresholdIso = toDateOnlyString(threshold);
-  return Boolean(thresholdIso) && eventIso >= thresholdIso!;
-}
-
 /** Returns a rejection reason string, or null when the event is acceptable. */
 function validateEvent(
   event: OpenAIWebConcert,
@@ -368,11 +394,14 @@ function validateEvent(
   return null;
 }
 
-function buildVenueEvidenceCounts(outcomes: ArtistConcertSearchOutcome[]): Map<string, number> {
+function buildVenueEvidenceCounts(outcomes: ArtistConcertSearchOutcome[], targetMarket: TargetMarket): Map<string, number> {
   const counts = new Map<string, number>();
   for (const outcome of outcomes) {
     for (const concert of outcome.concerts) {
       if (concert.verificationStatus === "unverified" || concert.verificationStatus === "rejected") {
+        continue;
+      }
+      if (!isConcertInTargetMarket(concert, targetMarket)) {
         continue;
       }
       const key = venueEvidenceKey(concert.venue.name, concert.venue.city);
@@ -423,7 +452,7 @@ const VENUE_LEAD_MIN_CONFIDENCE = 0.85;
  */
 function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[], targetCountry: string | null): BookingTarget[] {
   const venues = new Map<string, { venue: VerifiedConcert["venue"]; genres: Set<string>; matches: VenueLeadMatch[] }>();
-  const normalizedTargetCountry = targetCountry?.trim().toLowerCase() || null;
+  const normalizedTargetCountry = normalizeCountry(targetCountry);
 
   for (const outcome of outcomes) {
     for (const concert of outcome.concerts) {
@@ -433,7 +462,7 @@ function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[], targetCou
       if (concert.verificationStatus !== "confirmed" && concert.verificationStatus !== "probable") {
         continue;
       }
-      if (normalizedTargetCountry && concert.venue.country?.trim().toLowerCase() !== normalizedTargetCountry) {
+      if (normalizedTargetCountry && normalizeCountry(concert.venue.country) !== normalizedTargetCountry) {
         continue;
       }
 
@@ -462,11 +491,15 @@ function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[], targetCou
   }
 
   return [...venues.values()].map(({ venue, genres, matches }) => {
-    const confidence = Math.min(0.95, VENUE_LEAD_MIN_CONFIDENCE + (matches.length - 1) * 0.03);
     const resolvedUrl = resolveVenueOfficialUrl([
       { url: venue.website, verified: true },
       ...matches.map((match) => ({ url: match.sourceUrl, verified: false }))
     ]);
+    const confidence = computeVenueLeadConfidence({
+      hasResolvedUrl: Boolean(resolvedUrl),
+      hasLocation: Boolean(venue.city || venue.country),
+      matchCount: matches.length
+    });
     const evidence = uniqueStrings([
       ...matches.map((match) =>
         match.status === "upcoming"
@@ -477,6 +510,7 @@ function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[], targetCou
     ]);
     const collectedAt = new Date().toISOString();
     const venueId = venueIdentity(venue.name, venue.city, venue.country);
+    const venueOpportunityId = buildVenueOpportunityId(venue.name, venue.city, venue.country);
     const venueArtistEvidence: VenueArtistEvidence[] = matches
       .filter((match): match is VenueLeadMatch & { sourceUrl: string } => Boolean(match.sourceUrl))
       .map((match) => ({
@@ -503,11 +537,20 @@ function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[], targetCou
       country: venue.country,
       description: `${matches.length} compatible similar artist${matches.length === 1 ? " has" : "s have"} played or are scheduled to play here.`,
       sourceUrl: resolvedUrl,
-      sourceType: resolvedUrl === venue.website ? "official_site" : resolvedUrl ? "venue_official_programming_page" : "event_page",
+      sourceType: resolvedUrl === venue.website ? "official_site" : resolvedUrl ? "venue_official_programming_page" : "similar_artist_live_history",
       sourceProvider: "openai_web_search",
       genres: [...genres],
       venueName: venue.name,
+      venueOpportunityId,
       lineup: [],
+      programmingEvidence: uniqueProgrammingEvidence(matches.map((match) => ({
+        artistName: match.artistName,
+        artistNames: [match.artistName],
+        eventName: match.eventName ?? null,
+        eventDate: match.date,
+        sourceUrl: match.sourceUrl,
+        genres: [...genres]
+      }))),
       imageUrl: null,
       ticketUrl: null,
       eventDate: null,
@@ -529,6 +572,31 @@ function buildVenueLeadTargets(outcomes: ArtistConcertSearchOutcome[], targetCou
   });
 }
 
+function uniqueProgrammingEvidence(values: Array<{ artistName: string; artistNames?: string[]; eventName?: string | null; eventDate?: string | null; sourceUrl?: string | null; genres: string[] }>): Array<{ artistName: string; artistNames: string[]; eventName: string | null; eventDate: string | null; sourceUrl: string | null; genres: string[] }> {
+  const byArtist = new Map<string, { artistName: string; artistNames: string[]; eventName: string | null; eventDate: string | null; sourceUrl: string | null; genres: string[] }>();
+  for (const value of values) {
+    const key = similarArtistId(value.artistName);
+    const existing = byArtist.get(key);
+    byArtist.set(key, {
+      artistName: existing?.artistName ?? value.artistName,
+      artistNames: uniqueStrings([...(existing?.artistNames ?? []), ...(value.artistNames ?? [])]),
+      eventName: existing?.eventName ?? value.eventName ?? null,
+      eventDate: existing?.eventDate ?? value.eventDate ?? null,
+      sourceUrl: existing?.sourceUrl ?? value.sourceUrl ?? null,
+      genres: uniqueStrings([...(existing?.genres ?? []), ...value.genres])
+    });
+  }
+  return [...byArtist.values()];
+}
+
+function computeVenueLeadConfidence(details: { hasResolvedUrl: boolean; hasLocation: boolean; matchCount: number }): number {
+  const base = details.hasResolvedUrl ? VENUE_LEAD_MIN_CONFIDENCE : 0.62;
+  const locationBoost = details.hasLocation ? 0.08 : 0;
+  const evidenceBoost = Math.min(0.09, Math.max(0, details.matchCount - 1) * 0.03);
+  const cap = details.hasResolvedUrl ? 0.95 : 0.78;
+  return Math.min(cap, base + locationBoost + evidenceBoost);
+}
+
 function venueEvidenceKey(name: string, city: string | null): string {
   const normalize = (value: string) =>
     value
@@ -540,6 +608,18 @@ function venueEvidenceKey(name: string, city: string | null): string {
   return `${normalize(name)}|${city ? normalize(city) : ""}`;
 }
 
+function buildVenueOpportunityId(name: string, city: string | null, country: string | null): string {
+  const slug = [name, city, country]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .join("-")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-+|-+$)/g, "");
+  return `venue-${slug || "unknown"}`;
+}
+
 function toBookingTarget(
   input: BookingSearchInput,
   artist: SimilarArtist,
@@ -549,6 +629,7 @@ function toBookingTarget(
   const category: BookingTargetCategory = concert.eventType === "festival" ? "festival" : "event";
   const venueKey = venueEvidenceKey(concert.venue.name, concert.venue.city);
   const matchingArtistCount = venueEvidenceCounts.get(venueKey) ?? 1;
+  const venueOpportunityId = buildVenueOpportunityId(concert.venue.name, concert.venue.city, concert.venue.country);
 
   const identityConfidence = 0.75; // identity already validated as "resolved" before reaching here
   const confidence = computeConfidence(concert.verificationStatus, identityConfidence, matchingArtistCount);
@@ -567,7 +648,7 @@ function toBookingTarget(
   return {
     name: concert.eventName ?? `${artist.name} — live in ${concert.venue.city ?? concert.venue.name}`,
     category,
-    city: concert.venue.city ?? input.city,
+    city: concert.venue.city ?? null,
     country: concert.venue.country ?? null,
     description: concert.eventName,
     sourceUrl: concert.sources[0]?.url ?? null,
@@ -575,6 +656,7 @@ function toBookingTarget(
     sourceProvider: "openai_web_search",
     genres: artist.genres ?? [],
     venueName: concert.venue.name,
+    venueOpportunityId,
     lineup: concert.lineup,
     imageUrl: null,
     ticketUrl: null,

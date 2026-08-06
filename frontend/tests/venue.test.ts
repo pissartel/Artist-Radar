@@ -64,7 +64,7 @@ describe("getVenueById", () => {
       id: "le-point-ephemere-paris-france",
       name: "Le Point Ephemere",
       imageUrl: "https://example.test/logo.png",
-      venueTypeLabel: "Venue",
+      venueTypeLabel: null,
       address: "200 Quai de Valmy",
       city: "Paris",
       country: "France",

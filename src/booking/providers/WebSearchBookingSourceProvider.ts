@@ -43,7 +43,10 @@ export function buildWebSearchBookingSourceProvider(
           limit: Math.min(options.maxResultsPerQuery ?? 5, maxResults ?? input.limit)
         });
         for (const result of results) {
-          rawSources.push(webResultToRawSource(result, input.city));
+          const rawSource = webResultToRawSource(result);
+          if (rawSource) {
+            rawSources.push(rawSource);
+          }
           if (result.url && !isSocialOrTicketingUrl(result.url)) {
             extractUrls.add(result.url);
           }
@@ -97,7 +100,7 @@ export function buildWebSearchBookingSourceProvider(
               sourceUrl: url,
               sourceType: "official_site",
               category: venueData.isVenue ? "venue" : undefined,
-              city: venueData.city ?? input.city,
+              city: venueData.city ?? null,
               country: venueData.country ?? undefined,
               address: venueData.address ?? undefined,
               venueName: venueData.venueName,
@@ -134,7 +137,7 @@ export function buildWebSearchBookingSourceProvider(
             const eventSources = await mapWithConcurrency(
               detailLinks,
               options.eventDetailConcurrency ?? DEFAULT_EVENT_DETAIL_CONCURRENCY,
-              (detailUrl) => extractEventOpportunity(webExtractProvider, detailUrl, venueData, input.city)
+              (detailUrl) => extractEventOpportunity(webExtractProvider, detailUrl, venueData)
             );
             const acceptedEvents = eventSources.filter((source): source is RawBookingSource => Boolean(source));
             debugLog(
@@ -157,6 +160,7 @@ export function buildWebSearchBookingSourceProvider(
         metadata: {
           searchProvider: options.webSearchProvider.providerName,
           extractProvider: options.webExtractProvider?.providerName ?? null,
+          extractProviderDiagnostics: (options.webExtractProvider as { diagnostics?: unknown } | null | undefined)?.diagnostics ?? null,
           rawSourceCount: rawSources.length
         }
       };
@@ -167,8 +171,7 @@ export function buildWebSearchBookingSourceProvider(
 async function extractEventOpportunity(
   webExtractProvider: WebExtractProvider,
   detailUrl: string,
-  venue: ReturnType<typeof extractVenuePageData>,
-  fallbackCity: string
+  venue: ReturnType<typeof extractVenuePageData>
 ): Promise<RawBookingSource | null> {
   const detailExtracted = await webExtractProvider.extract(detailUrl);
   if (!detailExtracted?.html) return null;
@@ -189,6 +192,7 @@ async function extractEventOpportunity(
   // concert opportunity (it may still be a false-positive link, e.g. a
   // "past editions" or "about" page).
   if (!eventData.eventDate) return null;
+  if (isEditorialConcertPage([detailUrl, eventData.title, eventData.sourceTitle, eventData.description].filter(Boolean).join(" "))) return null;
 
   return {
     name: eventData.title ?? venue.venueName ?? detailUrl,
@@ -196,7 +200,7 @@ async function extractEventOpportunity(
     sourceUrl: detailUrl,
     sourceType: "event_page",
     category: "event",
-    city: eventData.city ?? venue.city ?? fallbackCity,
+    city: eventData.city ?? venue.city ?? null,
     country: venue.country ?? undefined,
     // The parent listing page's resolved venue identity is used as a
     // fallback — individual event pages on small venue sites often don't
@@ -244,20 +248,29 @@ function buildBookingSearchQueries(genre: string, city: string, target: string |
   ];
 }
 
-function webResultToRawSource(result: WebSearchResult, fallbackCity: string): RawBookingSource {
+function webResultToRawSource(result: WebSearchResult): RawBookingSource | null {
   const text = [result.title, result.snippet, result.markdown, result.url, ...(result.links ?? [])].filter(Boolean).join(" ");
+  if (isEditorialConcertPage(text)) {
+    return null;
+  }
   return {
     name: result.title ?? result.url ?? "Untitled booking source",
     url: result.url ?? null,
     sourceUrl: result.url ?? null,
     sourceType: "search_result",
-    city: fallbackCity,
+    city: null,
     text,
     snippet: result.snippet,
     links: result.links ?? [],
     confidence: result.confidence,
     eventDate: extractEventDate(text)
   };
+}
+
+const EDITORIAL_CONCERT_PAGE_PATTERN = /\b(live\s+report|concert\s+report|reports?|reviews?|recap|photos?|gallery|interview|news|article)\b/i;
+
+function isEditorialConcertPage(text: string): boolean {
+  return EDITORIAL_CONCERT_PAGE_PATTERN.test(text);
 }
 
 async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {

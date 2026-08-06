@@ -1,6 +1,6 @@
 import { matchBookingGenres } from "../genreMatching.js";
 import { compareArtistPopularity } from "../relevance.js";
-import type { BookingSearchInput, BookingTarget, BookingTargetCategory } from "../types.js";
+import type { BookingSearchInput, BookingTarget, BookingTargetCategory, VenueArtistEvidence } from "../types.js";
 import type { BookingSourceProvider, BookingSourceProviderResult } from "./BookingSourceProvider.js";
 import type { SimilarArtist } from "../../schemas.js";
 import { mapWithConcurrency } from "../../utils/concurrency.js";
@@ -33,6 +33,12 @@ import {
 } from "../../providers/ticketmaster/scoring.js";
 import type { SimilarArtistTicketmasterEvents, TicketmasterSearchOutcome } from "../../providers/ticketmaster/types.js";
 import { aggregateVenueEvidence, buildVenueEvidenceCountLookup, venueEvidenceKeyFor } from "../../modules/ticketmasterEvidence.js";
+import { isEligibleConcertLeadTime } from "../concertLeadTime.js";
+import { resolveVenueOfficialUrl } from "../venueUrl.js";
+import {
+  selectEligibleSimilarArtistsForBookingVenueDiscovery
+} from "../similarArtistEligibility.js";
+import { findCountryByPattern, normalizeCountryName } from "../targetCountry.js";
 
 export interface TicketmasterBookingProviderEnv {
   ENABLE_TICKETMASTER_CONCERTS?: string;
@@ -49,6 +55,7 @@ export interface TicketmasterBookingProviderOptions {
   env?: TicketmasterBookingProviderEnv;
   fetchImpl?: typeof fetch;
   client?: TicketmasterClient;
+  now?: Date;
 }
 
 export const DEFAULT_RADIUS_KM = 100;
@@ -123,7 +130,7 @@ function resolveCountryCode(
   // country signal available today; kept as a fallback rather than the
   // primary source in case profile country detection is added later.
   for (const candidate of [profileCountry, targetRegion]) {
-    const normalized = candidate?.trim().toLowerCase();
+    const normalized = findCountryByPattern(candidate) ?? normalizeCountryName(candidate);
     const code = normalized ? COUNTRY_NAME_TO_CODE[normalized] : undefined;
     if (code) {
       return code;
@@ -178,8 +185,9 @@ export function buildTicketmasterBookingSourceProvider(
         diagnostics: createTicketmasterDiagnostics(true)
       });
 
-      const outcome = await runTicketmasterSearches(client, input, env);
-      const targets = buildBookingTargets(input, outcome);
+      const now = options.now ?? new Date();
+      const outcome = await runTicketmasterSearches(client, input, env, now);
+      const targets = buildBookingTargets(input, outcome, now);
 
       logTopOpportunities(targets);
       const summary = `${targets.length} relevant events and ${countUniqueVenues(targets)} compatible venues found`;
@@ -194,7 +202,11 @@ export function buildTicketmasterBookingSourceProvider(
           enabled: true,
           diagnostics: outcome.diagnostics,
           genreLocationEventCount: outcome.genreLocationEvents.length,
+          rawEventCount: outcome.genreLocationEvents.length + outcome.similarArtistEvents.flatMap((entry) => [...entry.upcomingEvents, ...entry.pastEvents]).length,
+          venueOpportunitiesCreated: targets.filter((target) => target.category === "venue").length,
+          eventOpportunitiesCreated: targets.filter((target) => target.category === "event").length,
           similarArtistsProcessed: outcome.similarArtistEvents.length,
+          similarArtistEligibilityDiagnostics: outcome.similarArtistEligibilityDiagnostics ?? [],
           // Raw outcome retained here (the existing metadata bag convention
           // for provider-specific structured data) so the pipeline can build
           // venue/scene evidence from the same data already fetched here,
@@ -209,7 +221,8 @@ export function buildTicketmasterBookingSourceProvider(
 async function runTicketmasterSearches(
   client: TicketmasterClient,
   input: BookingSearchInput,
-  env: TicketmasterBookingProviderEnv
+  env: TicketmasterBookingProviderEnv,
+  now: Date = new Date()
 ): Promise<TicketmasterSearchOutcome> {
   const city = input.city?.trim() || input.artistProfile?.city?.trim() || null;
   const countryCode = resolveCountryCode(env, input.artistProfile?.country, input.target);
@@ -240,13 +253,14 @@ async function runTicketmasterSearches(
   }
 
   const genreLocationEvents = city
-    ? await searchGenreLocationEvents(client, { city, countryCode, radiusKm, classifications, targetGenres, env })
+    ? await searchGenreLocationEvents(client, { city, countryCode, radiusKm, classifications, targetGenres, env }, now)
     : [];
 
-  const similarArtists = selectTopCompatibleSimilarArtists(
+  const similarArtistSelection = selectEligibleSimilarArtistsForBookingVenueDiscovery(
     input.similarArtists ?? [],
     getTicketmasterSimilarArtistLimit(env)
   );
+  const similarArtists = similarArtistSelection.artists;
   debugLog("ticketmaster", `[similar-artists] Found ${input.similarArtists?.length ?? 0} similar artists`);
   debugLog("ticketmaster", `[similar-artists] Selected top ${similarArtists.length}`);
   similarArtists.forEach((artist, index) => {
@@ -256,10 +270,15 @@ async function runTicketmasterSearches(
   const similarArtistEvents = await mapWithConcurrency(
     similarArtists,
     DEFAULT_TICKETMASTER_CONCURRENCY,
-    (artist) => resolveSimilarArtistEvents(client, artist, targetGenres, env, countryCode)
+    (artist) => resolveSimilarArtistEvents(client, artist, targetGenres, env, countryCode, now)
   );
 
-  return { genreLocationEvents, similarArtistEvents, diagnostics: client.diagnostics };
+  return {
+    genreLocationEvents,
+    similarArtistEvents,
+    diagnostics: client.diagnostics,
+    similarArtistEligibilityDiagnostics: similarArtistSelection.diagnostics
+  };
 }
 
 async function searchGenreLocationEvents(
@@ -271,10 +290,10 @@ async function searchGenreLocationEvents(
     classifications: string[];
     targetGenres: string[];
     env: TicketmasterBookingProviderEnv;
-  }
+  },
+  now: Date = new Date()
 ): Promise<TicketmasterConcert[]> {
   debugLog("ticketmaster", "[genre-search] Searching future events");
-  const now = new Date();
   const lookaheadMonths = getTicketmasterLookaheadMonths(params.env);
   const eventLimit = getTicketmasterEventLimit(params.env);
   const endDate = new Date(now);
@@ -357,7 +376,8 @@ async function resolveSimilarArtistEvents(
   artist: SimilarArtist,
   targetGenres: string[],
   env: TicketmasterBookingProviderEnv,
-  countryCode: string | undefined
+  countryCode: string | undefined,
+  now: Date = new Date()
 ): Promise<SimilarArtistTicketmasterEvents> {
   debugLog("ticketmaster", `[${artist.name}][attraction] Searching attraction`);
   const candidates = await client.searchAttractions(artist.name);
@@ -376,7 +396,6 @@ async function resolveSimilarArtistEvents(
   }
   debugLog("ticketmaster", `[${artist.name}][attraction] Resolved to ${resolution.attractionId} — confidence: ${resolution.confidence.toFixed(2)}`);
 
-  const now = new Date();
   const lookaheadMonths = getTicketmasterLookaheadMonths(env);
   const pastLookbackMonths = getTicketmasterPastLookbackMonths(env);
   const upcomingEnd = new Date(now);
@@ -457,16 +476,26 @@ function matchEventGenres(concert: TicketmasterConcert, targetGenres: string[]) 
   return matchBookingGenres(targetGenres, eventGenres);
 }
 
-function buildBookingTargets(input: BookingSearchInput, outcome: TicketmasterSearchOutcome): BookingTarget[] {
+function buildBookingTargets(input: BookingSearchInput, outcome: TicketmasterSearchOutcome, now: Date): BookingTarget[] {
   const targets: BookingTarget[] = [];
   const seenEventIds = new Set<string>();
   const venueEvidence = aggregateVenueEvidence(outcome.similarArtistEvents);
   const venueEvidenceCounts = buildVenueEvidenceCountLookup(venueEvidence);
+  const venueTargets = new Map<string, BookingTarget>();
+
+  const addVenueTarget = (concert: TicketmasterConcert, similarArtist: SimilarArtist | null) => {
+    const venueTarget = toVenueBookingTarget(input, concert, similarArtist, venueEvidenceCounts, now);
+    if (!venueTarget) return;
+    const key = ticketmasterVenueDedupeKey(concert);
+    const existing = venueTargets.get(key);
+    venueTargets.set(key, existing ? mergeTicketmasterVenueTargets(existing, venueTarget) : venueTarget);
+  };
 
   for (const concert of outcome.genreLocationEvents) {
     if (seenEventIds.has(concert.eventId)) continue;
     seenEventIds.add(concert.eventId);
-    if (concert.status !== "upcoming") continue;
+    addVenueTarget(concert, null);
+    if (concert.status !== "upcoming" || !isEligibleConcertLeadTime(concert.date.localDate, now)) continue;
     targets.push(toBookingTarget(input, concert, null, true, venueEvidenceCounts));
   }
 
@@ -474,6 +503,8 @@ function buildBookingTargets(input: BookingSearchInput, outcome: TicketmasterSea
     for (const concert of [...upcomingEvents, ...pastEvents]) {
       if (seenEventIds.has(concert.eventId)) continue;
       seenEventIds.add(concert.eventId);
+      addVenueTarget(concert, artist);
+      if (concert.status !== "upcoming" || !isEligibleConcertLeadTime(concert.date.localDate, now)) continue;
       // Similar-artist events aren't filtered by the target's requested
       // location (a similar artist's show can be anywhere), so location
       // match is unknown here rather than assumed true.
@@ -481,10 +512,124 @@ function buildBookingTargets(input: BookingSearchInput, outcome: TicketmasterSea
     }
   }
 
+  targets.push(...venueTargets.values());
+
   debugLog("ticketmaster", `[deduplication] Raw opportunities: ${outcome.genreLocationEvents.length + outcome.similarArtistEvents.flatMap((entry) => [...entry.pastEvents, ...entry.upcomingEvents]).length}`);
   debugLog("ticketmaster", `[deduplication] Final opportunities: ${targets.length}`);
 
   return targets;
+}
+
+function toVenueBookingTarget(
+  input: BookingSearchInput,
+  concert: TicketmasterConcert,
+  similarArtist: SimilarArtist | null,
+  venueEvidenceCounts: Map<string, number>,
+  now: Date
+): BookingTarget | null {
+  const venue = concert.venue;
+  if (!venue?.name) return null;
+
+  const genreMatch = matchEventGenres(concert, [input.genre, ...(input.artistProfile?.genres ?? [])]);
+  const eventGenres = (concert.classifications ?? []).flatMap((classification) =>
+    [classification.genre, classification.subGenre].filter((value): value is string => Boolean(value))
+  );
+  const venueKey = venueEvidenceKeyFor(concert);
+  const matchingArtistCount = venueKey ? venueEvidenceCounts.get(venueKey) ?? (similarArtist ? 1 : 0) : 0;
+  const sourceUrl = resolveVenueOfficialUrl([{ url: venue.url, verified: true }]);
+  const venueOpportunityId = buildVenueOpportunityId(venue.name, venue.city ?? null, venue.country ?? null);
+  const compatibilityScore = similarArtist?.totalRelevance ?? null;
+  const collectedAt = now.toISOString();
+  const venueArtistEvidence: VenueArtistEvidence[] = similarArtist && concert.url
+    ? [{
+        venueId: venueOpportunityId,
+        similarArtistId: normalizeKey(similarArtist.name),
+        similarArtistName: similarArtist.name,
+        eventName: concert.name,
+        eventDate: concert.date.localDate,
+        sourceUrl: concert.url,
+        collectedAt,
+        sourceProvider: "ticketmaster",
+        confidence: Math.min(1, similarArtist.totalRelevance / 100)
+      }]
+    : [];
+
+  const evidence = uniqueStrings([
+    similarArtist
+      ? `Similar artist ${similarArtist.name} ${concert.status === "past" ? "played" : "is scheduled to play"} ${venue.name} on ${concert.date.localDate}.`
+      : `Ticketmaster event ${concert.name} is listed at ${venue.name} on ${concert.date.localDate}.`,
+    concert.url ? `Event source: ${concert.url}` : null,
+    sourceUrl ? `Venue page: ${sourceUrl}` : null,
+    compatibilityScore !== null ? `Similar artist compatibility: ${compatibilityScore}/100.` : null
+  ].filter((value): value is string => Boolean(value)));
+
+  return {
+    name: venue.name,
+    category: "venue",
+    city: venue.city ?? null,
+    country: venue.country ?? null,
+    description: `${venue.name} is a venue found from Ticketmaster concert data.`,
+    sourceUrl,
+    sourceType: sourceUrl ? "venue_official_programming_page" : "similar_artist_live_history",
+    sourceProvider: "ticketmaster",
+    genres: uniqueStrings([...eventGenres, ...(similarArtist?.genres ?? []), ...genreMatch.matchedGenres]),
+    estimatedCapacity: null,
+    estimatedArtistTier: null,
+    pastProgramming: uniqueStrings([concert.name, ...concert.attractions.map((attraction) => attraction.name)]),
+    venueName: venue.name,
+    venueOpportunityId,
+    address: venue.address ?? null,
+    postalCode: venue.postalCode ?? null,
+    latitude: venue.latitude ?? null,
+    longitude: venue.longitude ?? null,
+    providerVenueId: venue.ticketmasterId ?? null,
+    lineup: concert.attractions.map((attraction) => attraction.name),
+    programmingEvidence: uniqueProgrammingEvidence([
+      ...concert.attractions.map((attraction) => ({
+        artistName: attraction.name,
+        artistNames: concert.attractions.map((entry) => entry.name),
+        eventName: concert.name,
+        eventDate: concert.date.localDate,
+        sourceUrl: concert.url ?? null,
+        genres: eventGenres
+      })),
+      ...(similarArtist ? [{
+        artistName: similarArtist.name,
+        artistNames: concert.attractions.map((entry) => entry.name),
+        eventName: concert.name,
+        eventDate: concert.date.localDate,
+        sourceUrl: concert.url ?? null,
+        genres: similarArtist.genres
+      }] : [])
+    ]),
+    imageUrl: null,
+    ticketUrl: null,
+    eventDate: null,
+    isFutureEvent: null,
+    isPastEvent: null,
+    dateConfidence: "unclear",
+    opportunityKind: "actionable",
+    derivedFromSimilarArtist: similarArtist
+      ? {
+          name: similarArtist.name,
+          popularityComparison: compareArtistPopularity(input, similarArtist).comparison,
+          matchedGenres: genreMatch.matchedGenres,
+          sourceUrl: concert.url ?? null
+        }
+      : null,
+    venueArtistEvidence,
+    contacts: [],
+    confidence: computeTicketmasterVenueConfidence({
+      hasVenueId: Boolean(venue.ticketmasterId),
+      hasLocation: Boolean(venue.city || venue.country),
+      hasSourceUrl: Boolean(sourceUrl),
+      hasSimilarArtistEvidence: Boolean(similarArtist),
+      hasContact: false,
+      hasCapacity: false,
+      matchingArtistCount
+    }),
+    evidence
+  };
 }
 
 function toBookingTarget(
@@ -526,7 +671,7 @@ function toBookingTarget(
   return {
     name: concert.name,
     category,
-    city: concert.venue?.city ?? input.city,
+    city: concert.venue?.city ?? null,
     country: concert.venue?.country ?? null,
     description: concert.name,
     sourceUrl: concert.url ?? null,
@@ -534,6 +679,12 @@ function toBookingTarget(
     sourceProvider: "ticketmaster",
     genres: (concert.classifications ?? []).flatMap((classification) => [classification.genre, classification.subGenre].filter((value): value is string => Boolean(value))),
     venueName: concert.venue?.name ?? null,
+    venueOpportunityId: concert.venue?.name ? buildVenueOpportunityId(concert.venue.name, concert.venue.city ?? null, concert.venue.country ?? null) : null,
+    address: concert.venue?.address ?? null,
+    postalCode: concert.venue?.postalCode ?? null,
+    latitude: concert.venue?.latitude ?? null,
+    longitude: concert.venue?.longitude ?? null,
+    providerVenueId: concert.venue?.ticketmasterId ?? null,
     lineup: concert.attractions.map((attraction) => attraction.name),
     imageUrl: concert.images?.[0]?.url ?? null,
     ticketUrl: concert.url ?? null,
@@ -554,6 +705,115 @@ function toBookingTarget(
     confidence,
     evidence
   };
+}
+
+function mergeTicketmasterVenueTargets(existing: BookingTarget, incoming: BookingTarget): BookingTarget {
+  return {
+    ...existing,
+    sourceUrl: existing.sourceUrl ?? incoming.sourceUrl,
+    sourceType: existing.sourceUrl ? existing.sourceType : incoming.sourceType,
+    genres: uniqueStrings([...existing.genres, ...incoming.genres]),
+    pastProgramming: uniqueStrings([...(existing.pastProgramming ?? []), ...(incoming.pastProgramming ?? [])]),
+    address: existing.address ?? incoming.address,
+    postalCode: existing.postalCode ?? incoming.postalCode,
+    latitude: existing.latitude ?? incoming.latitude,
+    longitude: existing.longitude ?? incoming.longitude,
+    providerVenueId: existing.providerVenueId ?? incoming.providerVenueId,
+    lineup: uniqueStrings([...(existing.lineup ?? []), ...(incoming.lineup ?? [])]),
+    programmingEvidence: mergeProgrammingEvidence(existing.programmingEvidence, incoming.programmingEvidence),
+    derivedFromSimilarArtist: existing.derivedFromSimilarArtist ?? incoming.derivedFromSimilarArtist,
+    venueArtistEvidence: mergeVenueArtistEvidence(existing.venueArtistEvidence, incoming.venueArtistEvidence),
+    confidence: Math.min(0.92, Math.max(existing.confidence, incoming.confidence) + 0.03),
+    evidence: uniqueStrings([...existing.evidence, ...incoming.evidence])
+  };
+}
+
+function mergeProgrammingEvidence(
+  left?: BookingTarget["programmingEvidence"],
+  right?: BookingTarget["programmingEvidence"]
+): BookingTarget["programmingEvidence"] {
+  return uniqueProgrammingEvidence([...(left ?? []), ...(right ?? [])]);
+}
+
+function uniqueProgrammingEvidence(values: NonNullable<BookingTarget["programmingEvidence"]>): NonNullable<BookingTarget["programmingEvidence"]> {
+  const byArtist = new Map<string, NonNullable<BookingTarget["programmingEvidence"]>[number]>();
+  for (const value of values) {
+    const key = normalizeKey(value.artistName);
+    const existing = byArtist.get(key);
+    byArtist.set(key, {
+      artistName: existing?.artistName ?? value.artistName,
+      artistNames: uniqueStrings([...(existing?.artistNames ?? []), ...(value.artistNames ?? [])]),
+      eventName: existing?.eventName ?? value.eventName ?? null,
+      eventDate: existing?.eventDate ?? value.eventDate ?? null,
+      sourceUrl: existing?.sourceUrl ?? value.sourceUrl ?? null,
+      genres: uniqueStrings([...(existing?.genres ?? []), ...value.genres])
+    });
+  }
+  return [...byArtist.values()];
+}
+
+function mergeVenueArtistEvidence(left?: VenueArtistEvidence[], right?: VenueArtistEvidence[]): VenueArtistEvidence[] {
+  const seen = new Set<string>();
+  const combined: VenueArtistEvidence[] = [];
+  for (const item of [...(left ?? []), ...(right ?? [])]) {
+    const key = `${item.similarArtistId}:${item.sourceUrl}:${item.eventDate ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    combined.push(item);
+  }
+  return combined;
+}
+
+function ticketmasterVenueDedupeKey(concert: TicketmasterConcert): string {
+  const venue = concert.venue;
+  if (venue?.ticketmasterId) return `ticketmaster:${normalizeKey(venue.ticketmasterId)}`;
+  const venueUrl = venue?.url ? normalizeUrl(venue.url) : null;
+  if (venueUrl) return `url:${venueUrl}`;
+  return `identity:${normalizeKey(venue?.name ?? "")}|${normalizeKey(venue?.city ?? "")}|${normalizeKey(venue?.country ?? "")}`;
+}
+
+function normalizeUrl(value: string): string | null {
+  try {
+    const parsed = new URL(value);
+    parsed.hash = "";
+    parsed.search = "";
+    return parsed.toString().replace(/\/$/, "").toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function buildVenueOpportunityId(name: string, city: string | null, country: string | null): string {
+  const slug = [name, city, country]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .join("-")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-+|-+$)/g, "");
+  return `venue-${slug || "unknown"}`;
+}
+
+function computeTicketmasterVenueConfidence(details: {
+  hasVenueId: boolean;
+  hasLocation: boolean;
+  hasSourceUrl: boolean;
+  hasSimilarArtistEvidence: boolean;
+  hasContact: boolean;
+  hasCapacity: boolean;
+  matchingArtistCount: number;
+}): number {
+  const score =
+    0.2 +
+    (details.hasVenueId ? 0.18 : 0) +
+    (details.hasLocation ? 0.16 : 0) +
+    (details.hasSourceUrl ? 0.18 : -0.08) +
+    (details.hasSimilarArtistEvidence ? 0.12 : 0.04) +
+    (details.hasContact ? 0.08 : 0) +
+    (details.hasCapacity ? 0.06 : 0) +
+    Math.min(0.1, details.matchingArtistCount * 0.03);
+  return Math.max(0.25, Math.min(0.88, score));
 }
 
 function classifyCategory(concert: TicketmasterConcert): BookingTargetCategory {

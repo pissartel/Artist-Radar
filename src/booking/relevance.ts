@@ -2,6 +2,9 @@ import { matchBookingGenres } from "./genreMatching.js";
 import type { BookingSearchInput, BookingTarget, BookingTargetCategory, DateConfidence, OpportunityKind } from "./types.js";
 import type { SimilarArtist } from "../schemas.js";
 import { toDateOnlyString } from "../utils/dateOnly.js";
+import { isEligibleConcertLeadTime, MIN_CONCERT_LEAD_TIME_DAYS } from "./concertLeadTime.js";
+import { isEligibleSimilarArtistForBookingVenueDiscovery } from "./similarArtistEligibility.js";
+import { isInTargetMarket, resolveTargetCountry } from "./targetCountry.js";
 
 export interface BookingRelevanceEnv {
   BOOKING_RECENT_EVENT_MONTHS?: string;
@@ -21,9 +24,22 @@ export interface BookingRelevanceSummary {
   eventHistoryVenueCandidatesKept: number;
   rejectedOldEvents: number;
   rejectedPastEvents: number;
+  rejectedTooSoonEvents: number;
   rejectedGenreMismatchEvents: number;
   rejectedMissingDateEvents: number;
   rejectedLowConfidenceEvents: number;
+  rejectedCountryMismatchEvents: number;
+  venueCandidatesRejectedByGenre: number;
+  venueCandidatesRejectedByConfidence: number;
+  venueRejectionSamples: Array<{
+    name: string;
+    type: string;
+    city: string | null;
+    country: string | null;
+    genres: string[];
+    programmingEvidenceCount: number;
+    rejectionReason: string;
+  }>;
   warnings: string[];
 }
 
@@ -48,6 +64,7 @@ const EVERGREEN_ORGANIZATION_CATEGORIES: ReadonlySet<BookingTargetCategory> = ne
   "bar",
   "association",
   "collective",
+  "festival",
   "promoter",
   "live_producer",
   "booking_agency"
@@ -83,35 +100,59 @@ export function filterBookingTargetsForRelevance(
     eventHistoryVenueCandidatesKept: 0,
     rejectedOldEvents: 0,
     rejectedPastEvents: 0,
+    rejectedTooSoonEvents: 0,
     rejectedGenreMismatchEvents: 0,
     rejectedMissingDateEvents: 0,
     rejectedLowConfidenceEvents: 0,
+    rejectedCountryMismatchEvents: 0,
+    venueCandidatesRejectedByGenre: 0,
+    venueCandidatesRejectedByConfidence: 0,
+    venueRejectionSamples: [],
     warnings: []
   };
   const kept: BookingTarget[] = [];
+  const targetCountry = resolveTargetCountry(input);
 
   for (const target of targets) {
+    const isEvergreen = isEvergreenOrganizationCategory(target.category);
     const dateStatus = computeBookingDateStatus(target, recentMonths, now);
     const genreStatus = classifyBookingGenreEvidence(input, target);
 
-    if (dateStatus.rejectReason === "old_event") {
+    if (!isInTargetMarket(input, target, targetCountry)) {
+      summary.rejectedCountryMismatchEvents += 1;
+      if (isEvergreen) recordVenueRejection(summary, target, "country");
+      continue;
+    }
+    if (!isEvergreen && dateStatus.rejectReason === "old_event") {
       summary.rejectedOldEvents += 1;
       continue;
     }
+    if (!isEvergreen && dateStatus.rejectReason === "too_soon_event") {
+      summary.rejectedTooSoonEvents += 1;
+      continue;
+    }
     const keptByConfidenceWithoutDate = dateStatus.rejectReason === "missing_date" && target.confidence >= HIGH_CONFIDENCE_WITHOUT_DATE;
-    if (dateStatus.rejectReason === "missing_date" && !keptByConfidenceWithoutDate) {
+    if (!isEvergreen && dateStatus.rejectReason === "missing_date" && !keptByConfidenceWithoutDate) {
       summary.rejectedMissingDateEvents += 1;
       continue;
     }
     if (!genreStatus.keep) {
       if (genreStatus.rejectReason === "lowConfidence") {
         summary.rejectedLowConfidenceEvents += 1;
+        if (isEvergreen) {
+          summary.venueCandidatesRejectedByConfidence += 1;
+          recordVenueRejection(summary, target, "confidence");
+        }
       } else {
         summary.rejectedGenreMismatchEvents += 1;
+        if (isEvergreen) {
+          summary.venueCandidatesRejectedByGenre += 1;
+          recordVenueRejection(summary, target, "genre");
+        }
       }
       continue;
     }
-    if (dateStatus.isPastEvent) {
+    if (!isEvergreen && dateStatus.isPastEvent) {
       summary.rejectedPastEvents += 1;
     }
 
@@ -120,7 +161,7 @@ export function filterBookingTargetsForRelevance(
       isFutureEvent: dateStatus.isFutureEvent,
       isPastEvent: dateStatus.isPastEvent,
       dateConfidence: dateStatus.dateConfidence,
-      opportunityKind: keptByConfidenceWithoutDate ? "actionable" : dateStatus.opportunityKind,
+      opportunityKind: isEvergreen ? target.opportunityKind ?? "actionable" : keptByConfidenceWithoutDate ? "actionable" : dateStatus.opportunityKind,
       ageMonths: dateStatus.ageMonths,
       confidence: genreStatus.level === "generic" ? Math.min(target.confidence, 0.45) : target.confidence,
       evidence: [
@@ -150,8 +191,14 @@ export function filterBookingTargetsForRelevance(
   if (summary.rejectedPastEvents > 0) {
     summary.warnings.push(`Booking relevance excluded ${summary.rejectedPastEvents} past events from actionable opportunities (kept as historical signals).`);
   }
+  if (summary.rejectedTooSoonEvents > 0) {
+    summary.warnings.push(`Booking relevance rejected ${summary.rejectedTooSoonEvents} events happening in fewer than ${MIN_CONCERT_LEAD_TIME_DAYS} full days.`);
+  }
   if (summary.rejectedGenreMismatchEvents > 0) {
     summary.warnings.push(`Booking relevance rejected ${summary.rejectedGenreMismatchEvents} genre-mismatch candidates.`);
+  }
+  if (summary.rejectedCountryMismatchEvents > 0) {
+    summary.warnings.push(`Booking relevance rejected ${summary.rejectedCountryMismatchEvents} out-of-country candidates.`);
   }
   if (summary.rejectedMissingDateEvents > 0) {
     summary.warnings.push(`Booking relevance rejected ${summary.rejectedMissingDateEvents} low-confidence candidates without parseable event dates.`);
@@ -161,6 +208,19 @@ export function filterBookingTargetsForRelevance(
   }
 
   return { targets: kept, summary };
+}
+
+function recordVenueRejection(summary: BookingRelevanceSummary, target: BookingTarget, rejectionReason: string): void {
+  if (summary.venueRejectionSamples.length >= 10) return;
+  summary.venueRejectionSamples.push({
+    name: target.name,
+    type: target.category,
+    city: target.city,
+    country: target.country,
+    genres: target.genres,
+    programmingEvidenceCount: target.programmingEvidence?.length ?? 0,
+    rejectionReason
+  });
 }
 
 export function sourcePriorityBonus(target: BookingTarget): number {
@@ -208,6 +268,9 @@ export function compareArtistPopularity(input: BookingSearchInput, artist: Simil
 }
 
 export function isStrongSimilarArtistForBooking(input: BookingSearchInput, artist: SimilarArtist): boolean {
+  if (isEligibleSimilarArtistForBookingVenueDiscovery(artist)) {
+    return true;
+  }
   const genreMatch = matchBookingGenres([input.genre, ...(input.artistProfile?.genres ?? [])], artist.genres, artist.reason);
   if (genreMatch.level !== "exact" && genreMatch.level !== "related") {
     return false;
@@ -221,15 +284,32 @@ function classifyBookingGenreEvidence(input: BookingSearchInput, target: Booking
   evidence: string;
   rejectReason: "genreMismatch" | "lowConfidence" | null;
 } {
-  const text = [target.description, ...target.evidence, ...(target.pastProgramming ?? [])].filter(Boolean).join(" ");
-  const genreMatch = matchBookingGenres([input.genre, ...(input.artistProfile?.genres ?? [])], target.genres, text);
+  const isEvergreen = isEvergreenOrganizationCategory(target.category);
+  const programmingGenres = (target.programmingEvidence ?? []).flatMap((entry) => entry.genres);
+  const programmingArtists = (target.programmingEvidence ?? []).map((entry) => entry.artistName);
+  const text = [target.description, ...target.evidence, ...(target.pastProgramming ?? []), ...programmingArtists].filter(Boolean).join(" ");
+  const genreMatch = matchBookingGenres([input.genre, ...(input.artistProfile?.genres ?? [])], [...target.genres, ...programmingGenres], text);
   const normalizedText = text.toLowerCase();
+  const hasProgrammingEvidence = (target.programmingEvidence?.length ?? 0) > 0;
 
-  if (REJECT_GENRE_PATTERN.test(normalizedText) && !PUNK_CROSSOVER_PATTERN.test(normalizedText)) {
+  if (!isEvergreen && REJECT_GENRE_PATTERN.test(normalizedText) && !PUNK_CROSSOVER_PATTERN.test(normalizedText)) {
     return { keep: false, level: "incompatible", evidence: "Rejected explicit incompatible genre evidence.", rejectReason: "genreMismatch" };
   }
   if (genreMatch.level === "exact" || genreMatch.level === "related") {
     return { keep: true, level: genreMatch.level, evidence: `Strict genre filter kept ${genreMatch.level} match: ${genreMatch.matchedGenres.join(", ")}.`, rejectReason: null };
+  }
+  if (isEvergreen && hasProgrammingEvidence && REJECT_GENRE_PATTERN.test([...programmingGenres, normalizedText].join(" ")) && !PUNK_CROSSOVER_PATTERN.test([...programmingGenres, normalizedText].join(" "))) {
+    return { keep: false, level: "incompatible", evidence: "Rejected venue because all structured programming evidence is incompatible.", rejectReason: "genreMismatch" };
+  }
+  if (isEvergreen && (target.sourceProvider === "ticketmaster" || hasProgrammingEvidence)) {
+    return {
+      keep: true,
+      level: genreMatch.level,
+      evidence: hasProgrammingEvidence
+        ? "Kept venue with structured programming evidence; unknown genre is not treated as incompatible."
+        : "Kept structured venue candidate; missing venue genre is not treated as incompatible.",
+      rejectReason: null
+    };
   }
   if (genreMatch.level === "generic") {
     return { keep: false, level: "generic", evidence: "Rejected generic genre evidence without compatible programming proof.", rejectReason: "genreMismatch" };
@@ -254,7 +334,7 @@ interface EventDateClassification {
   dateConfidence: DateConfidence;
   opportunityKind: OpportunityKind;
   ageMonths: number | null;
-  rejectReason: "old_event" | "missing_date" | "past_event" | null;
+  rejectReason: "old_event" | "missing_date" | "past_event" | "too_soon_event" | null;
   evidence: string;
 }
 
@@ -281,6 +361,14 @@ function computeBookingDateStatus(target: BookingTarget, recentMonths: number, n
   }
 
   const status = classifyEventDate(target.eventDate, recentMonths, now);
+  if (!isEvergreen && status.isFutureEvent && !isEligibleConcertLeadTime(target.eventDate, now)) {
+    return {
+      ...status,
+      opportunityKind: "historical_signal",
+      rejectReason: "too_soon_event",
+      evidence: `Rejected event date ${target.eventDate}: fewer than ${MIN_CONCERT_LEAD_TIME_DAYS} full days remain.`
+    };
+  }
   if (isEvergreen && status.rejectReason === "old_event") {
     return {
       ...status,

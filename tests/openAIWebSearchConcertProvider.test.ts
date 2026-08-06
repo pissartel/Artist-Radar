@@ -39,7 +39,7 @@ function baseSimilarArtist(overrides: Partial<SimilarArtist> = {}): SimilarArtis
     reason: "Comparable pop punk artist.",
     confidence: 0.9,
     artistTier: "small",
-    bookingCategory: "local_peer",
+    bookingCategory: "regional_peer",
     estimatedFollowers: 1500,
     estimatedPopularity: 18,
     sizeSignalSource: "manual",
@@ -217,6 +217,29 @@ describe("OpenAIWebSearchConcertProvider", () => {
     expect(create).toHaveBeenCalledTimes(2);
   });
 
+  it("passes the target artist market into each similar-artist concert search prompt", async () => {
+    const create = vi.fn().mockResolvedValue(fakeResponse(concertResult(), ["https://venue.example/event"]));
+    const client = new OpenAIConcertClient({ apiKey: "test", model: "test-model", client: { responses: { create } } });
+    const provider = buildOpenAIWebSearchConcertProvider({
+      env: { ENABLE_OPENAI_CONCERT_DISCOVERY: "true", OPENAI_API_KEY: "test" },
+      client,
+      now: new Date("2026-07-24T00:00:00Z")
+    });
+
+    await provider.search({
+      input: {
+        ...input,
+        target: "grandes villes françaises",
+        similarArtists: [baseSimilarArtist({ country: "United States" })]
+      }
+    });
+
+    expect(create).toHaveBeenCalledTimes(1);
+    const prompt = String(create.mock.calls[0]?.[0]?.input ?? "");
+    expect(prompt).toContain("Search location: grandes villes françaises");
+    expect(prompt).toContain("Required country when a country is reported: France");
+  });
+
   it("boosts confidence when multiple similar artists share the same normalized venue", async () => {
     const create = vi.fn().mockImplementation(async (params: { input: string }) => {
       if (params.input.includes("Name: Artist A")) {
@@ -298,7 +321,7 @@ describe("OpenAIWebSearchConcertProvider", () => {
       // the title must be exactly the venue name, with no event suffix.
       expect(venueLead!.name).toBe("Le Klub");
       expect(venueLead!.eventDate).toBeNull();
-      expect(venueLead!.confidence).toBeGreaterThanOrEqual(0.82);
+      expect(venueLead!.confidence).toBeLessThan(0.8);
       // A past concert never produces its own "event" target at all — only
       // the venue lead (venue-opportunity spec: past concerts produce no
       // concert opportunity, only evidence for the venue).
@@ -500,6 +523,8 @@ describe("OpenAIWebSearchConcertProvider", () => {
       expect(venueLead!.name).toBe("Glazart");
       expect(venueLead!.sourceUrl).not.toBe("https://razibus.net/06-08-2026-the-suicide-machines");
       expect(venueLead!.venueArtistEvidence?.[0]?.sourceUrl).toBe("https://razibus.net/06-08-2026-the-suicide-machines");
+      expect(concertOpportunity!.venueOpportunityId).toBe(venueLead!.venueOpportunityId);
+      expect(concertOpportunity!.venueOpportunityId).toBe("venue-glazart-paris-france");
     });
 
     it("merges several concerts at the same venue (Glazart) by different similar artists into a single venue opportunity", async () => {
@@ -614,7 +639,7 @@ describe("OpenAIWebSearchConcertProvider", () => {
   });
 
   describe("concert search scoped to the artist's own target market", () => {
-    it("does not produce a concert opportunity (or a venue lead) for a show outside the artist's target market", async () => {
+    it("does not produce a concert opportunity or venue lead for a show outside the artist's target market", async () => {
       const client = clientWithFixedResult(
         concertResult({
           venueName: "Ippodromo SNAI San Siro",

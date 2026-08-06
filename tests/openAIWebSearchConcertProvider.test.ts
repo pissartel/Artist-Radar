@@ -77,30 +77,36 @@ function concertResult(overrides: {
   venueWebsite?: string;
   sourceUrl?: string;
   sourceType?: string;
+  status?: "past" | "upcoming";
 } = {}) {
+  const status = overrides.status ?? "past";
+  const concert = {
+    eventName: overrides.eventName ?? "Live show",
+    date: overrides.date ?? (status === "past" ? "2026-03-01" : "2026-09-10"),
+    venue: {
+      name: overrides.venueName ?? "Le Klub",
+      city: overrides.city ?? "Paris",
+      region: null,
+      country: overrides.country ?? "France",
+      website: overrides.venueWebsite ?? null
+    },
+    lineup: ["Headliner"],
+    eventType: "concert",
+    status,
+    sources: [{ url: overrides.sourceUrl ?? "https://venue.example/event", title: "Venue programme", sourceType: overrides.sourceType ?? "venue_official" }],
+    evidenceSummary: "Listed on the venue's own programming page.",
+    modelConfidence: 0.9
+  };
   return {
     artist: { requestedName: "x", resolvedName: "x", identityConfidence: 0.9, identityNotes: null },
-    pastConcerts: [
-      {
-        eventName: overrides.eventName ?? "Live show",
-        date: overrides.date ?? "2026-03-01",
-        venue: {
-          name: overrides.venueName ?? "Le Klub",
-          city: overrides.city ?? "Paris",
-          region: null,
-          country: overrides.country ?? "France",
-          website: overrides.venueWebsite ?? null
-        },
-        lineup: ["Headliner"],
-        eventType: "concert",
-        status: "past",
-        sources: [{ url: overrides.sourceUrl ?? "https://venue.example/event", title: "Venue programme", sourceType: overrides.sourceType ?? "venue_official" }],
-        evidenceSummary: "Listed on the venue's own programming page.",
-        modelConfidence: 0.9
-      }
-    ],
-    upcomingConcerts: [],
-    searchSummary: { pastConcertsFound: 1, upcomingConcertsFound: 0, noUpcomingConcertsFoundInCheckedSources: true, notes: null }
+    pastConcerts: status === "past" ? [concert] : [],
+    upcomingConcerts: status === "upcoming" ? [concert] : [],
+    searchSummary: {
+      pastConcertsFound: status === "past" ? 1 : 0,
+      upcomingConcertsFound: status === "upcoming" ? 1 : 0,
+      noUpcomingConcertsFoundInCheckedSources: status !== "upcoming",
+      notes: null
+    }
   };
 }
 
@@ -140,7 +146,7 @@ describe("OpenAIWebSearchConcertProvider", () => {
 
   it("produces a BookingTarget from a confirmed concert with a valid cited source", async () => {
     const client = clientWithFixedResult(
-      concertResult({ eventName: "The Comparable Punk Band Show", sourceUrl: "https://venue.example/event" }),
+      concertResult({ eventName: "The Comparable Punk Band Show", sourceUrl: "https://venue.example/event", status: "upcoming" }),
       ["https://venue.example/event"]
     );
     const provider = buildOpenAIWebSearchConcertProvider({
@@ -151,9 +157,9 @@ describe("OpenAIWebSearchConcertProvider", () => {
 
     const result = await provider.search({ input: { ...input, similarArtists: [baseSimilarArtist()] } });
 
-    // A past France-based concert produces both the historical event target
-    // (excluded from final opportunities downstream, but still a target
-    // here) and a separate "venue" category lead (see venue-lead tests below).
+    // An eligible (>= 1 month away) upcoming France-based concert produces
+    // both its own event target and a separate "venue" category lead (see
+    // venue-lead tests below).
     expect(result.targets).toHaveLength(2);
     const target = result.targets.find((t) => t.category === "event")!;
     expect(target.sourceProvider).toBe("openai_web_search");
@@ -249,7 +255,7 @@ describe("OpenAIWebSearchConcertProvider", () => {
       if (params.input.includes("Name: Failing Artist")) {
         throw new Error("boom");
       }
-      return fakeResponse(concertResult({ sourceUrl: "https://venue.example/ok" }), ["https://venue.example/ok"]);
+      return fakeResponse(concertResult({ sourceUrl: "https://venue.example/ok", status: "upcoming" }), ["https://venue.example/ok"]);
     });
     const client = new OpenAIConcertClient({ apiKey: "test", model: "test-model", client: { responses: { create } } });
     const provider = buildOpenAIWebSearchConcertProvider({
@@ -293,10 +299,10 @@ describe("OpenAIWebSearchConcertProvider", () => {
       expect(venueLead!.name).toBe("Le Klub");
       expect(venueLead!.eventDate).toBeNull();
       expect(venueLead!.confidence).toBeGreaterThanOrEqual(0.82);
-      // The event category target is still produced (used internally / as
-      // diagnostics evidence), but it's a separate target from the venue
-      // lead, never a duplicate "event opportunity" re-added for the venue.
-      expect(result.targets.filter((t) => t.category === "event")).toHaveLength(1);
+      // A past concert never produces its own "event" target at all — only
+      // the venue lead (venue-opportunity spec: past concerts produce no
+      // concert opportunity, only evidence for the venue).
+      expect(result.targets.filter((t) => t.category === "event")).toHaveLength(0);
     });
 
     it("links a venue lead to the venue's own website, not the triggering event page, when known", async () => {
@@ -465,7 +471,13 @@ describe("OpenAIWebSearchConcertProvider", () => {
 
     it("keeps the concert as its own event opportunity alongside the venue lead it produced", async () => {
       const client = clientWithFixedResult(
-        concertResult({ eventName: "The Suicide Machines + Faintest Idea @ Glazart", venueName: "Glazart", city: "Paris", sourceUrl: "https://razibus.net/06-08-2026-the-suicide-machines" }),
+        concertResult({
+          eventName: "The Suicide Machines + Faintest Idea @ Glazart",
+          venueName: "Glazart",
+          city: "Paris",
+          sourceUrl: "https://razibus.net/06-08-2026-the-suicide-machines",
+          status: "upcoming"
+        }),
         ["https://razibus.net/06-08-2026-the-suicide-machines"]
       );
       const provider = buildOpenAIWebSearchConcertProvider({
@@ -553,6 +565,51 @@ describe("OpenAIWebSearchConcertProvider", () => {
 
       expect(result.targets.some((t) => t.category === "venue")).toBe(false);
       expect(result.targets.some((t) => t.category === "event")).toBe(false);
+    });
+  });
+
+  describe("concert lead-time eligibility (venue-opportunity spec)", () => {
+    // Spec's own worked example: "today" is 2026-08-06.
+    const NOW = new Date("2026-08-06T00:00:00Z");
+
+    it("produces only a venue lead, no concert opportunity, for an upcoming show less than a month away", async () => {
+      const client = clientWithFixedResult(
+        concertResult({ venueName: "Glazart", city: "Paris", date: "2026-08-20", sourceUrl: "https://venue.example/event", status: "upcoming" }),
+        ["https://venue.example/event"]
+      );
+      const provider = buildOpenAIWebSearchConcertProvider({
+        env: { ENABLE_OPENAI_CONCERT_DISCOVERY: "true", OPENAI_API_KEY: "test" },
+        client,
+        now: NOW
+      });
+
+      const result = await provider.search({ input: { ...input, similarArtists: [baseSimilarArtist()] } });
+
+      expect(result.targets.some((t) => t.category === "event")).toBe(false);
+      const venueLead = result.targets.find((t) => t.category === "venue");
+      expect(venueLead).toBeDefined();
+      expect(venueLead!.venueName).toBe("Glazart");
+    });
+
+    it("produces both a venue lead and a concert opportunity for an upcoming show at least a month away", async () => {
+      const client = clientWithFixedResult(
+        concertResult({ venueName: "Glazart", city: "Paris", date: "2026-09-10", sourceUrl: "https://venue.example/event", status: "upcoming" }),
+        ["https://venue.example/event"]
+      );
+      const provider = buildOpenAIWebSearchConcertProvider({
+        env: { ENABLE_OPENAI_CONCERT_DISCOVERY: "true", OPENAI_API_KEY: "test" },
+        client,
+        now: NOW
+      });
+
+      const result = await provider.search({ input: { ...input, similarArtists: [baseSimilarArtist()] } });
+
+      const concertOpportunity = result.targets.find((t) => t.category === "event");
+      expect(concertOpportunity).toBeDefined();
+      expect(concertOpportunity!.eventDate).toBe("2026-09-10");
+      const venueLead = result.targets.find((t) => t.category === "venue");
+      expect(venueLead).toBeDefined();
+      expect(venueLead!.venueName).toBe("Glazart");
     });
   });
 });

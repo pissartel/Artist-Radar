@@ -88,7 +88,14 @@ describe("searchBookingOpportunities past-event filtering", () => {
     expect(result.rejectedByReason.pastEvent).toBeGreaterThanOrEqual(1);
   });
 
-  it("keeps a recent past concert detected by the OpenAI web-search provider as an actionable event, alongside its derived venue lead", async () => {
+  it("never keeps a past concert detected by the OpenAI web-search provider as an actionable event, even though its derived venue lead stays actionable", async () => {
+    // Venue-opportunity spec: a past concert — regardless of how it was
+    // discovered — is only ever evidence that a venue is compatible, never
+    // a concert opportunity of its own. In practice OpenAIWebSearchConcertProvider
+    // never even emits an "event"-category target for a past concert (see
+    // its own tests), but this asserts the shared relevance layer enforces
+    // the same rule for any provider, so no future OpenAI-specific
+    // exemption can quietly reappear here.
     const provider: BookingSourceProvider = {
       providerName: "qa_openai_web_search",
       async search() {
@@ -120,11 +127,12 @@ describe("searchBookingOpportunities past-event filtering", () => {
 
     const result = await searchBookingOpportunities(input, { providers: [provider], now: NOW });
 
-    expect(result.opportunities.map((opportunity) => opportunity.name)).toEqual(
-      expect.arrayContaining(["The Slugz at La Maroquinerie", "La Maroquinerie"])
-    );
-    const eventOpportunity = result.opportunities.find((opportunity) => opportunity.name === "The Slugz at La Maroquinerie");
-    expect(eventOpportunity?.opportunityKind).toBe("actionable");
+    expect(result.opportunities.map((opportunity) => opportunity.name)).toEqual(["La Maroquinerie"]);
+    expect(
+      result.targets.some(
+        (target) => target.name === "The Slugz at La Maroquinerie" && target.opportunityKind === "historical_signal"
+      )
+    ).toBe(true);
   });
 });
 

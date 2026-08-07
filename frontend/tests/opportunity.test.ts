@@ -26,6 +26,9 @@ function buildOpportunity(overrides: Partial<Opportunity> = {}): Opportunity {
     tags: [],
     matchScore: 82,
     matchReasons: ["Genre match", "Local scene fit"],
+    genres: [],
+    recentEvents: [],
+    lineup: [],
     ...overrides,
   };
 }

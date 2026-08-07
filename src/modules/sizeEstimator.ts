@@ -8,6 +8,7 @@ export interface SizeSignals {
   youtubeSubscribers?: number | null;
   youtubeTotalViews?: number | null;
   youtubeVideoCount?: number | null;
+  deezerFans?: number | null;
   manualEstimatedTier?: ArtistTier | null;
 }
 
@@ -137,6 +138,16 @@ function collectSignals(signals: SizeSignals): RankedSignal[] {
     });
   }
 
+  const deezerTier = determineDeezerTier(signals.deezerFans ?? null);
+  if (deezerTier !== "unknown") {
+    rankedSignals.push({
+      source: "deezer",
+      tier: deezerTier,
+      confidence: deezerTier === "large" ? 0.66 : deezerTier === "medium" ? 0.58 : 0.5,
+      reason: describeDeezerSignals(signals.deezerFans ?? null)
+    });
+  }
+
   if (signals.manualEstimatedTier && signals.manualEstimatedTier !== "unknown") {
     rankedSignals.push({
       source: "manual",
@@ -242,6 +253,19 @@ function determineYouTubeTier(subscribers: number | null, totalViews: number | n
           : "small"
       : "unknown";
   return chooseStrongerTier(subscriberTier, viewsTier);
+}
+
+function determineDeezerTier(fans: number | null): ArtistTier {
+  if (fans === null) {
+    return "unknown";
+  }
+  if (fans > 50_000) {
+    return "large";
+  }
+  if (fans >= 5_000) {
+    return "medium";
+  }
+  return "small";
 }
 
 function determineSpotifyAudienceTier(
@@ -353,6 +377,10 @@ function describeYouTubeSignals(
     parts.push(`YouTube videos=${videoCount}`);
   }
   return parts.length > 0 ? `${parts.join(", ")}.` : "YouTube metrics were unavailable.";
+}
+
+function describeDeezerSignals(fans: number | null): string {
+  return typeof fans === "number" ? `Deezer fans=${fans}.` : "Deezer metrics were unavailable.";
 }
 
 function clamp(value: number): number {

@@ -5,6 +5,7 @@ const PLATFORM_LABELS: Record<PlatformType, string> = {
   spotify: "SP",
   instagram: "IG",
   youtube: "YT",
+  deezer: "DZ",
   website: "Web",
 };
 

@@ -66,6 +66,11 @@ export interface ChartmetricAudienceMetrics {
   spotifyArtistId?: string;
   spotifyMonthlyListeners?: number;
   spotifyFollowers?: number;
+  // Chartmetric proprietary composite score, when returned by identity/search.
+  chartmetricArtistScore?: number;
+  // Chartmetric proprietary genre taxonomy ID. Keep as an ID until a label
+  // mapping is available; never display it as a genre name.
+  primaryGenreSmart?: number;
   // ISO 8601 timestamp of when Chartmetric measured these values, when the
   // API reports one distinctly from when we fetched them.
   measuredAt?: string;
@@ -139,9 +144,6 @@ export interface ChartmetricSocialAudienceMetrics {
 }
 
 export interface ChartmetricCandidateMetrics extends ChartmetricAudienceMetrics {
-  // Chartmetric's own composite popularity score for the artist (cm_artist_score),
-  // when the API reports one.
-  chartmetricArtistScore?: number;
   // Percent change in Spotify monthly listeners over the trailing window
   // (see CANDIDATE_GROWTH_WINDOW_DAYS in chartmetric.mapper.ts), positive for growth.
   listenerGrowthPercent?: number;

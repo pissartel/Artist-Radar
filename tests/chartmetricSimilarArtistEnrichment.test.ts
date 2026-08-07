@@ -68,6 +68,54 @@ describe("ChartmetricSimilarArtistEnrichmentService.enrichCandidates", () => {
     expect(byName.get("Low")?.reason).toBe("not_selected_for_enrichment");
   });
 
+  it("prioritizes Last.fm booking peers over large Spotify reference artists for enrichment", async () => {
+    const client = fakeClient();
+    const service = buildService({ client, candidateLimit: 2 });
+    const candidates: SimilarArtistCandidateInput[] = [
+      {
+        artistName: "Green Day",
+        spotifyArtistId: "spotify1",
+        priority: 99,
+        source: "spotify_search",
+        sources: ["spotify_search"],
+        bookingCategory: "reference",
+        artistTier: "large",
+        estimatedFollowers: 11_000_000,
+        genreRelevance: 95
+      },
+      {
+        artistName: "TYDEAL",
+        spotifyArtistId: "spotify2",
+        priority: 62,
+        source: "lastfm_similar",
+        sources: ["lastfm_similar"],
+        bookingCategory: "to_verify",
+        artistTier: "unknown",
+        estimatedFollowers: null,
+        genreRelevance: 90
+      },
+      {
+        artistName: "Broad Peak",
+        spotifyArtistId: "spotify3",
+        priority: 60,
+        source: "lastfm_similar",
+        sources: ["lastfm_similar"],
+        bookingCategory: "to_verify",
+        artistTier: "unknown",
+        estimatedFollowers: null,
+        genreRelevance: 88
+      }
+    ];
+
+    const results = await service.enrichCandidates({ candidates });
+
+    const byName = new Map(results.map((result) => [result.candidateName, result]));
+    expect(byName.get("TYDEAL")?.status).toBe("success");
+    expect(byName.get("Broad Peak")?.status).toBe("success");
+    expect(byName.get("Green Day")?.status).toBe("skipped");
+    expect(byName.get("Green Day")?.reason).toBe("not_selected_for_enrichment");
+  });
+
   it("skips every candidate when the feature flag is off, without calling the client", async () => {
     const client = fakeClient();
     const service = buildService({ client, env: { CHARTMETRIC_ARTIST_ENRICHMENT_ENABLED: "false" } });

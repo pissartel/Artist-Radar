@@ -15,18 +15,36 @@ import type {
   ChartmetricHistoryPoint
 } from "./chartmetric.types.js";
 
+export interface ChartmetricAudienceMetricFallbacks {
+  spotifyMonthlyListeners?: number;
+  spotifyFollowers?: number;
+  chartmetricArtistScore?: number;
+  primaryGenreSmart?: number;
+}
+
 export function mapToAudienceMetrics(
   chartmetricArtistId: string,
   spotifyArtistId: string | null,
   stats: ChartmetricArtistStatsRaw,
   matchConfidence: ArtistMatchConfidence,
-  fetchedAt: string = new Date().toISOString()
+  fetchedAt: string = new Date().toISOString(),
+  fallbacks: ChartmetricAudienceMetricFallbacks = {}
 ): ChartmetricAudienceMetrics {
   return {
     chartmetricArtistId,
     ...(spotifyArtistId ? { spotifyArtistId } : {}),
-    ...(stats.latest?.spotifyMonthlyListeners !== undefined ? { spotifyMonthlyListeners: stats.latest.spotifyMonthlyListeners } : {}),
-    ...(stats.latest?.spotifyFollowers !== undefined ? { spotifyFollowers: stats.latest.spotifyFollowers } : {}),
+    ...(stats.latest?.spotifyMonthlyListeners !== undefined
+      ? { spotifyMonthlyListeners: stats.latest.spotifyMonthlyListeners }
+      : fallbacks.spotifyMonthlyListeners !== undefined
+        ? { spotifyMonthlyListeners: fallbacks.spotifyMonthlyListeners }
+        : {}),
+    ...(stats.latest?.spotifyFollowers !== undefined
+      ? { spotifyFollowers: stats.latest.spotifyFollowers }
+      : fallbacks.spotifyFollowers !== undefined
+        ? { spotifyFollowers: fallbacks.spotifyFollowers }
+        : {}),
+    ...(fallbacks.chartmetricArtistScore !== undefined ? { chartmetricArtistScore: fallbacks.chartmetricArtistScore } : {}),
+    ...(fallbacks.primaryGenreSmart !== undefined ? { primaryGenreSmart: fallbacks.primaryGenreSmart } : {}),
     ...(stats.latest?.date ? { measuredAt: stats.latest.date } : {}),
     fetchedAt,
     matchConfidence,

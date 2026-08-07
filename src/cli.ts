@@ -15,6 +15,7 @@ interface CliOptions {
   spotifyUrl?: string;
   youtubeUrl?: string;
   instagramUrl?: string;
+  chartmetric?: boolean;
 }
 
 const program = new Command();
@@ -56,6 +57,7 @@ function addOpportunityCommand(mode: Mode, description: string): void {
     .option("--spotify-url <url>", "Spotify artist URL")
     .option("--youtube-url <url>", "YouTube channel or artist URL")
     .option("--instagram-url <url>", "Instagram profile URL")
+    .option("--chartmetric", "enable Chartmetric enrichment for this run")
     .action(async (options: CliOptions) => {
       const input = ArtistInputSchema.parse({
         mode,
@@ -70,7 +72,9 @@ function addOpportunityCommand(mode: Mode, description: string): void {
         instagramUrl: options.instagramUrl ?? null
       });
 
-      const result = await runOpportunitySearch(input);
+      const result = await runOpportunitySearch(input, {
+        ...(options.chartmetric ? { features: { chartmetricArtistEnrichment: true } } : {})
+      });
       const paths = await exportOpportunities(input, result);
 
       if (input.mode === "booking" && paths.artistJsonPath && paths.similarArtistsJsonPath && paths.bookingJsonPath && paths.bookingSummary) {

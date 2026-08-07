@@ -51,6 +51,13 @@ export interface ArtistScaleScoreInput {
   chartmetricArtistScore?: number;
   spotifyMonthlyListeners?: number;
   spotifyFollowers?: number;
+  // Last.fm listeners/playcount are real audience evidence for long-tail
+  // artists discovered through Last.fm. They are not equivalent to Spotify
+  // monthly listeners, so they carry lower sub-weight than
+  // Spotify/Chartmetric but still prevent a good Last.fm candidate from
+  // showing as "Scale unknown" when no richer platform data is available.
+  lastFmListeners?: number;
+  lastFmPlaycount?: number;
   youtubeSubscribers?: number;
   youtubeViews?: number;
   instagramFollowers?: number;
@@ -132,6 +139,8 @@ const STALE_DATA_THRESHOLD_DAYS = 180;
 const REFERENCE_MAX = {
   spotifyMonthlyListeners: 50_000_000,
   spotifyFollowers: 30_000_000,
+  lastFmListeners: 5_000_000,
+  lastFmPlaycount: 200_000_000,
   youtubeSubscribers: 30_000_000,
   youtubeViews: 5_000_000_000,
   instagramFollowers: 50_000_000,
@@ -146,6 +155,8 @@ const OPTIONAL_SIGNAL_KEYS: (keyof ArtistScaleScoreInput)[] = [
   "chartmetricArtistScore",
   "spotifyMonthlyListeners",
   "spotifyFollowers",
+  "lastFmListeners",
+  "lastFmPlaycount",
   "youtubeSubscribers",
   "youtubeViews",
   "instagramFollowers",
@@ -247,6 +258,8 @@ function scoreStreamingComponent(input: ArtistScaleScoreInput): number | null {
     { value: valueOrNull(input.chartmetricArtistScore, clampScore), weight: 0.3 },
     { value: valueOrNull(input.spotifyMonthlyListeners, (v) => logScale(v, REFERENCE_MAX.spotifyMonthlyListeners)), weight: 0.25 },
     { value: valueOrNull(input.spotifyFollowers, (v) => logScale(v, REFERENCE_MAX.spotifyFollowers)), weight: 0.15 },
+    { value: valueOrNull(input.lastFmListeners, (v) => logScale(v, REFERENCE_MAX.lastFmListeners)), weight: 0.08 },
+    { value: valueOrNull(input.lastFmPlaycount, (v) => logScale(v, REFERENCE_MAX.lastFmPlaycount)), weight: 0.04 },
     { value: computeListenerFollowerRatioScore(input.spotifyMonthlyListeners, input.spotifyFollowers), weight: 0.1 },
     { value: valueOrNull(input.deezerFans, (v) => logScale(v, REFERENCE_MAX.deezerFans)), weight: 0.05 },
     { value: playlistReach, weight: 0.05 },

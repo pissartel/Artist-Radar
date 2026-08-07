@@ -24,16 +24,19 @@ describe("profileCollector", () => {
         "https://example.com",
         "https://open.spotify.com/artist/123",
         "https://www.youtube.com/@fakeband",
-        "https://www.instagram.com/fakeband"
+        "https://www.instagram.com/fakeband",
+        "https://www.deezer.com/artist/456"
       ],
       spotifyUrl: null,
       youtubeUrl: null,
-      instagramUrl: null
+      instagramUrl: null,
+      deezerUrl: null
     });
 
     expect(socialLinks.spotifyUrl).toBe("https://open.spotify.com/artist/123");
     expect(socialLinks.youtubeUrl).toBe("https://www.youtube.com/@fakeband");
     expect(socialLinks.instagramUrl).toBe("https://www.instagram.com/fakeband");
+    expect(socialLinks.deezerUrl).toBe("https://www.deezer.com/artist/456");
   });
 
   it("prefers dedicated social URL flags over generic links", () => {
@@ -41,7 +44,8 @@ describe("profileCollector", () => {
       links: ["https://open.spotify.com/artist/from-links"],
       spotifyUrl: "https://open.spotify.com/artist/from-flag",
       youtubeUrl: null,
-      instagramUrl: null
+      instagramUrl: null,
+      deezerUrl: null
     });
 
     expect(socialLinks.spotifyUrl).toBe("https://open.spotify.com/artist/from-flag");
@@ -51,6 +55,7 @@ describe("profileCollector", () => {
     vi.stubEnv("MOCK_AI", "false");
     vi.stubEnv("SPOTIFY_CLIENT_ID", "");
     vi.stubEnv("SPOTIFY_CLIENT_SECRET", "");
+    vi.stubEnv("ENABLE_DEEZER_ARTIST_SEARCH", "false");
 
     const profile = await collectArtistProfile({
       ...baseInput,
@@ -69,10 +74,89 @@ describe("profileCollector", () => {
     expect(profile.imageConfidence).toBeNull();
   });
 
+  it("resolves the main artist Spotify profile by exact name when no Spotify URL is provided", async () => {
+    vi.stubEnv("MOCK_AI", "false");
+    vi.stubEnv("SPOTIFY_CLIENT_ID", "id");
+    vi.stubEnv("SPOTIFY_CLIENT_SECRET", "secret");
+    vi.stubEnv("ENABLE_DEEZER_ARTIST_SEARCH", "false");
+
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: "token" }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            artists: {
+              items: [
+                {
+                  id: "spotify-tuesday-fall",
+                  name: "Tuesday Fall",
+                  followers: { total: 1200 },
+                  popularity: 18,
+                  genres: ["pop punk"],
+                  external_urls: { spotify: "https://open.spotify.com/artist/spotify-tuesday-fall" },
+                  images: []
+                }
+              ]
+            }
+          }),
+          { status: 200 }
+        )
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const profile = await collectArtistProfile({
+      ...baseInput,
+      artist: "Tuesday Fall",
+      genre: "pop punk"
+    });
+
+    expect(profile.spotify?.id).toBe("spotify-tuesday-fall");
+    expect(profile.socialLinks.spotifyUrl).toBe("https://open.spotify.com/artist/spotify-tuesday-fall");
+    expect(profile.platformStats.spotifyFollowers).toBe(1200);
+    expect(profile.platformStats.spotifyPopularity).toBe(18);
+  });
+
+  it("resolves Deezer fans by exact name and uses them as profile audience data", async () => {
+    vi.stubEnv("MOCK_AI", "false");
+    vi.stubEnv("SPOTIFY_CLIENT_ID", "");
+    vi.stubEnv("SPOTIFY_CLIENT_SECRET", "");
+    vi.stubEnv("ENABLE_DEEZER_ARTIST_SEARCH", "true");
+
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: 456,
+              name: "Tuesday Fall",
+              nb_fan: 930,
+              link: "https://www.deezer.com/artist/456",
+              picture_medium: "https://image.example/tuesday-fall.jpg"
+            }
+          ]
+        }),
+        { status: 200 }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const profile = await collectArtistProfile({
+      ...baseInput,
+      artist: "Tuesday Fall",
+      genre: "pop punk"
+    });
+
+    expect(profile.socialLinks.deezerUrl).toBe("https://www.deezer.com/artist/456");
+    expect(profile.platformStats.deezerFans).toBe(930);
+    expect(profile.estimatedLevel).toBe("emerging");
+  });
+
   it("resolves a generic imageUrl from Spotify metadata when a confident match exists", async () => {
     vi.stubEnv("MOCK_AI", "false");
     vi.stubEnv("SPOTIFY_CLIENT_ID", "id");
     vi.stubEnv("SPOTIFY_CLIENT_SECRET", "secret");
+    vi.stubEnv("ENABLE_DEEZER_ARTIST_SEARCH", "false");
 
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -140,6 +224,8 @@ describe("profileCollector", () => {
   });
 
   it("infers a basic level from provided mock stats", async () => {
+    vi.stubEnv("ENABLE_DEEZER_ARTIST_SEARCH", "false");
+
     const profile = await collectArtistProfile({
       ...baseInput,
       platformStats: {

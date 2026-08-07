@@ -92,6 +92,8 @@ export interface SimilarArtistsFinderInput {
     SIMILAR_ARTISTS_OUTPUT_LIMIT?: string;
     SIMILAR_ARTISTS_TO_VERIFY_LIMIT?: string;
     SIMILAR_ARTISTS_PER_GROUP_LIMIT?: string;
+    SIMILAR_ARTISTS_REFERENCE_LIMIT?: string;
+    SIMILAR_ARTISTS_SPOTIFY_NAME_LOOKUP_LIMIT?: string;
     DEBUG_ARTIST_CONSOLIDATION?: string;
     YOUTUBE_API_KEY?: string;
     FIRECRAWL_API_KEY?: string;
@@ -193,6 +195,7 @@ interface SpotifySearchMatch {
 
 const MIN_GENRE_RELEVANCE = 25;
 const MIN_UNKNOWN_GENRE_LASTFM_RELEVANCE = 30;
+const MIN_LASTFM_SIMILARITY_GENRE_RELEVANCE = 55;
 
 const MOCK_SIMILAR_ARTISTS: SimilarArtistSeed[] = [
   {
@@ -315,7 +318,7 @@ export async function findSimilarArtists(input: SimilarArtistsFinderInput): Prom
 
 // Caps the number of "search by exact name" lookups so a large similar-artist
 // list can't trigger dozens of extra Spotify API calls in one analysis run.
-const MAX_SPOTIFY_NAME_SEARCH_LOOKUPS = 10;
+const DEFAULT_SPOTIFY_NAME_SEARCH_LOOKUPS = 30;
 
 async function enrichSimilarArtistsWithSpotify(
   artists: SimilarArtist[],
@@ -334,7 +337,9 @@ async function enrichSimilarArtistsWithSpotify(
   }
 
   const severalByIds = input.spotifySeveralArtistsByIds ?? ((ids: string[]) => getSeveralSpotifyArtistsByIds(ids, env));
+  const artistById = input.spotifyArtistById ?? ((id: string) => getSpotifyArtistById(id, env));
   const searchByName = input.spotifySearchByName ?? ((name: string) => searchSpotifyArtistByName(name, env));
+  const nameSearchLookupLimit = parseOutputLimit(env.SIMILAR_ARTISTS_SPOTIFY_NAME_LOOKUP_LIMIT, DEFAULT_SPOTIFY_NAME_SEARCH_LOOKUPS);
 
   // Cache keyed by Spotify artist ID so an artist referenced twice (e.g. once
   // with an ID and once resolved by name to the same ID) is only fetched once.
@@ -360,6 +365,20 @@ async function enrichSimilarArtistsWithSpotify(
         idsRequested: idsToFetch.length,
         error: error instanceof Error ? error.message : String(error)
       });
+      const fallbackIds = idsToFetch.slice(0, nameSearchLookupLimit);
+      for (const id of fallbackIds) {
+        try {
+          const profile = await artistById(id);
+          if (profile) {
+            profileById.set(profile.id, profile);
+          }
+        } catch (fallbackError) {
+          warnLog("spotify", "Fallback Spotify artist lookup failed for a similar artist.", {
+            spotifyId: id,
+            error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+          });
+        }
+      }
     }
   }
 
@@ -369,7 +388,7 @@ async function enrichSimilarArtistsWithSpotify(
     const knownId = idByArtistName.get(artist.name);
     let profile = knownId ? profileById.get(knownId) ?? null : null;
 
-    if (!profile && !knownId && nameSearchLookups < MAX_SPOTIFY_NAME_SEARCH_LOOKUPS) {
+    if (!profile && !knownId && nameSearchLookups < nameSearchLookupLimit) {
       nameSearchLookups += 1;
       try {
         profile = await searchByName(artist.name);
@@ -394,6 +413,31 @@ async function enrichSimilarArtistsWithSpotify(
 
     const spotifyMetadata = toSpotifyMetadata(profile);
     const resolvedImage = resolveArtistImage({ spotify: spotifyMetadata });
+    const artistTier = artist.artistTier === "unknown" && profile.followers !== null
+      ? determineAbsoluteArtistTier(profile.followers, profile.popularity)
+      : artist.artistTier;
+    const sizeRelevance = artist.artistTier === artistTier ? artist.sizeRelevance : scoreForTier(artistTier);
+    const sourceConfidence = clampScore(Math.round((artist.sourceConfidence ?? defaultSourceConfidence(artist.source)) * 100));
+    const evidenceBoost = artist.verificationStatus === "verified" ? 8 : artist.verificationStatus === "needs_verification" ? 2 : -8;
+    const totalRelevance = artist.sizeRelevance === sizeRelevance
+      ? artist.totalRelevance
+      : calculateDiscoveryTotalRelevance(
+          artist.genreRelevance,
+          sizeRelevance,
+          artist.sceneRelevance,
+          artist.source,
+          clampScore(sourceConfidence + evidenceBoost),
+          {
+            name: artist.name,
+            genres: artist.genres,
+            city: artist.city,
+            country: artist.country,
+            url: artist.url,
+            source: artist.source,
+            reason: artist.reason,
+            sourceConfidence: artist.sourceConfidence
+          }
+        );
     enriched.push({
       ...artist,
       // Keep the top-level spotifyId/spotifyUrl scalar fields in sync with
@@ -405,6 +449,17 @@ async function enrichSimilarArtistsWithSpotify(
       // representations).
       spotifyId: artist.spotifyId ?? spotifyMetadata.id,
       spotifyUrl: artist.spotifyUrl ?? spotifyMetadata.url,
+      genres: artist.genres.length > 0 ? artist.genres : spotifyMetadata.genres,
+      artistTier,
+      estimatedFollowers: artist.estimatedFollowers ?? profile.followers,
+      estimatedPopularity: artist.estimatedPopularity ?? profile.popularity,
+      sizeSignalSource: artist.sizeSignalSource === "unknown" && (profile.followers !== null || profile.popularity !== null)
+        ? "spotify_artist"
+        : artist.sizeSignalSource,
+      sizeRelevance,
+      totalRelevance,
+      relevanceToUserArtist: totalRelevance,
+      popularity: mergeSpotifyPopularitySummary(artist.popularity, spotifyMetadata),
       spotify: spotifyMetadata,
       imageUrl: resolvedImage.imageUrl,
       imageSource: resolvedImage.imageSource,
@@ -423,6 +478,25 @@ function toSpotifyMetadata(profile: SpotifyArtistProfile): NonNullable<SimilarAr
     followers: profile.followers,
     popularity: profile.popularity,
     genres: profile.genres
+  };
+}
+
+function mergeSpotifyPopularitySummary(
+  popularity: SimilarArtist["popularity"],
+  spotify: NonNullable<SimilarArtist["spotify"]>
+): SimilarArtist["popularity"] {
+  return {
+    ...popularity,
+    confidence: Math.max(popularity.confidence, spotify.followers !== null || spotify.popularity !== null ? 0.58 : 0.2),
+    sizeSignalSource: popularity.sizeSignalSource === "unknown" ? "spotify" : popularity.sizeSignalSource,
+    platforms: {
+      ...popularity.platforms,
+      spotify: {
+        followers: spotify.followers,
+        popularity: spotify.popularity,
+        sourceUrl: spotify.url
+      }
+    }
   };
 }
 
@@ -719,9 +793,13 @@ function scoreDiscoveryCandidate(
     : genreCompatibility.level === "weak_broad_match"
       ? Math.min(baseGenreRelevance, 55)
       : baseGenreRelevance;
-  const genreRelevance = candidate.source === "lastfm_similar" && candidateGenres.length === 0
-    ? Math.max(baseGenreRelevance, MIN_UNKNOWN_GENRE_LASTFM_RELEVANCE)
-    : adjustedBaseGenreRelevance;
+  const genreRelevance = scoreDiscoveryGenreRelevance({
+    candidate,
+    candidateGenres,
+    baseGenreRelevance,
+    adjustedBaseGenreRelevance,
+    genreCompatibility
+  });
   const size = scoreDiscoverySizeRelevance(getUserMetrics(input.profile), candidate);
   let artistTier = size.artistTier;
   let sizeScore = size.score;
@@ -755,13 +833,17 @@ function scoreDiscoveryCandidate(
     candidate.city ? `City: ${candidate.city}` : ""
   ]);
   const evidenceBoost = verificationStatus === "verified" ? 8 : verificationStatus === "needs_verification" ? 2 : -8;
-  const totalRelevance = calculateTotalRelevance(
+  const calculatedTotalRelevance = calculateDiscoveryTotalRelevance(
     genreRelevance,
     sizeScore,
     sceneRelevance,
     candidate.source,
-    clampScore(sourceConfidence + evidenceBoost)
+    clampScore(sourceConfidence + evidenceBoost),
+    candidate
   );
+  const totalRelevance = isKnownOutsideTargetCountry(candidate.country, input)
+    ? Math.min(calculatedTotalRelevance, 45)
+    : calculatedTotalRelevance;
   const possibleUse = possibleUseForBookingCategory(bookingCategory, artistTier, sceneRelevance);
   // Preserve the Spotify identity/image already captured at discovery time
   // (issue #201 follow-up) instead of relying solely on the later,
@@ -818,7 +900,7 @@ function scoreDiscoveryCandidate(
     possibleUse,
     estimatedLevel: artistTierToEstimatedLevel(artistTier),
     evidenceNotes,
-    sourceUrls: uniqueStrings(candidate.sourceUrls ?? []),
+    sourceUrls: uniqueStrings([...(candidate.sourceUrls ?? []), candidate.url ?? ""]),
     genreEvidence: candidate.genreEvidence ?? [],
     locationEvidence: candidate.locationEvidence ?? [],
     sizeEvidence: candidate.sizeEvidence ?? [],
@@ -881,6 +963,68 @@ function scoreDiscoverySizeRelevance(
   };
 }
 
+function scoreDiscoveryGenreRelevance(input: {
+  candidate: SimilarArtistDiscoveryCandidate;
+  candidateGenres: string[];
+  baseGenreRelevance: number;
+  adjustedBaseGenreRelevance: number;
+  genreCompatibility: ReturnType<typeof evaluateGenreCompatibility>;
+}): number {
+  const { candidate, candidateGenres, baseGenreRelevance, adjustedBaseGenreRelevance, genreCompatibility } = input;
+  if (candidate.source !== "lastfm_similar") {
+    return adjustedBaseGenreRelevance;
+  }
+
+  const lastFmSimilarityRelevance = scoreLastFmSimilarityGenreRelevance(candidate);
+  if (candidateGenres.length === 0) {
+    return Math.max(baseGenreRelevance, lastFmSimilarityRelevance);
+  }
+
+  if (!genreCompatibility.compatible) {
+    return adjustedBaseGenreRelevance;
+  }
+
+  const catalogOnlyGenreEvidence =
+    (candidate.genreEvidence ?? []).length > 0 &&
+    (candidate.genreEvidence ?? []).every((entry) => entry.source === "musicbrainz");
+
+  return catalogOnlyGenreEvidence
+    ? Math.max(lastFmSimilarityRelevance, Math.min(adjustedBaseGenreRelevance, 85))
+    : Math.max(adjustedBaseGenreRelevance, Math.min(lastFmSimilarityRelevance, 88));
+}
+
+function scoreLastFmSimilarityGenreRelevance(candidate: SimilarArtistDiscoveryCandidate): number {
+  const sourceConfidence = candidate.sourceConfidence ?? defaultSourceConfidence(candidate.source);
+  const similaritySignal = clampScore(Math.round(42 + sourceConfidence * 48));
+  return Math.max(
+    MIN_LASTFM_SIMILARITY_GENRE_RELEVANCE,
+    Math.min(90, Math.max(MIN_UNKNOWN_GENRE_LASTFM_RELEVANCE, similaritySignal))
+  );
+}
+
+function calculateDiscoveryTotalRelevance(
+  genreRelevance: number,
+  sizeRelevance: number,
+  sceneRelevance: number,
+  source: SimilarArtistSource,
+  sourceConfidence: number,
+  candidate: SimilarArtistDiscoveryCandidate
+): number {
+  if (source !== "lastfm_similar") {
+    return calculateTotalRelevance(genreRelevance, sizeRelevance, sceneRelevance, source, sourceConfidence);
+  }
+
+  const locationSignal = candidate.city
+    ? sceneRelevance
+    : candidate.country
+      ? Math.min(sceneRelevance, 50)
+      : sceneRelevance;
+
+  return clampScore(
+    Math.round(genreRelevance * 0.45 + locationSignal * 0.15 + sizeRelevance * 0.1 + sourceConfidence * 0.3)
+  );
+}
+
 function determineBookingCategory(
   candidate: SimilarArtistDiscoveryCandidate,
   artistTier: ArtistTier,
@@ -888,12 +1032,11 @@ function determineBookingCategory(
   localRelevance: number,
   input: SimilarArtistsFinderInput
 ): BookingCategory {
-  const country = normalizeText(candidate.country ?? "");
+  const country = normalizeCountryForComparison(candidate.country);
   const city = normalizeText(candidate.city ?? "");
-  const target = normalizeText(input.target ?? "");
-  const targetCountry = input.profile.country ? normalizeText(input.profile.country) : "";
+  const targetCountry = normalizeCountryForComparison(input.profile.country);
   const frenchTarget = isFrenchTarget(input.target);
-  const isFrance = country === "france" || targetCountry === "france" || (frenchTarget && country === "france");
+  const candidateIsFrance = isFrenchCountry(country);
   const sameCity = input.city ? city === normalizeText(input.city) : false;
   const sameCountry = Boolean(country && targetCountry && country === targetCountry);
   const strongGenre = genreRelevance >= 60;
@@ -903,7 +1046,7 @@ function determineBookingCategory(
     return "local_peer";
   }
 
-  if ((sameCountry || isFrance) && strongGenre && localRelevance >= 60 && accessibleSize) {
+  if ((sameCountry || (frenchTarget && candidateIsFrance)) && strongGenre && localRelevance >= 60 && accessibleSize) {
     return "regional_peer";
   }
 
@@ -1132,7 +1275,7 @@ function mergeConsolidation(
     youtubeTotalViews: consolidation.youtubeTotalViews ?? candidate.youtubeTotalViews ?? null,
     youtubeVideoCount: consolidation.youtubeVideoCount ?? candidate.youtubeVideoCount ?? null,
     genres: uniqueStrings([...candidate.genres, ...consolidation.genres]),
-    city: consolidation.city ?? candidate.city,
+    city: normalizeCandidateCity(consolidation.city ?? candidate.city),
     country: consolidation.country ?? candidate.country,
     verificationStatus: consolidation.verificationStatus,
     sourceUrls: uniqueStrings([...(candidate.sourceUrls ?? []), ...consolidation.sourceUrls]),
@@ -1282,7 +1425,7 @@ function inferVerificationStatus(candidate: SimilarArtistDiscoveryCandidate): Ar
 
 function buildPopularitySummary(candidate: SimilarArtistDiscoveryCandidate, artistTier: ArtistTier): SimilarArtist["popularity"] {
   const instagramEvidence = candidate.sizeEvidence?.find((entry) => entry.source === "firecrawl" && typeof entry.followers === "number");
-  const youtubeEvidence = candidate.sizeEvidence?.find((entry) => entry.source === "youtube" || typeof entry.subscribers === "number" || typeof entry.views === "number");
+  const youtubeEvidence = candidate.sizeEvidence?.find((entry) => entry.source === "youtube");
   const lastfmEvidence = candidate.sizeEvidence?.find((entry) => entry.source === "lastfm");
   const spotifyFollowers = candidate.followersCount ?? null;
   const spotifyPopularity = candidate.popularity ?? null;
@@ -1375,7 +1518,7 @@ function mergeMusicBrainzMetadata(
     ...metadata.tags
   ]);
   const mergedCountry = candidate.country ?? metadata.country ?? null;
-  const mergedCity = candidate.city ?? metadata.beginArea ?? metadata.area ?? null;
+  const mergedCity = candidate.city ?? normalizeCandidateCity(metadata.beginArea ?? metadata.area ?? null);
   const baseConfidence = candidate.sourceConfidence ?? defaultSourceConfidence(candidate.source);
   const countryBoost = isFrenchTarget(input.target) && isFrenchCountry(metadata.country) ? 0.12 : 0.05;
   const tagBoost = metadata.tags.length > 0 ? 0.08 : 0;
@@ -1389,6 +1532,24 @@ function mergeMusicBrainzMetadata(
     url: candidate.url ?? metadata.sourceUrl ?? null,
     musicBrainzId: metadata.musicBrainzId,
     sourceUrls: uniqueStrings([...(candidate.sourceUrls ?? []), ...(metadata.sourceUrl ? [metadata.sourceUrl] : [])]),
+    genreEvidence: metadata.tags.length > 0
+      ? [
+          ...(candidate.genreEvidence ?? []),
+          { source: "musicbrainz", genres: metadata.tags, confidence: 0.72, sourceUrl: metadata.sourceUrl }
+        ]
+      : candidate.genreEvidence,
+    locationEvidence: metadata.country || metadata.area || metadata.beginArea
+      ? [
+          ...(candidate.locationEvidence ?? []),
+          {
+            source: "musicbrainz",
+            city: metadata.beginArea ?? null,
+            country: metadata.country ?? metadata.area ?? null,
+            confidence: 0.68,
+            sourceUrl: metadata.sourceUrl
+          }
+        ]
+      : candidate.locationEvidence,
     notes: candidate.notes
       ? `${candidate.notes} MusicBrainz matched ${metadata.name}.`
       : `MusicBrainz matched ${metadata.name}. Country: ${metadata.country ?? "unknown"}. Tags: ${metadata.tags.join(", ") || "none"}.`,
@@ -2054,7 +2215,8 @@ export function scoreSceneRelevance(
   const normalizedCity = city ? normalizeText(city) : null;
   const normalizedTarget = target ? normalizeText(target) : null;
   const candidateCity = candidate.city ? normalizeText(candidate.city) : null;
-  const candidateCountry = candidate.country ? normalizeText(candidate.country) : null;
+  const candidateCountry = normalizeCountryForComparison(candidate.country);
+  const targetCountry = inferTargetCountryForScene(target);
 
   if (normalizedCity && candidateCity && candidateCity === normalizedCity) {
     return 90;
@@ -2066,6 +2228,10 @@ export function scoreSceneRelevance(
 
   if (normalizedTarget && countryMatchesTarget(candidateCountry, normalizedTarget)) {
     return 85;
+  }
+
+  if (candidateCountry && targetCountry && candidateCountry !== targetCountry) {
+    return 0;
   }
 
   if (!candidateCity && !candidateCountry) {
@@ -2902,6 +3068,7 @@ function pruneSimilarArtistsForOutput(
   const outputLimit = parseOutputLimit(env?.SIMILAR_ARTISTS_OUTPUT_LIMIT, 80);
   const toVerifyLimit = parseOutputLimit(env?.SIMILAR_ARTISTS_TO_VERIFY_LIMIT, 40);
   const perGroupLimit = parseOutputLimit(env?.SIMILAR_ARTISTS_PER_GROUP_LIMIT, 20);
+  const referenceLimit = parseOutputLimit(env?.SIMILAR_ARTISTS_REFERENCE_LIMIT, 8);
   const grouped = groupSimilarArtistsByTier(sortedArtists);
   const pruned: Array<{ artist: SimilarArtist; reason: string }> = [];
   const selectedByGroup: SimilarArtistsByTier = {
@@ -2915,9 +3082,10 @@ function pruneSimilarArtistsForOutput(
 
   for (const category of ["local_peer", "regional_peer", "support_target", "reference", "unknown"] as BookingCategory[]) {
     const group = [...grouped[category]].sort(compareSimilarArtistsForOutput);
-    selectedByGroup[category] = group.slice(0, perGroupLimit);
-    for (const artist of group.slice(perGroupLimit)) {
-      pruned.push({ artist, reason: `${category} group limit ${perGroupLimit} reached` });
+    const groupLimit = category === "reference" ? Math.min(perGroupLimit, referenceLimit) : perGroupLimit;
+    selectedByGroup[category] = group.slice(0, groupLimit);
+    for (const artist of group.slice(groupLimit)) {
+      pruned.push({ artist, reason: `${category} group limit ${groupLimit} reached` });
     }
   }
 
@@ -3038,7 +3206,7 @@ function countryMatchesTarget(candidateCountry: string | null, normalizedTarget:
     return false;
   }
 
-  const normalizedCountry = normalizeText(candidateCountry);
+  const normalizedCountry = normalizeCountryForComparison(candidateCountry);
   if (!normalizedCountry) {
     return false;
   }
@@ -3059,8 +3227,7 @@ function isFrenchCountry(value: string | null | undefined): boolean {
     return false;
   }
 
-  const normalized = normalizeText(value);
-  return normalized === "france" || normalized === "fr" || normalized === "french republic";
+  return normalizeCountryForComparison(value) === "france";
 }
 
 function isFrenchTarget(value: string | null | undefined): boolean {
@@ -3079,6 +3246,56 @@ function isFrenchTarget(value: string | null | undefined): boolean {
     normalized.includes("grandes villes françaises") ||
     normalized.includes("grandes villes francaises")
   );
+}
+
+function inferTargetCountryForScene(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  if (isFrenchTarget(value)) {
+    return "france";
+  }
+
+  return normalizeCountryForComparison(value);
+}
+
+function isKnownOutsideTargetCountry(
+  country: string | null | undefined,
+  input: SimilarArtistsFinderInput
+): boolean {
+  const candidateCountry = normalizeCountryForComparison(country);
+  const targetCountry = inferTargetCountryForScene(input.target) ?? normalizeCountryForComparison(input.profile.country);
+  return Boolean(candidateCountry && targetCountry && candidateCountry !== targetCountry);
+}
+
+function normalizeCountryForComparison(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = normalizeText(value);
+  const aliases: Record<string, string> = {
+    fr: "france",
+    france: "france",
+    french: "france",
+    "french republic": "france",
+    "republique francaise": "france",
+    "république française": "france",
+    ca: "canada",
+    canada: "canada",
+    canadian: "canada",
+    us: "united states",
+    usa: "united states",
+    "u s a": "united states",
+    "united states": "united states",
+    "united states of america": "united states",
+    uk: "united kingdom",
+    gb: "united kingdom",
+    "united kingdom": "united kingdom"
+  };
+
+  return aliases[normalized] ?? normalized;
 }
 
 function expandGenres(genres: string[]): { exact: Set<string>; expanded: Set<string>; tokens: Set<string> } {

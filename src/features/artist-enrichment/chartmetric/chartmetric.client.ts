@@ -39,6 +39,11 @@ export interface ChartmetricArtistIdentityRaw {
   id: number;
   name: string;
   spotifyId?: string;
+  verified?: boolean;
+  spotifyMonthlyListeners?: number;
+  spotifyFollowers?: number;
+  chartmetricArtistScore?: number;
+  primaryGenreSmart?: number;
 }
 
 export interface ChartmetricArtistStatPoint {
@@ -70,6 +75,11 @@ export interface ChartmetricArtistScoreAndSocialRaw {
 export interface ChartmetricPlaylistReachRaw {
   playlistReachScore?: number;
   totalCurrentPlaylists?: number;
+}
+
+export interface ChartmetricArtistUrlsRaw {
+  spotifyIds: string[];
+  spotifyUrls: string[];
 }
 
 export interface ChartmetricSimilarArtistRaw {
@@ -104,8 +114,8 @@ export class ChartmetricClient {
   }
 
   async getArtistBySpotifyId(spotifyArtistId: string): Promise<ChartmetricRequestOutcome<ChartmetricArtistIdentityRaw | null>> {
-    return this.request(`/api/artist/spotify/${encodeURIComponent(spotifyArtistId)}`, (payload) =>
-      parseArtistIdentity(payload)
+    return this.request(`/api/search?q=${encodeURIComponent(spotifyArtistId)}&type=artists&limit=10`, (payload) =>
+      parseArtistSearchResults(payload).find((artist) => spotifyIdsMatch(artist.spotifyId, spotifyArtistId)) ?? null
     );
   }
 
@@ -139,6 +149,10 @@ export class ChartmetricClient {
     return this.request(`/api/artist/${encodeURIComponent(chartmetricArtistId)}/playlists/current/stats`, (payload) =>
       parsePlaylistReach(payload)
     );
+  }
+
+  async getArtistUrls(chartmetricArtistId: string): Promise<ChartmetricRequestOutcome<ChartmetricArtistUrlsRaw>> {
+    return this.request(`/api/artist/${encodeURIComponent(chartmetricArtistId)}/urls`, (payload) => parseArtistUrls(payload));
   }
 
   // Issue #201 scope item: "neighbouring-artist relationship or score, if
@@ -300,7 +314,16 @@ function parseArtistIdentity(payload: unknown): ChartmetricArtistIdentityRaw | n
     return null;
   }
   const spotifyId = extractSpotifyIdFromCodes(obj);
-  return { id: obj.id, name: obj.name, ...(spotifyId ? { spotifyId } : {}) };
+  return {
+    id: obj.id,
+    name: obj.name,
+    ...(spotifyId ? { spotifyId } : {}),
+    ...(typeof obj.verified === "boolean" ? { verified: obj.verified } : {}),
+    ...(toFiniteNumber(obj.sp_monthly_listeners) !== undefined ? { spotifyMonthlyListeners: toFiniteNumber(obj.sp_monthly_listeners) } : {}),
+    ...(toFiniteNumber(obj.sp_followers) !== undefined ? { spotifyFollowers: toFiniteNumber(obj.sp_followers) } : {}),
+    ...(toFiniteNumber(obj.cm_artist_score) !== undefined ? { chartmetricArtistScore: toFiniteNumber(obj.cm_artist_score) } : {}),
+    ...(toFiniteNumber(obj.primary_genre_smart) !== undefined ? { primaryGenreSmart: toFiniteNumber(obj.primary_genre_smart) } : {})
+  };
 }
 
 function parseArtistSearchResults(payload: unknown): ChartmetricArtistIdentityRaw[] {
@@ -396,6 +419,21 @@ function parsePlaylistReach(payload: unknown): ChartmetricPlaylistReachRaw {
   };
 }
 
+function parseArtistUrls(payload: unknown): ChartmetricArtistUrlsRaw {
+  const obj = extractObj(payload) as Record<string, unknown> | null;
+  if (!obj) {
+    return { spotifyIds: [], spotifyUrls: [] };
+  }
+
+  const spotifyUrls = uniqueStrings(extractSpotifyUrlValues(obj));
+  const spotifyIds = uniqueStrings([
+    ...spotifyUrls.map((url) => extractSpotifyIdFromUrl(url)),
+    ...extractSpotifyIdValues(obj)
+  ]);
+
+  return { spotifyIds, spotifyUrls };
+}
+
 function parseSimilarArtists(payload: unknown): ChartmetricSimilarArtistRaw[] {
   if (typeof payload !== "object" || payload === null) {
     return [];
@@ -419,7 +457,16 @@ function parseSimilarArtists(payload: unknown): ChartmetricSimilarArtistRaw[] {
     .filter((entry): entry is ChartmetricSimilarArtistRaw => entry !== null);
 }
 
-function extractObj(payload: unknown): { id?: unknown; name?: unknown; code2?: unknown } | null {
+function extractObj(payload: unknown): {
+  id?: unknown;
+  name?: unknown;
+  code2?: unknown;
+  verified?: unknown;
+  sp_monthly_listeners?: unknown;
+  sp_followers?: unknown;
+  cm_artist_score?: unknown;
+  primary_genre_smart?: unknown;
+} | null {
   if (typeof payload !== "object" || payload === null) {
     return null;
   }
@@ -438,4 +485,87 @@ function extractSpotifyIdFromCodes(obj: Record<string, unknown>): string | undef
     return spotifyIds[0];
   }
   return undefined;
+}
+
+function extractSpotifyUrlValues(record: Record<string, unknown>): string[] {
+  return extractStringValuesForKeys(record, [
+    "spotify",
+    "spotify_url",
+    "spotify_urls",
+    "spotifyUrl",
+    "spotifyUrls",
+    "sp_url",
+    "sp_urls"
+  ]).filter((value) => value.includes("open.spotify.com/artist/"));
+}
+
+function extractSpotifyIdValues(record: Record<string, unknown>): string[] {
+  return extractStringValuesForKeys(record, [
+    "spotify_id",
+    "spotify_ids",
+    "spotifyId",
+    "spotifyIds",
+    "sp_artist_id",
+    "sp_artist_ids",
+    "spArtistId",
+    "spArtistIds"
+  ]).filter((value) => /^[a-zA-Z0-9]{16,32}$/.test(value));
+}
+
+function extractStringValuesForKeys(record: Record<string, unknown>, keys: string[]): string[] {
+  const values: string[] = [];
+  const visit = (value: unknown, depth: number) => {
+    if (depth > 3 || value === null || value === undefined) {
+      return;
+    }
+    if (typeof value === "string") {
+      values.push(value.trim());
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((entry) => visit(entry, depth + 1));
+      return;
+    }
+    if (typeof value === "object") {
+      const nested = value as Record<string, unknown>;
+      keys.forEach((key) => visit(nested[key], depth + 1));
+      if (depth < 2) {
+        Object.values(nested).forEach((entry) => {
+          if (typeof entry === "object" && entry !== null) {
+            visit(entry, depth + 1);
+          }
+        });
+      }
+    }
+  };
+
+  keys.forEach((key) => visit(record[key], 0));
+  ["urls", "external_urls", "externalUrls", "links", "platforms"].forEach((key) => visit(record[key], 0));
+  return values.filter((value) => value.length > 0);
+}
+
+function extractSpotifyIdFromUrl(url: string): string | undefined {
+  const match = /open\.spotify\.com\/artist\/([a-zA-Z0-9]+)/.exec(url);
+  return match?.[1];
+}
+
+function uniqueStrings(values: Array<string | undefined>): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+    const key = value.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(value);
+  }
+  return result;
+}
+
+function spotifyIdsMatch(left: string | undefined, right: string): boolean {
+  return Boolean(left && left.toLowerCase() === right.toLowerCase());
 }

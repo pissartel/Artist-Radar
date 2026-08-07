@@ -129,6 +129,7 @@ function buildMainArtistScaleScoreInput(
     youtubeSubscribers: profile.platformStats.youtubeSubscribers ?? undefined,
     youtubeViews: profile.platformStats.youtubeTotalViews ?? undefined,
     instagramFollowers: profile.platformStats.instagramFollowers ?? undefined,
+    deezerFans: profile.platformStats.deezerFans ?? undefined,
     measuredAt: metrics?.measuredAt,
     matchConfidence: metrics?.matchConfidence
   };
@@ -137,6 +138,7 @@ function buildMainArtistScaleScoreInput(
 function buildSimilarArtistScaleScoreInput(artist: SimilarArtist): ArtistScaleScoreInput {
   const metrics = artist.chartmetric?.metrics;
   const social = metrics?.socialAudience;
+  const lastFm = artist.popularity.platforms.lastfm;
 
   return {
     chartmetricArtistScore: metrics?.chartmetricArtistScore,
@@ -147,6 +149,8 @@ function buildSimilarArtistScaleScoreInput(artist: SimilarArtist): ArtistScaleSc
       ?? artist.estimatedFollowers
       ?? artist.popularity.platforms.spotify?.followers
       ?? undefined,
+    lastFmListeners: lastFm?.listeners ?? undefined,
+    lastFmPlaycount: lastFm?.playcount ?? undefined,
     engagementScore: artist.spotify?.popularity ?? artist.popularity.platforms.spotify?.popularity ?? undefined,
     instagramFollowers: social?.instagramFollowers ?? artist.popularity.platforms.instagram?.followers ?? undefined,
     // No TikTok data source exists anywhere in this codebase — Chartmetric-only.

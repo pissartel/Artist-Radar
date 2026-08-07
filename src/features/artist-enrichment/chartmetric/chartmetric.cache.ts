@@ -19,6 +19,10 @@ export interface ChartmetricIdentityMatch {
   chartmetricArtistId: string;
   matchMethod: ArtistMatchMethod;
   matchConfidence: ArtistMatchConfidence;
+  spotifyMonthlyListeners?: number;
+  spotifyFollowers?: number;
+  chartmetricArtistScore?: number;
+  primaryGenreSmart?: number;
 }
 
 // A cache entry preserves *why* a negative match failed (not found vs.

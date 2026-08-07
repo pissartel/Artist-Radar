@@ -44,6 +44,7 @@ import {
   type ChartmetricUsageGuardEnv
 } from "./chartmetric.usage-guard.js";
 import type { ArtistEnrichmentInput, ChartmetricSkipReason, SimilarArtistCandidateEnrichmentResult } from "./chartmetric.types.js";
+import type { ArtistTier, BookingCategory, SimilarArtistSource } from "../../../schemas.js";
 
 type FetchLike = typeof fetch;
 type ChartmetricSimilarArtistEnrichmentEnv = ChartmetricFeatureFlagEnv &
@@ -55,9 +56,16 @@ type ChartmetricSimilarArtistEnrichmentEnv = ChartmetricFeatureFlagEnv &
 
 export interface SimilarArtistCandidateInput extends ArtistEnrichmentInput {
   // Existing (non-Chartmetric) relevance ranking already computed upstream
-  // (e.g. totalRelevance), used only to pick which candidates fall inside
-  // the enriched top-N — higher enriches first.
+  // (e.g. totalRelevance), used as one input to pick which candidates fall
+  // inside the enriched top-N — higher enriches first.
   priority: number;
+  source?: SimilarArtistSource;
+  sources?: SimilarArtistSource[];
+  bookingCategory?: BookingCategory;
+  genreRelevance?: number;
+  sceneRelevance?: number;
+  artistTier?: ArtistTier;
+  estimatedFollowers?: number | null;
 }
 
 export interface EnrichSimilarArtistCandidatesInput {
@@ -85,7 +93,7 @@ export interface ChartmetricSimilarArtistEnrichmentOptions {
   overallTimeoutMs?: number;
 }
 
-const DEFAULT_CANDIDATE_LIMIT = 10;
+const DEFAULT_CANDIDATE_LIMIT = 20;
 const GROWTH_WINDOW_DAYS = 28;
 // Small concurrency window rather than fully sequential or fully parallel
 // calls: some throughput without hammering Chartmetric's rate limits (the
@@ -198,7 +206,15 @@ export class ChartmetricSimilarArtistEnrichmentService {
   }
 
   private selectTopCandidates(candidates: SimilarArtistCandidateInput[]): SimilarArtistCandidateInput[] {
-    return [...candidates].sort((a, b) => b.priority - a.priority).slice(0, this.candidateLimit);
+    return [...candidates]
+      .sort((a, b) => {
+        const bookingDelta = bookingDiscoveryPriority(b) - bookingDiscoveryPriority(a);
+        if (bookingDelta !== 0) {
+          return bookingDelta;
+        }
+        return b.priority - a.priority;
+      })
+      .slice(0, this.candidateLimit);
   }
 
   private skippedResult(candidateName: string, reason: ChartmetricSkipReason): SimilarArtistCandidateEnrichmentResult {
@@ -261,7 +277,11 @@ export class ChartmetricSimilarArtistEnrichmentService {
             matched: true as const,
             chartmetricArtistId: matchOutcome.chartmetricArtistId!,
             matchMethod: matchOutcome.matchMethod!,
-            matchConfidence: matchOutcome.matchConfidence!
+            matchConfidence: matchOutcome.matchConfidence!,
+            ...(matchOutcome.spotifyMonthlyListeners !== undefined ? { spotifyMonthlyListeners: matchOutcome.spotifyMonthlyListeners } : {}),
+            ...(matchOutcome.spotifyFollowers !== undefined ? { spotifyFollowers: matchOutcome.spotifyFollowers } : {}),
+            ...(matchOutcome.chartmetricArtistScore !== undefined ? { chartmetricArtistScore: matchOutcome.chartmetricArtistScore } : {}),
+            ...(matchOutcome.primaryGenreSmart !== undefined ? { primaryGenreSmart: matchOutcome.primaryGenreSmart } : {})
           };
         }
         return { matched: false as const, status: matchOutcome.status };
@@ -288,7 +308,11 @@ export class ChartmetricSimilarArtistEnrichmentService {
     const identity: ChartmetricIdentityMatch = {
       chartmetricArtistId: entry.chartmetricArtistId,
       matchMethod: entry.matchMethod,
-      matchConfidence: entry.matchConfidence
+      matchConfidence: entry.matchConfidence,
+      ...(entry.spotifyMonthlyListeners !== undefined ? { spotifyMonthlyListeners: entry.spotifyMonthlyListeners } : {}),
+      ...(entry.spotifyFollowers !== undefined ? { spotifyFollowers: entry.spotifyFollowers } : {}),
+      ...(entry.chartmetricArtistScore !== undefined ? { chartmetricArtistScore: entry.chartmetricArtistScore } : {}),
+      ...(entry.primaryGenreSmart !== undefined ? { primaryGenreSmart: entry.primaryGenreSmart } : {})
     };
 
     return this.fetchCandidateMetrics(candidate, identity, mainArtistChartmetricId, cacheHit);
@@ -309,7 +333,12 @@ export class ChartmetricSimilarArtistEnrichmentService {
           : await this.metricsCache.getOrCreate(identity.chartmetricArtistId, async () => {
               const outcome = await this.client.getArtistStats(identity.chartmetricArtistId);
               this.creditBudget.record(outcome.reportedCredits ?? ESTIMATED_CREDITS_PER_ENDPOINT.stats);
-              return mapToAudienceMetrics(identity.chartmetricArtistId, candidate.spotifyArtistId ?? null, outcome.data, identity.matchConfidence);
+              return mapToAudienceMetrics(identity.chartmetricArtistId, candidate.spotifyArtistId ?? null, outcome.data, identity.matchConfidence, undefined, {
+                spotifyMonthlyListeners: identity.spotifyMonthlyListeners,
+                spotifyFollowers: identity.spotifyFollowers,
+                chartmetricArtistScore: identity.chartmetricArtistScore,
+                primaryGenreSmart: identity.primaryGenreSmart
+              });
             });
     } catch (error) {
       return { ...this.mapClientError(candidate.artistName, error, "stats"), cacheHit };
@@ -454,6 +483,55 @@ export class ChartmetricSimilarArtistEnrichmentService {
     });
     return { provider: "chartmetric", candidateName, status: "error", reason: "unexpected_error" };
   }
+}
+
+function bookingDiscoveryPriority(candidate: SimilarArtistCandidateInput): number {
+  let score = candidate.priority;
+  switch (candidate.bookingCategory) {
+    case "local_peer":
+      score += 700;
+      break;
+    case "regional_peer":
+      score += 650;
+      break;
+    case "support_target":
+      score += 600;
+      break;
+    case "to_verify":
+      score += hasLastFmSource(candidate) ? 430 : 220;
+      break;
+    case "reference":
+      score -= 350;
+      break;
+    case "unknown":
+    default:
+      score += hasLastFmSource(candidate) ? 180 : 0;
+      break;
+  }
+
+  if (hasLastFmSource(candidate)) {
+    score += 250;
+  }
+  if (candidate.source === "spotify_search" || candidate.source === "spotify_related") {
+    score -= 75;
+  }
+  if (candidate.artistTier === "large") {
+    score -= 150;
+  }
+  if ((candidate.estimatedFollowers ?? 0) >= 1_000_000) {
+    score -= 300;
+  }
+  if ((candidate.genreRelevance ?? 0) >= 80) {
+    score += 80;
+  } else if ((candidate.genreRelevance ?? 0) < 60) {
+    score -= 80;
+  }
+
+  return score;
+}
+
+function hasLastFmSource(candidate: SimilarArtistCandidateInput): boolean {
+  return candidate.source === "lastfm_similar" || (candidate.sources ?? []).includes("lastfm_similar");
 }
 
 function parseLimit(value: string | undefined, fallback: number): number {

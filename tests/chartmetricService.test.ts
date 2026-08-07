@@ -67,6 +67,42 @@ describe("ChartmetricArtistEnrichmentProvider.enrichArtist", () => {
     expect(result.metrics?.spotifyFollowers).toBeUndefined();
   });
 
+  it("uses fallback metrics from a verified exact-name search result when stats are empty", async () => {
+    const client = fakeClient({
+      getArtistBySpotifyId: vi.fn().mockResolvedValue({ data: null, retryCount: 0, durationMs: 5 }),
+      searchArtistsByName: vi.fn().mockResolvedValue({
+        data: [{
+          id: 13176332,
+          name: "Tuesday Fall",
+          verified: true,
+          spotifyMonthlyListeners: 169,
+          spotifyFollowers: 98,
+          chartmetricArtistScore: 0.7787992911203467,
+          primaryGenreSmart: 501460
+        }],
+        retryCount: 0,
+        durationMs: 5
+      }),
+      getArtistStats: vi.fn().mockResolvedValue({ data: { latest: null, history: [] }, retryCount: 0, durationMs: 5 })
+    });
+    const provider = buildProvider({ client });
+
+    const result = await provider.enrichArtist({
+      artistName: "Tuesday Fall",
+      spotifyUrl: "https://open.spotify.com/artist/2RO6dHJK11CKcEg1G7XYps",
+      genres: ["pop punk"],
+      city: "Paris"
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.matchMethod).toBe("name_with_genre_location");
+    expect(result.matchConfidence).toBe("high");
+    expect(result.metrics?.spotifyMonthlyListeners).toBe(169);
+    expect(result.metrics?.spotifyFollowers).toBe(98);
+    expect(result.metrics?.chartmetricArtistScore).toBe(0.7787992911203467);
+    expect(result.metrics?.primaryGenreSmart).toBe(501460);
+  });
+
   it("is skipped when the preview/dev request toggle is off", async () => {
     const provider = buildProvider({ env: { VERCEL_ENV: "development" }, requestToggleEnabled: false });
     const result = await provider.enrichArtist(BASE_INPUT);

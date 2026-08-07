@@ -67,7 +67,7 @@ function joinLocation(city?: string | null, country?: string | null): string {
   return [dedupedCity, country].filter((part): part is string => Boolean(part)).join(", ");
 }
 
-function mapArtistProfile(profile: BackendArtistProfile, request: ArtistRadarRequest): ArtistProfile {
+function mapArtistProfile(profile: BackendArtistProfile, request: ArtistRadarRequest, chartmetric?: BackendPipelineResult["chartmetric"]): ArtistProfile {
   const name = profile.artistName ?? request.artistName;
   const city = profile.city ?? request.location;
   const country = profile.country ?? "";
@@ -84,6 +84,9 @@ function mapArtistProfile(profile: BackendArtistProfile, request: ArtistRadarReq
   if (profile.socialLinks.youtubeUrl) {
     platforms.push({ type: "youtube", url: profile.socialLinks.youtubeUrl });
   }
+  if (profile.socialLinks.deezerUrl) {
+    platforms.push({ type: "deezer", url: profile.socialLinks.deezerUrl });
+  }
 
   return {
     id: slugify(name),
@@ -92,27 +95,31 @@ function mapArtistProfile(profile: BackendArtistProfile, request: ArtistRadarReq
     location: joinLocation(city, country) || city,
     city,
     country,
-    monthlyListeners: profile.spotify?.followers ?? profile.platformStats.spotifyFollowers ?? 0,
+    monthlyListeners: chartmetric?.metrics?.spotifyMonthlyListeners ?? 0,
     growthPercent: 0,
     imageUrl: profile.imageUrl ?? undefined,
     imageSource: profile.imageSource ?? null,
     imageConfidence: profile.imageConfidence ?? null,
     platforms,
     spotify: profile.spotify ?? undefined,
-    metrics: mapArtistMetrics(profile, genres),
+    metrics: mapArtistMetrics(profile, genres, chartmetric),
   };
 }
 
 // Spotify's public API does not expose monthly listener counts, so that
 // field stays null rather than being inferred from followers.
-function mapArtistMetrics(profile: BackendArtistProfile, genres: string[]): ArtistMetrics {
-  return {
-    monthlyListeners: null,
+function mapArtistMetrics(profile: BackendArtistProfile, genres: string[], chartmetric?: BackendPipelineResult["chartmetric"]): ArtistMetrics {
+  const metrics: ArtistMetrics = {
+    monthlyListeners: chartmetric?.metrics?.spotifyMonthlyListeners ?? null,
     followers: profile.platformStats.spotifyFollowers ?? null,
     popularityScore: profile.platformStats.spotifyPopularity ?? null,
     mainGenre: genres[0] ?? null,
     spotifyUrl: profile.socialLinks.spotifyUrl ?? null,
   };
+  if (typeof profile.platformStats.deezerFans === "number") {
+    metrics.deezerFans = profile.platformStats.deezerFans;
+  }
+  return metrics;
 }
 
 function mapSimilarArtist(artist: BackendSimilarArtist): SimilarArtist {
@@ -417,7 +424,14 @@ export function mapPipelineResultToArtistRadarResponse(
   request: ArtistRadarRequest
 ): ArtistRadarResponse {
   const includeBooking = request.enableBooking !== false;
-  const similarArtists = Object.values(result.similarArtists).flat().map(mapSimilarArtist);
+  const similarArtists = [
+    ...(result.similarArtists.local_peer ?? []),
+    ...(result.similarArtists.regional_peer ?? []),
+    ...(result.similarArtists.support_target ?? []),
+    ...(result.similarArtists.to_verify ?? []),
+    ...(result.similarArtists.reference ?? []),
+    ...(result.similarArtists.unknown ?? [])
+  ].map(mapSimilarArtist);
   const backendOpportunities = includeBooking ? result.opportunities : [];
   const droppedDuringFrontendMapping: Array<{ name: string; type: string; reason: string }> = [];
   const bookingOpportunities = backendOpportunities.flatMap((opportunity) => {
@@ -435,7 +449,7 @@ export function mapPipelineResultToArtistRadarResponse(
   const warnings = includeBooking ? (result.bookingSearch?.warnings ?? []) : [];
 
   return {
-    artist: mapArtistProfile(result.artistProfile, request),
+    artist: mapArtistProfile(result.artistProfile, request, result.chartmetric),
     kpis: buildKpis(similarArtists, bookingOpportunities),
     similarArtists,
     bookingOpportunities,

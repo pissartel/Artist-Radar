@@ -72,10 +72,12 @@ export interface BackendArtistProfile {
     spotifyUrl?: string | null;
     youtubeUrl?: string | null;
     instagramUrl?: string | null;
+    deezerUrl?: string | null;
   };
   platformStats: {
     spotifyFollowers?: number | null;
     spotifyPopularity?: number | null;
+    deezerFans?: number | null;
   };
   spotify?: BackendSpotifyMetadata | null;
   imageUrl?: string | null;
@@ -127,6 +129,15 @@ export interface BackendChartmetricDiagnostics {
   finalCommercialTier?: BackendCommercialTier;
   scoreCoverage?: number;
   scoreConfidence?: BackendCommercialScoreConfidence;
+}
+
+export interface BackendChartmetricArtistResult {
+  provider: "chartmetric";
+  status: string;
+  metrics?: {
+    spotifyMonthlyListeners?: number;
+    spotifyFollowers?: number;
+  };
 }
 
 // Issue #219: cross-platform commercial-scale band/confidence vocabulary —
@@ -405,6 +416,7 @@ export interface BackendPipelineResult {
   // independently of the concert-oriented booking pipeline since labels
   // aren't event-based (see src/pipeline.ts OpportunitySearchRunResult).
   labelOpportunities?: BackendLabelOpportunity[];
+  chartmetric?: BackendChartmetricArtistResult;
   // Cross-platform artistScaleScore for the analyzed artist plus its
   // comparison against the similar-artist sample (issue #219). Always
   // populated by the backend (with `artistScaleScore: null`/

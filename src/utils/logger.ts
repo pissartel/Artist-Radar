@@ -1,4 +1,4 @@
-export type DebugScope = "spotify" | "lastfm" | "musicbrainz" | "wikidata" | "firecrawl" | "web-search" | "artist-verification" | "artist-consolidation" | "similar-artists" | "seeds" | "profile" | "youtube" | "events" | "pipeline" | "booking" | "genre" | "sources" | "enrichment" | "concert-history" | "ticketmaster" | "openai-concerts" | "labels" | "chartmetric" | "concerts50";
+export type DebugScope = "spotify" | "lastfm" | "musicbrainz" | "wikidata" | "firecrawl" | "web-search" | "artist-verification" | "artist-consolidation" | "similar-artists" | "seeds" | "profile" | "youtube" | "deezer" | "events" | "pipeline" | "booking" | "genre" | "sources" | "enrichment" | "concert-history" | "ticketmaster" | "openai-concerts" | "labels" | "chartmetric" | "concerts50";
 
 const DEBUG_FLAG_BY_SCOPE: Record<DebugScope, string> = {
   spotify: "DEBUG_SPOTIFY",
@@ -13,6 +13,7 @@ const DEBUG_FLAG_BY_SCOPE: Record<DebugScope, string> = {
   seeds: "DEBUG_SEEDS",
   profile: "DEBUG_PROFILE",
   youtube: "DEBUG_YOUTUBE",
+  deezer: "DEBUG_DEEZER",
   events: "DEBUG_EVENTS",
   pipeline: "DEBUG_PIPELINE",
   booking: "DEBUG_BOOKING",

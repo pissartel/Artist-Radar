@@ -176,7 +176,11 @@ export class ChartmetricArtistEnrichmentProvider implements ArtistEnrichmentProv
             matched: true as const,
             chartmetricArtistId: matchOutcome.chartmetricArtistId!,
             matchMethod: matchOutcome.matchMethod!,
-            matchConfidence: matchOutcome.matchConfidence!
+            matchConfidence: matchOutcome.matchConfidence!,
+            ...(matchOutcome.spotifyMonthlyListeners !== undefined ? { spotifyMonthlyListeners: matchOutcome.spotifyMonthlyListeners } : {}),
+            ...(matchOutcome.spotifyFollowers !== undefined ? { spotifyFollowers: matchOutcome.spotifyFollowers } : {}),
+            ...(matchOutcome.chartmetricArtistScore !== undefined ? { chartmetricArtistScore: matchOutcome.chartmetricArtistScore } : {}),
+            ...(matchOutcome.primaryGenreSmart !== undefined ? { primaryGenreSmart: matchOutcome.primaryGenreSmart } : {})
           };
         }
         return { matched: false as const, status: matchOutcome.status };
@@ -211,7 +215,11 @@ export class ChartmetricArtistEnrichmentProvider implements ArtistEnrichmentProv
     const identity: ChartmetricIdentityMatch = {
       chartmetricArtistId: entry.chartmetricArtistId,
       matchMethod: entry.matchMethod,
-      matchConfidence: entry.matchConfidence
+      matchConfidence: entry.matchConfidence,
+      ...(entry.spotifyMonthlyListeners !== undefined ? { spotifyMonthlyListeners: entry.spotifyMonthlyListeners } : {}),
+      ...(entry.spotifyFollowers !== undefined ? { spotifyFollowers: entry.spotifyFollowers } : {}),
+      ...(entry.chartmetricArtistScore !== undefined ? { chartmetricArtistScore: entry.chartmetricArtistScore } : {}),
+      ...(entry.primaryGenreSmart !== undefined ? { primaryGenreSmart: entry.primaryGenreSmart } : {})
     };
     return this.fetchMetrics(input, identity);
   }
@@ -232,7 +240,12 @@ export class ChartmetricArtistEnrichmentProvider implements ArtistEnrichmentProv
           const outcome = await this.client.getArtistStats(identity.chartmetricArtistId);
           retryCount = outcome.retryCount;
           reportedCredits = outcome.reportedCredits;
-          return mapToAudienceMetrics(identity.chartmetricArtistId, input.spotifyArtistId ?? null, outcome.data, identity.matchConfidence);
+          return mapToAudienceMetrics(identity.chartmetricArtistId, input.spotifyArtistId ?? null, outcome.data, identity.matchConfidence, undefined, {
+            spotifyMonthlyListeners: identity.spotifyMonthlyListeners,
+            spotifyFollowers: identity.spotifyFollowers,
+            chartmetricArtistScore: identity.chartmetricArtistScore,
+            primaryGenreSmart: identity.primaryGenreSmart
+          });
         });
       }
     } catch (error) {

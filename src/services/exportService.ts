@@ -21,7 +21,7 @@ export interface ExportPaths {
 export interface BookingRequestOutputInput {
   artistData: OpportunitySearchRunResult["artistProfile"];
   similarArtists: OpportunitySearchRunResult["similarArtists"];
-  bookingResult: Pick<OpportunitySearchRunResult, "opportunities" | "venueCandidates" | "eventCandidates" | "bookingSearch" | "labelOpportunities">;
+  bookingResult: Pick<OpportunitySearchRunResult, "opportunities" | "venueCandidates" | "eventCandidates" | "bookingSearch" | "labelOpportunities" | "chartmetric">;
   outputDir: string;
 }
 
@@ -59,6 +59,13 @@ interface ArtistBookingOutput {
     location: string | null;
     country: string | null;
     monthlyListeners: number | null;
+    spotifyFollowers: number | null;
+    spotifyPopularity: number | null;
+    deezerFans: number | null;
+    chartmetricStatus: NonNullable<OpportunitySearchRunResult["chartmetric"]>["status"] | null;
+    chartmetricReason: NonNullable<OpportunitySearchRunResult["chartmetric"]>["reason"] | null;
+    chartmetricArtistScore: number | null;
+    chartmetricPrimaryGenreSmart: number | null;
     bandSize: number | null;
     sourceUrls: string[];
     confidenceScore: number;
@@ -101,6 +108,10 @@ const similarArtistCsvFields = [
   "instagramUrl",
   "youtubeUrl",
   "verificationStatus",
+  "artistScaleScore",
+  "artistScaleBand",
+  "artistScaleScoreConfidence",
+  "artistScaleScoreCoverage",
   "totalRelevance",
   "genreRelevance",
   "localRelevance",
@@ -219,7 +230,7 @@ export async function writeBookingRequestOutputs({
   const sourceMetadata = bookingResult.bookingSearch?.sourceMetadata ?? [];
   const sourcesUsed = bookingResult.bookingSearch?.sourcesUsed ?? collectSourcesUsed(bookingResult.opportunities);
   const rejectedByReason = bookingResult.bookingSearch?.rejectedByReason ?? null;
-  const artistOutput = buildArtistOutput(artistData);
+  const artistOutput = buildArtistOutput(artistData, bookingResult.chartmetric);
   const similarArtistsOutput = {
     similarArtists: flattenedSimilarArtists.map(mapSimilarArtistForBookingOutput),
     warnings: []
@@ -305,8 +316,8 @@ export function flattenSimilarArtists(similarArtists: Record<BookingCategory, Si
     ...similarArtists.local_peer,
     ...similarArtists.regional_peer,
     ...similarArtists.support_target,
-    ...similarArtists.reference,
     ...similarArtists.to_verify,
+    ...similarArtists.reference,
     ...similarArtists.unknown
   ];
 }
@@ -354,14 +365,27 @@ async function writeBookingJsonFile(
   }
 }
 
-function buildArtistOutput(artistProfile: OpportunitySearchRunResult["artistProfile"]): ArtistBookingOutput {
+function buildArtistOutput(
+  artistProfile: OpportunitySearchRunResult["artistProfile"],
+  chartmetric: OpportunitySearchRunResult["chartmetric"] | undefined
+): ArtistBookingOutput {
+  const chartmetricHasAudienceMetrics =
+    chartmetric?.metrics?.spotifyMonthlyListeners !== undefined || chartmetric?.metrics?.spotifyFollowers !== undefined;
+
   return {
     artist: {
       name: artistProfile.artistName ?? null,
       genres: artistProfile.genres,
       location: artistProfile.city ?? null,
       country: artistProfile.country ?? null,
-      monthlyListeners: artistProfile.platformStats.spotifyFollowers ?? null,
+      monthlyListeners: chartmetric?.metrics?.spotifyMonthlyListeners ?? null,
+      spotifyFollowers: chartmetric?.metrics?.spotifyFollowers ?? artistProfile.platformStats.spotifyFollowers ?? null,
+      spotifyPopularity: artistProfile.platformStats.spotifyPopularity ?? null,
+      deezerFans: artistProfile.platformStats.deezerFans ?? null,
+      chartmetricStatus: chartmetric?.status ?? null,
+      chartmetricReason: chartmetric?.reason ?? null,
+      chartmetricArtistScore: chartmetric?.metrics?.chartmetricArtistScore ?? null,
+      chartmetricPrimaryGenreSmart: chartmetric?.metrics?.primaryGenreSmart ?? null,
       bandSize: null,
       sourceUrls: collectArtistSourceUrls(artistProfile),
       confidenceScore: Math.round(artistProfile.confidence * 100),
@@ -369,8 +393,25 @@ function buildArtistOutput(artistProfile: OpportunitySearchRunResult["artistProf
       imageSource: artistProfile.imageSource ?? null,
       imageConfidence: artistProfile.imageConfidence ?? null
     },
-    warnings: artistProfile.notes
+    warnings: buildArtistWarnings(artistProfile.notes, chartmetricHasAudienceMetrics)
   };
+}
+
+function buildArtistWarnings(notes: string[], chartmetricHasAudienceMetrics: boolean): string[] {
+  if (!chartmetricHasAudienceMetrics) {
+    return notes;
+  }
+
+  const staleSizeWarnings = new Set([
+    "Estimated level is unknown because no platform stats were provided.",
+    "Size signals used: unknown.",
+    "Size reasons: No reliable audience metrics available from configured providers."
+  ]);
+
+  return [
+    ...notes.filter((note) => !staleSizeWarnings.has(note)),
+    "Chartmetric audience metrics were fetched and merged into the artist output."
+  ];
 }
 
 function mapSimilarArtistForBookingOutput(artist: SimilarArtist): Record<string, unknown> {
@@ -384,7 +425,35 @@ function mapSimilarArtistForBookingOutput(artist: SimilarArtist): Record<string,
     sourceUrls: artist.sourceUrls,
     imageUrl: artist.imageUrl ?? null,
     imageSource: artist.imageSource ?? null,
-    imageConfidence: artist.imageConfidence ?? null
+    imageConfidence: artist.imageConfidence ?? null,
+    artistScaleScore: artist.artistScaleScore ?? null,
+    artistScaleBand: artist.artistScaleBand ?? null,
+    artistScaleScoreConfidence: artist.artistScaleScoreConfidence ?? null,
+    artistScaleScoreCoverage: artist.artistScaleScoreCoverage ?? null,
+    chartmetricStatus: artist.chartmetric?.status ?? null,
+    chartmetricMatchMethod: artist.chartmetric?.matchMethod ?? null,
+    chartmetricMatchConfidence: artist.chartmetric?.matchConfidence ?? null,
+    chartmetricSpotifyMonthlyListeners: artist.chartmetric?.metrics?.spotifyMonthlyListeners ?? null,
+    chartmetricSpotifyFollowers: artist.chartmetric?.metrics?.spotifyFollowers ?? null,
+    chartmetricArtistScore: artist.chartmetric?.metrics?.chartmetricArtistScore ?? null,
+    chartmetricPrimaryGenreSmart: artist.chartmetric?.metrics?.primaryGenreSmart ?? null,
+    popularity: artist.popularity,
+    estimatedFollowers: artist.estimatedFollowers ?? null,
+    estimatedPopularity: artist.estimatedPopularity ?? null,
+    bookingCategory: artist.bookingCategory,
+    artistTier: artist.artistTier,
+    possibleUse: artist.possibleUse,
+    genreRelevance: artist.genreRelevance,
+    localRelevance: artist.localRelevance,
+    sizeRelevance: artist.sizeRelevance,
+    sceneRelevance: artist.sceneRelevance,
+    totalRelevance: artist.totalRelevance,
+    relevanceToUserArtist: artist.relevanceToUserArtist,
+    verificationStatus: artist.verificationStatus,
+    spotifyUrl: artist.spotifyUrl ?? null,
+    spotifyId: artist.spotifyId ?? null,
+    instagramUrl: artist.instagramUrl ?? null,
+    youtubeUrl: artist.youtubeUrl ?? null
   };
 }
 
@@ -396,7 +465,8 @@ function collectArtistSourceUrls(artistProfile: OpportunitySearchRunResult["arti
   return [
     artistProfile.socialLinks.spotifyUrl,
     artistProfile.socialLinks.youtubeUrl,
-    artistProfile.socialLinks.instagramUrl
+    artistProfile.socialLinks.instagramUrl,
+    artistProfile.socialLinks.deezerUrl
   ].filter((url): url is string => Boolean(url));
 }
 

@@ -7,6 +7,7 @@ function fakeClient(overrides: Partial<ChartmetricClient> = {}): ChartmetricClie
   return {
     getArtistBySpotifyId: vi.fn().mockResolvedValue({ data: null, retryCount: 0, durationMs: 1 }),
     searchArtistsByName: vi.fn().mockResolvedValue({ data: [], retryCount: 0, durationMs: 1 }),
+    getArtistUrls: vi.fn().mockResolvedValue({ data: { spotifyIds: [], spotifyUrls: [] }, retryCount: 0, durationMs: 1 }),
     getArtistStats: vi.fn(),
     ...overrides
   } as unknown as ChartmetricClient;
@@ -68,6 +69,93 @@ describe("matchChartmetricArtist", () => {
     expect(outcome.chartmetricArtistId).toBeUndefined();
   });
 
+  it("uses a known Spotify ID to disambiguate multiple exact-name candidates", async () => {
+    const client = fakeClient({
+      searchArtistsByName: vi.fn().mockResolvedValue({
+        data: [
+          { id: 1, name: "Broad Peak", spotifyId: "other-spotify-id" },
+          {
+            id: 2,
+            name: "Broad Peak",
+            spotifyId: "SPOTIFY123",
+            spotifyMonthlyListeners: 3766,
+            spotifyFollowers: 1346
+          }
+        ],
+        retryCount: 0,
+        durationMs: 1
+      })
+    });
+
+    const outcome = await matchChartmetricArtist({ ...baseInput, spotifyArtistId: "spotify123" }, client);
+
+    expect(outcome).toEqual({
+      status: "matched",
+      chartmetricArtistId: "2",
+      matchMethod: "name_with_platform_links",
+      matchConfidence: "high",
+      spotifyMonthlyListeners: 3766,
+      spotifyFollowers: 1346
+    });
+  });
+
+  it("uses Chartmetric artist URLs to disambiguate exact-name candidates when search results omit Spotify codes", async () => {
+    const getArtistUrls = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: { spotifyIds: [], spotifyUrls: ["https://open.spotify.com/artist/other"] },
+        retryCount: 0,
+        durationMs: 1
+      })
+      .mockResolvedValueOnce({
+        data: { spotifyIds: [], spotifyUrls: ["https://open.spotify.com/artist/4r903oqNo1mfW3mIg1TjIk"] },
+        retryCount: 0,
+        durationMs: 1
+      });
+    const client = fakeClient({
+      searchArtistsByName: vi.fn().mockResolvedValue({
+        data: [
+          { id: 1, name: "TYDEAL" },
+          { id: 2, name: "TYDEAL", spotifyMonthlyListeners: 3766, spotifyFollowers: 1346 }
+        ],
+        retryCount: 0,
+        durationMs: 1
+      }),
+      getArtistUrls
+    });
+
+    const outcome = await matchChartmetricArtist({ artistName: "TYDEAL", spotifyArtistId: "4r903oqNo1mfW3mIg1TjIk" }, client);
+
+    expect(getArtistUrls).toHaveBeenCalledWith("1");
+    expect(getArtistUrls).toHaveBeenCalledWith("2");
+    expect(outcome).toEqual({
+      status: "matched",
+      chartmetricArtistId: "2",
+      matchMethod: "name_with_platform_links",
+      matchConfidence: "high",
+      spotifyMonthlyListeners: 3766,
+      spotifyFollowers: 1346
+    });
+  });
+
+  it("does not treat an input Spotify URL as corroboration when the Chartmetric candidate has no matching platform ID", async () => {
+    const client = fakeClient({
+      searchArtistsByName: vi.fn().mockResolvedValue({
+        data: [{ id: 13176332, name: "TYDEAL", verified: true }],
+        retryCount: 0,
+        durationMs: 1
+      })
+    });
+
+    const outcome = await matchChartmetricArtist({
+      artistName: "TYDEAL",
+      spotifyUrl: "https://open.spotify.com/artist/4r903oqNo1mfW3mIg1TjIk"
+    }, client);
+
+    expect(outcome.status).toBe("low_confidence");
+    expect(outcome.matchConfidence).toBe("low");
+  });
+
   it("matches with high confidence when a single name candidate's known Spotify ID lines up", async () => {
     const client = fakeClient({
       searchArtistsByName: vi.fn().mockResolvedValue({
@@ -94,6 +182,30 @@ describe("matchChartmetricArtist", () => {
     const outcome = await matchChartmetricArtist({ ...baseInput, genres: ["pop punk"], city: "Lyon" }, client);
     expect(outcome.status).toBe("low_confidence");
     expect(outcome.matchConfidence).toBe("medium");
+  });
+
+  it("matches a unique verified exact-name candidate with high confidence when corroborating evidence is present", async () => {
+    const client = fakeClient({
+      searchArtistsByName: vi.fn().mockResolvedValue({
+        data: [{ id: 13176332, name: "Tuesday Fall", verified: true }],
+        retryCount: 0,
+        durationMs: 1
+      })
+    });
+
+    const outcome = await matchChartmetricArtist({
+      artistName: "Tuesday Fall",
+      spotifyUrl: "https://open.spotify.com/artist/2RO6dHJK11CKcEg1G7XYps",
+      genres: ["pop punk"],
+      city: "Paris"
+    }, client);
+
+    expect(outcome).toEqual({
+      status: "matched",
+      chartmetricArtistId: "13176332",
+      matchMethod: "name_with_genre_location",
+      matchConfidence: "high"
+    });
   });
 
   it("returns low_confidence (low) for a single name candidate with zero corroborating evidence", async () => {

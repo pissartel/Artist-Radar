@@ -5,6 +5,7 @@ import {
   groupSimilarArtistsByTier,
   mapSpotifyArtistToSimilarArtist,
   scoreGenreRelevance,
+  scoreSceneRelevance,
   scoreSizeRelevance
 } from "../src/modules/similarArtistsFinder.js";
 import type { ArtistProfile, SimilarArtist } from "../src/schemas.js";
@@ -83,6 +84,163 @@ describe("findSimilarArtists", () => {
     expect(searchCalls).toBe(0);
     expect(artists).toHaveLength(1);
     expect(artists[0]?.source).toBe("spotify_related");
+  });
+
+  it("backfills Spotify identity for more than ten Last.fm-discovered peers by name", async () => {
+    const lastFmNames = Array.from({ length: 12 }, (_, index) => `Lastfm Peer ${index + 1}`);
+    const searchByNameCalls: string[] = [];
+
+    const artists = await findSimilarArtists({
+      profile,
+      target: "France",
+      genre: "pop punk",
+      city: "Paris",
+      seedCandidates: [],
+      env: {
+        MOCK_AI: "false",
+        SPOTIFY_CLIENT_ID: "client",
+        SPOTIFY_CLIENT_SECRET: "secret",
+        ENABLE_SPOTIFY_RELATED_ARTISTS: "false",
+        VERIFY_SIMILAR_ARTISTS: "false"
+      },
+      lastfmSimilarArtists: async () => lastFmNames.map((name, index) => ({
+        name,
+        url: `https://www.last.fm/music/${encodeURIComponent(name)}`,
+        match: 0.98 - index * 0.01
+      })),
+      spotifySearch: async () => [],
+      spotifySearchByName: async (name) => {
+        searchByNameCalls.push(name);
+        return spotifyArtist(`spotify-${name.toLowerCase().replaceAll(" ", "-")}`, name, 2_000, 18, ["pop punk"]);
+      }
+    });
+
+    const lastFmArtists = artists.filter((artist) => artist.sources.includes("lastfm_similar"));
+    expect(searchByNameCalls).toHaveLength(12);
+    expect(lastFmArtists).toHaveLength(12);
+    expect(lastFmArtists.every((artist) => artist.spotifyId)).toBe(true);
+  });
+
+  it("keeps Last.fm source evidence and a similarity signal when a retained candidate is not consolidated", async () => {
+    const artists = await findSimilarArtists({
+      profile,
+      target: "France",
+      genre: "pop punk",
+      city: "Paris",
+      seedCandidates: [],
+      env: {
+        MOCK_AI: "false",
+        LASTFM_API_KEY: "key",
+        CONSOLIDATE_SIMILAR_ARTISTS: "true",
+        CONSOLIDATE_SIMILAR_ARTISTS_LIMIT: "0",
+        ENABLE_SPOTIFY_DEEP_ENRICHMENT: "false",
+        ENABLE_SPOTIFY_RELATED_ARTISTS: "false"
+      },
+      lastfmSimilarArtists: async () => [
+        {
+          name: "TYDEAL",
+          url: "https://www.last.fm/music/TYDEAL",
+          match: 0.94
+        }
+      ],
+      spotifySearch: async () => []
+    });
+
+    const tydeal = artists.find((artist) => artist.name === "TYDEAL");
+    expect(tydeal).toBeDefined();
+    expect(tydeal?.sourceUrls).toContain("https://www.last.fm/music/tydeal");
+    expect(tydeal?.genreRelevance).toBeGreaterThanOrEqual(55);
+  });
+
+  it("does not mirror Last.fm playcount into YouTube popularity fields", async () => {
+    const artists = await findSimilarArtists({
+      profile,
+      target: "France",
+      genre: "pop punk",
+      city: "Paris",
+      seedCandidates: [],
+      env: {
+        MOCK_AI: "false",
+        LASTFM_API_KEY: "key",
+        CONSOLIDATE_SIMILAR_ARTISTS: "true",
+        ENABLE_SPOTIFY_DEEP_ENRICHMENT: "false",
+        ENABLE_SPOTIFY_RELATED_ARTISTS: "false"
+      },
+      lastfmSimilarArtists: async () => [
+        {
+          name: "Broad Peak",
+          url: "https://www.last.fm/music/Broad+Peak",
+          match: 0.94
+        }
+      ],
+      lastfmArtistInfo: async () => ({
+        name: "Broad Peak",
+        url: "https://www.last.fm/music/Broad+Peak",
+        listeners: 1378,
+        playcount: 6754,
+        tags: []
+      }),
+      spotifySearch: async () => []
+    });
+
+    const broadPeak = artists.find((artist) => artist.name === "Broad Peak");
+    expect(broadPeak?.popularity.platforms.lastfm?.playcount).toBe(6754);
+    expect(broadPeak?.popularity.platforms.youtube).toBeUndefined();
+  });
+
+  it("penalizes artists from a known country outside the requested French market", () => {
+    expect(scoreSceneRelevance({ city: null, country: "CA" }, "grandes villes françaises", "Paris")).toBeLessThan(40);
+    expect(scoreSceneRelevance({ city: null, country: "France" }, "grandes villes françaises", "Paris")).toBe(85);
+  });
+
+  it("does not rank a Canadian adjacent-genre artist above an unknown-country Last.fm peer for a France search", async () => {
+    const artists = await findSimilarArtists({
+      profile,
+      target: "grandes villes françaises",
+      genre: "pop punk",
+      city: "Paris",
+      seedCandidates: [],
+      env: {
+        MOCK_AI: "false",
+        LASTFM_API_KEY: "key",
+        CONSOLIDATE_SIMILAR_ARTISTS: "true",
+        ENABLE_SPOTIFY_DEEP_ENRICHMENT: "false",
+        ENABLE_SPOTIFY_RELATED_ARTISTS: "false"
+      },
+      lastfmSimilarArtists: async () => [
+        { name: "Broad Peak", url: "https://www.last.fm/music/Broad+Peak", match: 0.96 },
+        { name: "allsinners", url: "https://www.last.fm/music/allsinners", match: 0.96 }
+      ],
+      lastfmArtistInfo: async (name) => ({
+        name,
+        url: `https://www.last.fm/music/${encodeURIComponent(name)}`,
+        listeners: name === "Broad Peak" ? 1378 : 832,
+        playcount: name === "Broad Peak" ? 6754 : 2353,
+        tags: name === "allsinners" ? ["post-hardcore"] : []
+      }),
+      musicBrainzSearch: async (name) => name === "allsinners"
+        ? {
+            musicBrainzId: "mb-allsinners",
+            name: "allsinners",
+            country: "CA",
+            area: "Canada",
+            beginArea: null,
+            tags: [],
+            sourceUrl: "https://musicbrainz.org/artist/mb-allsinners",
+            score: 100
+          }
+        : null,
+      spotifySearch: async () => []
+    });
+
+    const broadPeak = artists.find((artist) => artist.name === "Broad Peak");
+    const allsinners = artists.find((artist) => artist.name === "allsinners");
+
+    expect(broadPeak).toBeDefined();
+    expect(allsinners).toBeDefined();
+    expect(allsinners?.localRelevance).toBeLessThan(40);
+    expect(allsinners?.bookingCategory).toBe("reference");
+    expect(broadPeak?.totalRelevance ?? 0).toBeGreaterThan(allsinners?.totalRelevance ?? 0);
   });
 
   it("prints provider counts when DEBUG_SIMILAR_ARTISTS is true", async () => {
@@ -352,6 +510,52 @@ describe("findSimilarArtists", () => {
     expect(broadPeak?.spotifyId).toBe("broad-peak-spotify-id");
     expect(broadPeak?.spotify?.followers).toBe(42_000);
     expect(broadPeak?.imageUrl).toBe("https://image.example/broad-peak.jpg");
+  });
+
+  it("falls back to per-id Spotify lookups when batch enrichment fails", async () => {
+    const artists = await findSimilarArtists({
+      profile,
+      target: "France",
+      genre: "pop punk",
+      city: "Paris",
+      seedCandidates: [],
+      env: {
+        MOCK_AI: "false",
+        SPOTIFY_CLIENT_ID: "client",
+        SPOTIFY_CLIENT_SECRET: "secret",
+        ENABLE_SPOTIFY_RELATED_ARTISTS: "false"
+      },
+      lastfmSimilarArtists: async () => [],
+      spotifySearch: async () => [
+        {
+          id: "as-it-is",
+          name: "As It Is",
+          followers: null,
+          popularity: null,
+          genres: [],
+          spotifyUrl: "https://open.spotify.com/artist/as-it-is",
+          images: []
+        }
+      ],
+      spotifySeveralArtistsByIds: async () => {
+        throw new Error("batch forbidden");
+      },
+      spotifyArtistById: async () => ({
+        id: "as-it-is",
+        name: "As It Is",
+        followers: 550_000,
+        popularity: 48,
+        genres: ["pop punk", "emo"],
+        spotifyUrl: "https://open.spotify.com/artist/as-it-is",
+        images: ["https://image.example/as-it-is.jpg"]
+      })
+    });
+
+    const artist = artists.find((entry) => entry.name === "As It Is");
+    expect(artist?.estimatedFollowers).toBe(550_000);
+    expect(artist?.artistTier).toBe("large");
+    expect(artist?.genres).toEqual(expect.arrayContaining(["pop punk", "emo"]));
+    expect(artist?.imageUrl).toBe("https://image.example/as-it-is.jpg");
   });
 
   it("uses top track popularity as a fallback size signal when artist popularity and followers are missing", async () => {
@@ -1421,6 +1625,48 @@ describe("findSimilarArtists", () => {
     const candidate = grouped.to_verify.find((artist) => artist.name === "Bad Frequencies");
     expect(candidate).toBeDefined();
     expect(candidate?.verificationStatus).toBe("needs_verification");
+  });
+
+  it("keeps strong Last.fm similarity ahead of catalog-only MusicBrainz metadata", async () => {
+    const artists = await findSimilarArtists({
+      profile,
+      target: "grandes villes françaises",
+      genre: "pop punk",
+      city: "Paris",
+      seedCandidates: [],
+      env: {
+        MOCK_AI: "false",
+        LASTFM_API_KEY: "key",
+        CONSOLIDATE_SIMILAR_ARTISTS: "false",
+        ENABLE_SPOTIFY_DEEP_ENRICHMENT: "false",
+        ENABLE_SPOTIFY_RELATED_ARTISTS: "false"
+      },
+      lastfmSimilarArtists: async () => [
+        { name: "Broad Peak", url: null, match: 0.96 },
+        { name: "Mina Warren", url: null, match: 0.94 }
+      ],
+      musicBrainzSearch: async (name) => name === "Mina Warren"
+        ? {
+            musicBrainzId: "mina-warren",
+            name: "Mina Warren",
+            country: "France",
+            area: "France",
+            beginArea: "France",
+            tags: ["pop punk", "easycore", "emo", "punk rock"],
+            sourceUrl: "https://musicbrainz.org/artist/mina-warren",
+            score: 95
+          }
+        : null,
+      spotifySearch: async () => []
+    });
+
+    const broadPeak = artists.find((artist) => artist.name === "Broad Peak");
+    const minaWarren = artists.find((artist) => artist.name === "Mina Warren");
+
+    expect(broadPeak?.genreRelevance).toBeGreaterThanOrEqual(85);
+    expect(broadPeak?.totalRelevance).toBeGreaterThanOrEqual(75);
+    expect(minaWarren?.totalRelevance).toBeLessThan(90);
+    expect((minaWarren?.totalRelevance ?? 0) - (broadPeak?.totalRelevance ?? 0)).toBeLessThanOrEqual(5);
   });
 
   it("increasing consolidation limit does not reduce final output when no output limits are hit", async () => {

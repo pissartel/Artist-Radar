@@ -6,6 +6,7 @@ import {
   buildOutputBaseName,
   BookingOutputWriteError,
   exportOpportunities,
+  flattenSimilarArtists,
   formatBookingOutputLog,
   opportunitiesToCsv,
   similarArtistsToCsv,
@@ -84,6 +85,10 @@ const similarArtists: SimilarArtist[] = [
       { source: "lastfm", followers: 800, views: 4000, confidence: 0.45, sourceUrl: "https://www.last.fm/music/sample" }
     ],
     verificationStatus: "verified",
+    artistScaleScore: 34,
+    artistScaleBand: "emerging",
+    artistScaleScoreConfidence: "medium",
+    artistScaleScoreCoverage: 0.54,
     popularity: {
       estimatedLevel: "small",
       confidence: 0.75,
@@ -110,6 +115,18 @@ const result: OpportunitySearchRunResult = {
     estimatedLevel: "unknown",
     confidence: 0.2,
     notes: ["Test profile."]
+  },
+  chartmetric: {
+    provider: "chartmetric",
+    status: "success",
+    metrics: {
+      chartmetricArtistId: "cm-fake-band",
+      spotifyMonthlyListeners: 12_345,
+      spotifyFollowers: 4_321,
+      fetchedAt: "2026-08-07T00:00:00.000Z",
+      matchConfidence: "exact",
+      source: "chartmetric"
+    }
   },
   similarArtists: {
     local_peer: similarArtists,
@@ -162,12 +179,40 @@ describe("export utilities", () => {
 
   it("converts similar artists to CSV", () => {
     const csv = similarArtistsToCsv(similarArtists);
-    expect(csv).toContain('"name","bookingCategory","possibleUse","genres","city","country","estimatedLevel","popularityConfidence","instagramFollowers","youtubeSubscribers","youtubeViews","spotifyFollowers","spotifyPopularity","lastfmListeners","lastfmPlaycount","spotifyUrl","instagramUrl","youtubeUrl","verificationStatus","totalRelevance","genreRelevance","localRelevance","sizeRelevance","sources","sourceUrls","reason"');
+    expect(csv).toContain('"name","bookingCategory","possibleUse","genres","city","country","estimatedLevel","popularityConfidence","instagramFollowers","youtubeSubscribers","youtubeViews","spotifyFollowers","spotifyPopularity","lastfmListeners","lastfmPlaycount","spotifyUrl","instagramUrl","youtubeUrl","verificationStatus","artistScaleScore","artistScaleBand","artistScaleScoreConfidence","artistScaleScoreCoverage","totalRelevance","genreRelevance","localRelevance","sizeRelevance","sources","sourceUrls","reason"');
     expect(csv).toContain("Sample Similar Band");
     expect(csv).toContain("co_bill");
     expect(csv).toContain("1200");
     expect(csv).toContain("90000");
     expect(csv).toContain("800");
+    expect(csv).toContain("34");
+    expect(csv).toContain("medium");
+  });
+
+  it("flattens similar artists with to_verify before reference", () => {
+    const toVerifyArtist: SimilarArtist = {
+      ...similarArtists[0]!,
+      name: "Close Last.fm Peer",
+      bookingCategory: "to_verify",
+      possibleUse: "unknown",
+      totalRelevance: 68
+    };
+    const referenceArtist: SimilarArtist = {
+      ...similarArtists[0]!,
+      name: "Distant Reference",
+      bookingCategory: "reference",
+      possibleUse: "reference",
+      totalRelevance: 45
+    };
+
+    expect(flattenSimilarArtists({
+      local_peer: [],
+      regional_peer: [],
+      support_target: [],
+      reference: [referenceArtist],
+      to_verify: [toVerifyArtist],
+      unknown: []
+    }).map((artist) => artist.name)).toEqual(["Close Last.fm Peer", "Distant Reference"]);
   });
 
   it("exports JSON, opportunities CSV, similar artists CSV and events CSV files", async () => {
@@ -257,7 +302,7 @@ describe("export utilities", () => {
       bookingOpportunitiesCount: 1,
       labelOpportunitiesCount: 0,
       sourcesUsedCount: 1,
-      warningsCount: 2
+      warningsCount: 3
     });
 
     const outputRootFiles = await readdir(outputDir);
@@ -285,13 +330,22 @@ describe("export utilities", () => {
 
     expect(artistJson.artist.name).toBe("Fake Band");
     expect(artistJson.artist.genres).toEqual(["metalcore"]);
+    expect(artistJson.artist.monthlyListeners).toBe(12345);
+    expect(artistJson.artist.spotifyFollowers).toBe(4321);
+    expect(artistJson.artist.spotifyPopularity).toBeNull();
+    expect(artistJson.artist.chartmetricStatus).toBe("success");
+    expect(artistJson.artist.chartmetricReason).toBeNull();
     expect(artistJson.artist.confidenceScore).toBe(20);
     expect(artistJson).toHaveProperty("warnings");
+    expect(artistJson.warnings).toContain("Chartmetric audience metrics were fetched and merged into the artist output.");
     expect(artistJson).not.toHaveProperty("booking");
     expect(artistJson).not.toHaveProperty("opportunities");
 
     expect(similarArtistsJson.similarArtists).toHaveLength(1);
     expect(similarArtistsJson.similarArtists[0].name).toBe("Sample Similar Band");
+    expect(similarArtistsJson.similarArtists[0].artistScaleScore).toBe(34);
+    expect(similarArtistsJson.similarArtists[0].artistScaleBand).toBe("emerging");
+    expect(similarArtistsJson.similarArtists[0].artistScaleScoreConfidence).toBe("medium");
     expect(similarArtistsJson).not.toHaveProperty("booking");
     expect(similarArtistsJson).not.toHaveProperty("opportunities");
 

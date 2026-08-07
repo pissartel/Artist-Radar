@@ -160,6 +160,177 @@ describe("enrichSimilarArtistsWithChartmetric", () => {
     expect(enriched?.chartmetric?.metrics?.spotifyMonthlyListeners).toBe(6000);
   });
 
+  it("promotes reliable Chartmetric audience metrics into public popularity fields", async () => {
+    const artist = buildArtist({
+      name: "Tuesday Fall Peer",
+      artistTier: "unknown",
+      estimatedFollowers: null,
+      popularity: {
+        estimatedLevel: "unknown",
+        confidence: 0.2,
+        sizeSignalSource: "unknown",
+        platforms: {}
+      }
+    });
+    const grouped = groupSimilarArtistsByTier([artist]);
+    const provider = fakeProvider([
+      {
+        provider: "chartmetric",
+        candidateName: "Tuesday Fall Peer",
+        status: "success",
+        matchMethod: "spotify_id",
+        matchConfidence: "exact",
+        metrics: {
+          chartmetricArtistId: "42",
+          spotifyArtistId: "sp42",
+          spotifyMonthlyListeners: 169,
+          spotifyFollowers: 98,
+          chartmetricArtistScore: 0.7787992911203467,
+          primaryGenreSmart: 501460,
+          fetchedAt: "2026-01-01T00:00:00.000Z",
+          matchConfidence: "exact",
+          source: "chartmetric"
+        }
+      }
+    ]);
+
+    const result = await enrichSimilarArtistsWithChartmetric({ profile: PROFILE, similarArtists: grouped, provider });
+    const enriched = result.local_peer[0];
+
+    expect(enriched?.estimatedFollowers).toBe(98);
+    expect(enriched?.artistTier).toBe("small");
+    expect(enriched?.popularity.estimatedLevel).toBe("small");
+    expect(enriched?.popularity.sizeSignalSource).toBe("spotify");
+    expect(enriched?.popularity.platforms.spotify?.followers).toBe(98);
+    expect(enriched?.chartmetric?.metrics?.chartmetricArtistScore).toBe(0.7787992911203467);
+    expect(enriched?.chartmetric?.metrics?.primaryGenreSmart).toBe(501460);
+  });
+
+  it("raises to_verify candidates with reliable Chartmetric audience above the flat discovery fallback", async () => {
+    const artist = buildArtist({
+      name: "TYDEAL",
+      bookingCategory: "to_verify",
+      possibleUse: "unknown",
+      totalRelevance: 50,
+      relevanceToUserArtist: 50,
+      genreRelevance: 55,
+      sceneRelevance: 45,
+      localRelevance: 45,
+      sizeRelevance: 35,
+      estimatedFollowers: null,
+      artistTier: "unknown",
+      popularity: {
+        estimatedLevel: "unknown",
+        confidence: 0.2,
+        sizeSignalSource: "unknown",
+        platforms: {}
+      }
+    });
+    const grouped = groupSimilarArtistsByTier([artist]);
+    const provider = fakeProvider([
+      {
+        provider: "chartmetric",
+        candidateName: "TYDEAL",
+        status: "success",
+        matchMethod: "name_with_platform_links",
+        matchConfidence: "high",
+        metrics: {
+          chartmetricArtistId: "100",
+          spotifyArtistId: "spotify-tydeal",
+          spotifyMonthlyListeners: 3766,
+          spotifyFollowers: 1346,
+          chartmetricArtistScore: 11.1942322773419,
+          primaryGenreSmart: 501905,
+          fetchedAt: "2026-01-01T00:00:00.000Z",
+          matchConfidence: "high",
+          source: "chartmetric"
+        }
+      }
+    ]);
+
+    const result = await enrichSimilarArtistsWithChartmetric({ profile: PROFILE, similarArtists: grouped, provider });
+    const enriched = result.to_verify[0];
+
+    expect(enriched?.totalRelevance).toBeGreaterThan(50);
+    expect(enriched?.relevanceToUserArtist).toBe(enriched?.totalRelevance);
+    expect(enriched?.sizeRelevance).toBeGreaterThanOrEqual(65);
+    expect(enriched?.possibleUse).toBe("booking_research");
+    expect(enriched?.evidenceNotes).toContain(
+      "chartmetric audience verified a small/medium-scale candidate; kept as to_verify because genre/location evidence is still incomplete."
+    );
+  });
+
+  it("does not raise an ambiguous Chartmetric candidate", async () => {
+    const artist = buildArtist({
+      name: "Two Trains Left",
+      bookingCategory: "to_verify",
+      possibleUse: "unknown",
+      totalRelevance: 50,
+      relevanceToUserArtist: 50,
+      genreRelevance: 55,
+      sceneRelevance: 45,
+      localRelevance: 45,
+      sizeRelevance: 35
+    });
+    const grouped = groupSimilarArtistsByTier([artist]);
+    const provider = fakeProvider([{ provider: "chartmetric", candidateName: "Two Trains Left", status: "ambiguous" }]);
+
+    const result = await enrichSimilarArtistsWithChartmetric({ profile: PROFILE, similarArtists: grouped, provider });
+    const enriched = result.to_verify[0];
+
+    expect(enriched?.totalRelevance).toBe(50);
+    expect(enriched?.sizeRelevance).toBe(35);
+    expect(enriched?.possibleUse).toBe("unknown");
+  });
+
+  it("uses high Chartmetric artist score to downgrade large to_verify candidates to references", async () => {
+    const artist = buildArtist({
+      name: "As It Is",
+      bookingCategory: "to_verify",
+      possibleUse: "unknown",
+      totalRelevance: 68,
+      relevanceToUserArtist: 68,
+      genreRelevance: 88,
+      sceneRelevance: 45,
+      localRelevance: 45,
+      sizeRelevance: 35,
+      estimatedFollowers: null,
+      artistTier: "unknown"
+    });
+    const grouped = groupSimilarArtistsByTier([artist]);
+    const provider = fakeProvider([
+      {
+        provider: "chartmetric",
+        candidateName: "As It Is",
+        status: "success",
+        matchMethod: "spotify_id",
+        matchConfidence: "high",
+        metrics: {
+          chartmetricArtistId: "200",
+          spotifyArtistId: "spotify-as-it-is",
+          spotifyMonthlyListeners: 550_000,
+          spotifyFollowers: 180_000,
+          chartmetricArtistScore: 24,
+          fetchedAt: "2026-01-01T00:00:00.000Z",
+          matchConfidence: "high",
+          source: "chartmetric"
+        }
+      }
+    ]);
+
+    const result = await enrichSimilarArtistsWithChartmetric({ profile: PROFILE, similarArtists: grouped, provider });
+    const enriched = result.reference[0];
+
+    expect(enriched?.name).toBe("As It Is");
+    expect(enriched?.artistTier).toBe("large");
+    expect(enriched?.bookingCategory).toBe("reference");
+    expect(enriched?.possibleUse).toBe("long_term_reference");
+    expect(enriched?.totalRelevance).toBeLessThanOrEqual(62);
+    expect(enriched?.evidenceNotes).toContain(
+      "Chartmetric artist score indicates a larger-scale reference artist; not treated as a peer booking target."
+    );
+  });
+
   it("passes existing relevance as the enrichment priority so the most relevant candidates are ranked first", async () => {
     const low = buildArtist({ name: "Low", totalRelevance: 20, bookingCategory: "to_verify" });
     const high = buildArtist({ name: "High", totalRelevance: 95, bookingCategory: "local_peer" });

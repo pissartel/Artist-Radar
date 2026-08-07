@@ -29,6 +29,7 @@ export const SizeSignalSourceSchema = z.enum([
   "spotify_artist",
   "spotify_tracks",
   "youtube",
+  "deezer",
   "mixed",
   "manual",
   "unknown"
@@ -260,7 +261,8 @@ export const SpotifyMetadataSchema = z.object({
 export const SocialLinksSchema = z.object({
   spotifyUrl: OptionalUrlSchema,
   youtubeUrl: OptionalUrlSchema,
-  instagramUrl: OptionalUrlSchema
+  instagramUrl: OptionalUrlSchema,
+  deezerUrl: OptionalUrlSchema
 });
 
 export const PlatformStatsSchema = z.object({
@@ -270,7 +272,8 @@ export const PlatformStatsSchema = z.object({
   youtubeSubscribers: z.number().int().nonnegative().nullable().optional(),
   youtubeTotalViews: z.number().int().nonnegative().nullable().optional(),
   youtubeVideoCount: z.number().int().nonnegative().nullable().optional(),
-  instagramFollowers: z.number().int().nonnegative().nullable().optional()
+  instagramFollowers: z.number().int().nonnegative().nullable().optional(),
+  deezerFans: z.number().int().nonnegative().nullable().optional()
 });
 
 export const ArtistInputSchema = z.object({
@@ -284,6 +287,7 @@ export const ArtistInputSchema = z.object({
   spotifyUrl: OptionalUrlSchema,
   youtubeUrl: OptionalUrlSchema,
   instagramUrl: OptionalUrlSchema,
+  deezerUrl: OptionalUrlSchema,
   platformStats: PlatformStatsSchema.optional()
 });
 
@@ -356,11 +360,12 @@ export const ChartmetricCandidateMetricsSchema = z.object({
   spotifyArtistId: z.string().trim().min(1).optional(),
   spotifyMonthlyListeners: z.number().nonnegative().optional(),
   spotifyFollowers: z.number().nonnegative().optional(),
+  chartmetricArtistScore: z.number().optional(),
+  primaryGenreSmart: z.number().optional(),
   measuredAt: z.string().trim().min(1).optional(),
   fetchedAt: z.string().trim().min(1),
   matchConfidence: ChartmetricMatchConfidenceSchema,
   source: z.literal("chartmetric"),
-  chartmetricArtistScore: z.number().optional(),
   listenerGrowthPercent: z.number().optional(),
   followerGrowthPercent: z.number().optional(),
   socialAudience: ChartmetricSocialAudienceSchema.optional(),

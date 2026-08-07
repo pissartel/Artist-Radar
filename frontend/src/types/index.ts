@@ -1,5 +1,5 @@
 // Dashboard API-aligned types
-export type PlatformType = "spotify" | "instagram" | "youtube" | "website";
+export type PlatformType = "spotify" | "instagram" | "youtube" | "deezer" | "website";
 
 export interface Platform {
   type: PlatformType;
@@ -36,6 +36,7 @@ export interface ArtistMetrics {
   monthlyListeners: number | null;
   followers: number | null;
   popularityScore: number | null;
+  deezerFans?: number | null;
   mainGenre: string | null;
   spotifyUrl: string | null;
 }

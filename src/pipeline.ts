@@ -512,8 +512,8 @@ export function flattenSimilarArtists(groups: SimilarArtistsByTier): SimilarArti
     ...groups.local_peer,
     ...groups.regional_peer,
     ...groups.support_target,
-    ...groups.reference,
     ...groups.to_verify,
+    ...groups.reference,
     ...groups.unknown
   ];
 }

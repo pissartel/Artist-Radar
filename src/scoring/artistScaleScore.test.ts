@@ -68,6 +68,22 @@ describe("scoreArtistScale", () => {
     expect(result.confidence).toBe("high");
   });
 
+  it("uses Last.fm listeners and playcount as lower-weight streaming evidence instead of returning scale unknown", () => {
+    const result = scoreArtistScale(
+      {
+        lastFmListeners: 8_500,
+        lastFmPlaycount: 90_000
+      },
+      { now: NOW }
+    );
+
+    expect(result.artistScaleScore).toBeGreaterThan(0);
+    expect(result.scaleBand).not.toBe("major");
+    expect(result.confidence).not.toBe("unavailable");
+    expect(result.coverage).toBeGreaterThan(0);
+    expect(result.components.streaming).not.toBeNull();
+  });
+
   it("scores a large/major artist high across every component", () => {
     const input: ArtistScaleScoreInput = {
       chartmetricArtistScore: 95,

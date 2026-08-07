@@ -136,6 +136,57 @@ describe("computeArtistScaleForAnalysis", () => {
     );
   });
 
+  it("uses Deezer fans as a fallback scale signal for the analyzed artist", () => {
+    const profile = buildProfile({
+      platformStats: { deezerFans: 1_200 }
+    });
+
+    const result = computeArtistScaleForAnalysis({
+      profile,
+      similarArtists: groupSimilarArtistsByTier([]),
+      now: NOW
+    });
+
+    expect(result.artistScale.artistScaleScore).not.toBeNull();
+    expect(result.artistScale.confidence).not.toBe("unavailable");
+    expect(result.artistScale.coverage).toBeGreaterThan(0);
+  });
+
+  it("scores Last.fm-discovered similar artists from Last.fm listeners/playcount when Spotify and Chartmetric are missing", () => {
+    const profile = buildProfile({
+      platformStats: { spotifyFollowers: 2_000, spotifyPopularity: 18 }
+    });
+    const tydealLike = buildSimilarArtist({
+      name: "TYDEAL",
+      source: "lastfm_similar",
+      sources: ["lastfm_similar"],
+      popularity: {
+        estimatedLevel: "unknown",
+        confidence: 0.58,
+        sizeSignalSource: "lastfm",
+        platforms: {
+          lastfm: {
+            listeners: 8_500,
+            playcount: 92_000,
+            sourceUrl: "https://www.last.fm/music/TYDEAL"
+          }
+        }
+      }
+    });
+
+    const result = computeArtistScaleForAnalysis({
+      profile,
+      similarArtists: groupSimilarArtistsByTier([tydealLike]),
+      comparisonThresholds: { minSimilarArtistScores: 1, inLineMaxPercentileDistance: 10, wellBeyondMinPercentileDistance: 25 },
+      now: NOW
+    });
+
+    const scored = Object.values(result.similarArtists).flat().find((artist) => artist.name === "TYDEAL");
+    expect(scored?.artistScaleScore).not.toBeNull();
+    expect(scored?.artistScaleScoreConfidence).not.toBe("unavailable");
+    expect(scored?.artistScaleScoreCoverage).toBeGreaterThan(0);
+  });
+
   it("handles a mix of Chartmetric-backed, fallback-only and no-data similar artists without fabricating the no-data candidate's score", () => {
     const profile = buildProfile({ platformStats: { spotifyFollowers: 500_000 } });
 

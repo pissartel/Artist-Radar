@@ -7,8 +7,9 @@ import {
   type PlatformStats,
   type SocialLinks
 } from "../schemas.js";
-import { getSpotifyArtistProfile, type SpotifyArtistProfile } from "../services/spotifyService.js";
+import { getSpotifyArtistProfile, searchSpotifyArtistByName, type SpotifyArtistProfile } from "../services/spotifyService.js";
 import { getYouTubeChannelStats, type YouTubeChannelStats } from "../services/youtubeService.js";
+import { getDeezerArtistProfile, searchDeezerArtistByName, type DeezerArtistProfile } from "../services/deezerService.js";
 import { resolveArtistImage } from "../services/artistImageResolver.js";
 import { debugLog } from "../utils/logger.js";
 import { estimateArtistSize } from "./sizeEstimator.js";
@@ -43,11 +44,18 @@ export async function collectArtistProfile(rawInput: ArtistInput): Promise<Artis
     genre: input.genre,
     spotifyUrlPresent: Boolean(socialLinks.spotifyUrl),
     youtubeUrlPresent: Boolean(socialLinks.youtubeUrl),
-    instagramUrlPresent: Boolean(socialLinks.instagramUrl)
+    instagramUrlPresent: Boolean(socialLinks.instagramUrl),
+    deezerUrlPresent: Boolean(socialLinks.deezerUrl)
   });
-  const spotifyProfile = await getSpotifyArtistProfile(socialLinks.spotifyUrl);
+  const spotifyProfile = await resolveSpotifyProfile(input.artist, socialLinks.spotifyUrl);
   const youtubeStats = await getYouTubeChannelStats(socialLinks.youtubeUrl);
-  const platformStats = mergePlatformStats(input.platformStats ?? {}, spotifyProfile, youtubeStats);
+  const deezerProfile = await resolveDeezerProfile(input.artist, socialLinks.deezerUrl);
+  const resolvedSocialLinks: SocialLinks = {
+    ...socialLinks,
+    spotifyUrl: socialLinks.spotifyUrl ?? spotifyProfile?.spotifyUrl ?? null,
+    deezerUrl: socialLinks.deezerUrl ?? deezerProfile?.deezerUrl ?? null
+  };
+  const platformStats = mergePlatformStats(input.platformStats ?? {}, spotifyProfile, youtubeStats, deezerProfile);
   const spotifyGenres = spotifyProfile?.genres ?? [];
   const genres = mergeGenres([input.genre], spotifyGenres);
   const sizeEstimate = estimateArtistSize({
@@ -57,16 +65,18 @@ export async function collectArtistProfile(rawInput: ArtistInput): Promise<Artis
     spotifyTopTrackPopularityAvg: spotifyProfile?.topTrackPopularityAvg ?? null,
     youtubeSubscribers: platformStats.youtubeSubscribers ?? null,
     youtubeTotalViews: platformStats.youtubeTotalViews ?? null,
-    youtubeVideoCount: platformStats.youtubeVideoCount ?? null
+    youtubeVideoCount: platformStats.youtubeVideoCount ?? null,
+    deezerFans: platformStats.deezerFans ?? null
   });
   const estimatedLevel = sizeEstimate.estimatedLevel;
-  const confidence = calculateConfidence(socialLinks, platformStats, estimatedLevel);
-  const notes = buildNotes(socialLinks, platformStats, estimatedLevel, spotifyProfile, sizeEstimate);
+  const confidence = calculateConfidence(resolvedSocialLinks, platformStats, estimatedLevel);
+  const notes = buildNotes(resolvedSocialLinks, platformStats, estimatedLevel, spotifyProfile, sizeEstimate);
   const spotifyMetadata = toSpotifyMetadata(spotifyProfile);
   const resolvedImage = resolveArtistImage({ spotify: spotifyMetadata });
   debugLog("profile", "artist enrichment results", {
     spotifyEnrichmentSucceeded: Boolean(spotifyProfile),
     youtubeEnrichmentSucceeded: Boolean(youtubeStats),
+    deezerEnrichmentSucceeded: Boolean(deezerProfile),
     estimatedArtistLevel: estimatedLevel,
     confidence,
     sizeTier: sizeEstimate.sizeTier,
@@ -84,7 +94,7 @@ export async function collectArtistProfile(rawInput: ArtistInput): Promise<Artis
     spotifyGenres,
     youtubeChannelId: youtubeStats?.youtubeChannelId ?? null,
     youtubeTitle: youtubeStats?.youtubeTitle ?? null,
-    socialLinks,
+    socialLinks: resolvedSocialLinks,
     platformStats,
     estimatedLevel,
     confidence,
@@ -94,6 +104,32 @@ export async function collectArtistProfile(rawInput: ArtistInput): Promise<Artis
     imageSource: resolvedImage.imageSource,
     imageConfidence: resolvedImage.imageConfidence
   });
+}
+
+async function resolveSpotifyProfile(artistName: string, spotifyUrl: string | null | undefined): Promise<SpotifyArtistProfile | null> {
+  const byUrl = await getSpotifyArtistProfile(spotifyUrl);
+  if (byUrl) {
+    return byUrl;
+  }
+
+  if (spotifyUrl) {
+    return null;
+  }
+
+  return searchSpotifyArtistByName(artistName);
+}
+
+async function resolveDeezerProfile(artistName: string, deezerUrl: string | null | undefined): Promise<DeezerArtistProfile | null> {
+  const byUrl = await getDeezerArtistProfile(deezerUrl);
+  if (byUrl) {
+    return byUrl;
+  }
+
+  if (deezerUrl) {
+    return null;
+  }
+
+  return searchDeezerArtistByName(artistName);
 }
 
 function toSpotifyMetadata(spotifyProfile: SpotifyArtistProfile | null): ArtistProfile["spotify"] {
@@ -111,7 +147,7 @@ function toSpotifyMetadata(spotifyProfile: SpotifyArtistProfile | null): ArtistP
   };
 }
 
-export function extractSocialLinks(input: Pick<ArtistInput, "links" | "spotifyUrl" | "youtubeUrl" | "instagramUrl">): SocialLinks {
+export function extractSocialLinks(input: Pick<ArtistInput, "links" | "spotifyUrl" | "youtubeUrl" | "instagramUrl" | "deezerUrl">): SocialLinks {
   const fromLinks = input.links.reduce<SocialLinks>((acc, link) => {
     const platform = detectPlatform(link);
     if (platform === "spotify" && !acc.spotifyUrl) {
@@ -123,17 +159,21 @@ export function extractSocialLinks(input: Pick<ArtistInput, "links" | "spotifyUr
     if (platform === "instagram" && !acc.instagramUrl) {
       acc.instagramUrl = link;
     }
+    if (platform === "deezer" && !acc.deezerUrl) {
+      acc.deezerUrl = link;
+    }
     return acc;
   }, {});
 
   return {
     spotifyUrl: input.spotifyUrl ?? fromLinks.spotifyUrl ?? null,
     youtubeUrl: input.youtubeUrl ?? fromLinks.youtubeUrl ?? null,
-    instagramUrl: input.instagramUrl ?? fromLinks.instagramUrl ?? null
+    instagramUrl: input.instagramUrl ?? fromLinks.instagramUrl ?? null,
+    deezerUrl: input.deezerUrl ?? fromLinks.deezerUrl ?? null
   };
 }
 
-function detectPlatform(url: string): "spotify" | "youtube" | "instagram" | null {
+function detectPlatform(url: string): "spotify" | "youtube" | "instagram" | "deezer" | null {
   const hostname = new URL(url).hostname.replace(/^www\./, "");
 
   if (hostname === "open.spotify.com" || hostname.endsWith(".spotify.com")) {
@@ -146,6 +186,10 @@ function detectPlatform(url: string): "spotify" | "youtube" | "instagram" | null
 
   if (hostname === "instagram.com" || hostname.endsWith(".instagram.com")) {
     return "instagram";
+  }
+
+  if (hostname === "deezer.com" || hostname.endsWith(".deezer.com")) {
+    return "deezer";
   }
 
   return null;
@@ -162,6 +206,7 @@ export function estimateArtistLevel(
     youtubeSubscribers: stats.youtubeSubscribers ?? null,
     youtubeTotalViews: stats.youtubeTotalViews ?? null,
     youtubeVideoCount: stats.youtubeVideoCount ?? null,
+    deezerFans: stats.deezerFans ?? null,
     manualEstimatedTier: null
   }).estimatedLevel;
 }
@@ -169,7 +214,8 @@ export function estimateArtistLevel(
 function mergePlatformStats(
   stats: PlatformStats,
   spotifyProfile: SpotifyArtistProfile | null,
-  youtubeStats: YouTubeChannelStats | null
+  youtubeStats: YouTubeChannelStats | null,
+  deezerProfile: DeezerArtistProfile | null
 ): PlatformStats {
   return {
     ...stats,
@@ -178,7 +224,8 @@ function mergePlatformStats(
     hiddenSubscriberCount: youtubeStats?.hiddenSubscriberCount ?? stats.hiddenSubscriberCount,
     youtubeSubscribers: youtubeStats?.youtubeSubscribers ?? stats.youtubeSubscribers,
     youtubeTotalViews: youtubeStats?.youtubeTotalViews ?? stats.youtubeTotalViews,
-    youtubeVideoCount: youtubeStats?.youtubeVideoCount ?? stats.youtubeVideoCount
+    youtubeVideoCount: youtubeStats?.youtubeVideoCount ?? stats.youtubeVideoCount,
+    deezerFans: deezerProfile?.fans ?? stats.deezerFans
   };
 }
 

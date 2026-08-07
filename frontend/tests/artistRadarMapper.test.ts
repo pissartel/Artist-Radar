@@ -80,6 +80,45 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     ]);
   });
 
+  it("maps to_verify similar artists before reference artists", () => {
+    const result = buildResult({
+      similarArtists: {
+        reference: [
+          {
+            name: "allsinners",
+            genres: ["post-hardcore"],
+            city: "Canada",
+            country: "CA",
+            reason: "Outside the requested market.",
+            artistTier: "small",
+            totalRelevance: 45,
+            estimatedFollowers: 832,
+            genreRelevance: 85,
+            sceneRelevance: 0,
+          },
+        ],
+        to_verify: [
+          {
+            name: "Broad Peak",
+            genres: [],
+            city: null,
+            country: null,
+            reason: "Strong Last.fm similarity, missing metadata.",
+            artistTier: "small",
+            totalRelevance: 68,
+            estimatedFollowers: 1378,
+            genreRelevance: 70,
+            sceneRelevance: 45,
+          },
+        ],
+      },
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+
+    expect(response.similarArtists.map((artist) => artist.name)).toEqual(["Broad Peak", "allsinners"]);
+  });
+
   it("preserves multiple valid backend venue opportunities and reports mapper drop counts", () => {
     const result = buildResult({
       opportunities: [
@@ -271,6 +310,33 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
       mainGenre: "pop punk",
       spotifyUrl: "https://open.spotify.com/artist/abc123",
     });
+  });
+
+  it("maps monthly listeners only from Chartmetric, never from Spotify followers", () => {
+    const result = buildResult({
+      artistProfile: {
+        artistName: "Tuesday Fall",
+        city: "Paris",
+        country: "France",
+        genres: ["pop punk"],
+        socialLinks: { spotifyUrl: "https://open.spotify.com/artist/abc123" },
+        platformStats: { spotifyFollowers: 5400, spotifyPopularity: 32 },
+      },
+      chartmetric: {
+        provider: "chartmetric",
+        status: "success",
+        metrics: {
+          spotifyMonthlyListeners: 9100,
+          spotifyFollowers: 5400,
+        },
+      },
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+
+    expect(response.artist.monthlyListeners).toBe(9100);
+    expect(response.artist.metrics?.monthlyListeners).toBe(9100);
+    expect(response.artist.metrics?.followers).toBe(5400);
   });
 
   it("marks Spotify-derived metrics as unavailable rather than inventing them", () => {

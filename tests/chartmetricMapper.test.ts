@@ -33,6 +33,24 @@ describe("mapToAudienceMetrics", () => {
     expect(metrics.spotifyFollowers).toBe(0);
     expect(hasUsableMetrics(metrics)).toBe(true);
   });
+
+  it("uses search-result fallback metrics when the stats endpoint has no latest point", () => {
+    const metrics = mapToAudienceMetrics(
+      "1",
+      "spotify1",
+      { latest: null, history: [] },
+      "high",
+      "2026-01-02T00:00:00.000Z",
+      { spotifyMonthlyListeners: 169, spotifyFollowers: 98, chartmetricArtistScore: 0.7787992911203467, primaryGenreSmart: 501460 }
+    );
+
+    expect(metrics.spotifyMonthlyListeners).toBe(169);
+    expect(metrics.spotifyFollowers).toBe(98);
+    expect(metrics.chartmetricArtistScore).toBe(0.7787992911203467);
+    expect(metrics.primaryGenreSmart).toBe(501460);
+    expect(metrics.measuredAt).toBeUndefined();
+    expect(hasUsableMetrics(metrics)).toBe(true);
+  });
 });
 
 describe("mapToHistoryPoints", () => {

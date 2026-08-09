@@ -26,6 +26,67 @@ function buildResult(overrides: Partial<BackendPipelineResult> = {}): BackendPip
 }
 
 describe("mapPipelineResultToArtistRadarResponse", () => {
+  it("maps only sourced manager opportunities with professional evidence", () => {
+    const result = buildResult({
+      managerOpportunities: [
+        {
+          id: "management-co",
+          name: "Scene Management",
+          opportunityType: "management_company",
+          sourceUrl: "https://management.example/roster",
+          websiteUrl: "https://management.example",
+          associatedArtists: ["Neon Riot"],
+          associatedGenres: ["pop punk"],
+          audienceLevel: "small",
+          sources: [{ name: "official roster", url: "https://management.example/roster" }],
+          compatibilityScore: 84,
+          compatibilityExplanation: "Connected through Neon Riot at a compatible career stage.",
+          manager: {
+            roster: ["Neon Riot"],
+            relevantArtists: ["Neon Riot"],
+            managerGenres: ["pop punk"],
+            typicalAudienceLevel: "small",
+            services: ["career development"],
+            acceptsSubmissions: null,
+            contactPolicy: null,
+            relationshipStatus: "current",
+            isActive: true,
+            evidence: [{
+              sourceUrl: "https://management.example/roster",
+              similarArtistName: "Neon Riot",
+              relationshipStatus: "current",
+              confidence: 0.9,
+            }],
+          },
+        },
+        {
+          id: "unsourced",
+          name: "Unsourced Management",
+          opportunityType: "management_company",
+          sourceUrl: null,
+          associatedArtists: [],
+          associatedGenres: [],
+          audienceLevel: "unknown",
+          sources: [{ name: "unknown", url: null }],
+          manager: {
+            roster: [], relevantArtists: [], managerGenres: [], typicalAudienceLevel: "unknown",
+            services: [], relationshipStatus: "unknown", evidence: [],
+          },
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+
+    expect(response.managerOpportunities).toHaveLength(1);
+    expect(response.managerOpportunities[0]).toMatchObject({
+      name: "Scene Management",
+      relevantArtists: ["Neon Riot"],
+      relationshipStatus: "current",
+      compatibilityScore: 84,
+    });
+  });
+
   it("maps artist profile, similar artists, and opportunities from the real pipeline result", () => {
     const result = buildResult({
       similarArtists: {

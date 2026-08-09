@@ -287,12 +287,16 @@ describe("export utilities", () => {
           warnings: ["Provider disabled warning."],
           metadata: { enabled: false }
         }]
-      }
+      },
+      labelOpportunities: [{ id: "label-1", name: "Label One" }] as any,
+      bookerOpportunities: [{ id: "booker-1", name: "Booker One" }] as any,
+      managerOpportunities: [{ id: "manager-1", name: "Manager One" }] as any
     }, outputDir);
 
     expect(paths.artistJsonPath).toMatch(new RegExp(`${escapeRegExp(path.join(outputDir, "booking"))}[/\\\\]booking-fake-band-lyon-.+[/\\\\]artist\\.json$`));
     expect(paths.similarArtistsJsonPath).toBe(path.join(path.dirname(paths.artistJsonPath!), "similar-artists.json"));
     expect(paths.bookingJsonPath).toBe(path.join(path.dirname(paths.artistJsonPath!), "booking.json"));
+    expect(paths.professionalOpportunitiesJsonPath).toBe(path.join(path.dirname(paths.artistJsonPath!), "professional-opportunities.json"));
     expect(paths.jsonPath).toBe(paths.bookingJsonPath);
     expect(paths.opportunitiesCsvPath).toBe("");
     expect(paths.similarArtistsCsvPath).toBe("");
@@ -300,8 +304,9 @@ describe("export utilities", () => {
     expect(paths.bookingSummary).toEqual({
       similarArtistsCount: 1,
       bookingOpportunitiesCount: 1,
-      labelOpportunitiesCount: 0,
-      bookerOpportunitiesCount: 0,
+      labelOpportunitiesCount: 1,
+      bookerOpportunitiesCount: 1,
+      managerOpportunitiesCount: 1,
       sourcesUsedCount: 1,
       warningsCount: 3
     });
@@ -314,6 +319,7 @@ describe("export utilities", () => {
     expect(bookingRunFiles.filter((file) => file.endsWith(".json")).sort()).toEqual([
       "artist.json",
       "booking.json",
+      "professional-opportunities.json",
       "similar-artists.json"
     ]);
     expect(bookingRunFiles.filter((file) => file.endsWith(".csv"))).toEqual([]);
@@ -321,9 +327,11 @@ describe("export utilities", () => {
     const artistJsonText = await readFile(paths.artistJsonPath!, "utf8");
     const similarArtistsJsonText = await readFile(paths.similarArtistsJsonPath!, "utf8");
     const bookingJsonText = await readFile(paths.bookingJsonPath!, "utf8");
+    const professionalJsonText = await readFile(paths.professionalOpportunitiesJsonPath!, "utf8");
     const artistJson = JSON.parse(artistJsonText) as Record<string, any>;
     const similarArtistsJson = JSON.parse(similarArtistsJsonText) as Record<string, any>;
     const bookingJson = JSON.parse(bookingJsonText) as Record<string, any>;
+    const professionalJson = JSON.parse(professionalJsonText) as Record<string, any>;
 
     expect(artistJsonText).toContain('\n  "artist":');
     expect(similarArtistsJsonText).toContain('\n  "similarArtists":');
@@ -360,6 +368,13 @@ describe("export utilities", () => {
     });
     expect(bookingJson).not.toHaveProperty("similarArtists");
     expect(bookingJson.booking).not.toHaveProperty("similarArtists");
+    expect(bookingJson).not.toHaveProperty("labels");
+    expect(bookingJson).not.toHaveProperty("bookers");
+    expect(bookingJson).not.toHaveProperty("managers");
+    expect(professionalJson.labels.opportunities[0].name).toBe("Label One");
+    expect(professionalJson.bookers.opportunities[0].name).toBe("Booker One");
+    expect(professionalJson.managers.opportunities[0].name).toBe("Manager One");
+    expect(professionalJson).not.toHaveProperty("booking");
   });
 
   it("formats booking output logs with paths and summary counts without env values", () => {
@@ -367,19 +382,24 @@ describe("export utilities", () => {
       artistJsonPath: "outputs/booking/run-1/artist.json",
       similarArtistsJsonPath: "outputs/booking/run-1/similar-artists.json",
       bookingJsonPath: "outputs/booking/run-1/booking.json",
+      professionalOpportunitiesJsonPath: "outputs/booking/run-1/professional-opportunities.json",
       bookingSummary: {
         similarArtistsCount: 3,
         bookingOpportunitiesCount: 2,
+        labelOpportunitiesCount: 1,
+        bookerOpportunitiesCount: 1,
+        managerOpportunitiesCount: 1,
         sourcesUsedCount: 1,
         warningsCount: 0
       }
     });
 
-    expect(output).toContain("Booking outputs written:");
+    expect(output).toContain("Analysis outputs written:");
     expect(output).toContain("- Artist data JSON: outputs/booking/run-1/artist.json");
     expect(output).toContain("- Similar artists JSON: outputs/booking/run-1/similar-artists.json");
     expect(output).toContain("- Booking opportunities JSON: outputs/booking/run-1/booking.json");
-    expect(output).toContain("Booking output summary:");
+    expect(output).toContain("- Professional opportunities JSON: outputs/booking/run-1/professional-opportunities.json");
+    expect(output).toContain("Analysis output summary:");
     expect(output).toContain("- Similar artists: 3");
     expect(output).toContain("- Booking opportunities: 2");
     expect(output).toContain("- Sources used: 1");

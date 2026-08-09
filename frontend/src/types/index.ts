@@ -422,6 +422,41 @@ export interface LabelOpportunityDetails {
   sources: LabelSourceReference[];
 }
 
+export type ManagerEntityType = "manager" | "management_company";
+export type ManagerRelationshipStatus = "current" | "former" | "unknown";
+
+export interface ManagerEvidence {
+  sourceUrl: string | null;
+  similarArtistName: string | null;
+  relationshipStatus: ManagerRelationshipStatus;
+  confidence: number;
+}
+
+export interface ManagerOpportunity {
+  id: string;
+  name: string;
+  entityType: ManagerEntityType;
+  city: string | null;
+  country: string | null;
+  websiteUrl: string | null;
+  sourceUrl: string | null;
+  contactPageUrl: string | null;
+  publicEmail: string | null;
+  roster: string[];
+  relevantArtists: string[];
+  genres: string[];
+  typicalAudienceLevel: "small" | "medium" | "large" | "unknown";
+  services: string[];
+  acceptsSubmissions: boolean | null;
+  contactPolicy: string | null;
+  relationshipStatus: ManagerRelationshipStatus;
+  isActive: boolean | null;
+  compatibilityScore: number;
+  compatibilityExplanation: string;
+  evidence: ManagerEvidence[];
+  sourceLinks: string[];
+}
+
 // Generic entity covering booking opportunities today and future artist
 // growth opportunities (labels, playlists, creative providers, ...).
 export interface Opportunity {
@@ -564,6 +599,7 @@ export interface DashboardData {
   kpis: KpiMetric[];
   similarArtists: SimilarArtist[];
   bookingOpportunities: Opportunity[];
+  managerOpportunities: ManagerOpportunity[];
   topCities: CityOpportunityStat[];
   sources: BookingSource[];
   bookingDiagnostics?: {

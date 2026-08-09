@@ -383,6 +383,79 @@ export interface BackendLabelOpportunity {
   label?: BackendLabelOpportunityDetails | null;
 }
 
+export type BackendManagerRelationshipStatus = "current" | "former" | "unknown";
+
+export interface BackendManagerEvidence {
+  sourceUrl: string | null;
+  similarArtistName?: string | null;
+  relationshipStatus: BackendManagerRelationshipStatus;
+  confidence: number;
+}
+
+export interface BackendManagerOpportunityDetails {
+  roster: string[];
+  relevantArtists: string[];
+  managerGenres: string[];
+  typicalAudienceLevel: BackendArtistTier;
+  services: string[];
+  acceptsSubmissions?: boolean | null;
+  contactPolicy?: string | null;
+  relationshipStatus: BackendManagerRelationshipStatus;
+  isActive?: boolean | null;
+  evidence: BackendManagerEvidence[];
+}
+
+export interface BackendManagerOpportunity {
+  id: string;
+  name: string;
+  opportunityType: "manager" | "management_company";
+  shortDescription?: string | null;
+  city?: string | null;
+  country?: string | null;
+  websiteUrl?: string | null;
+  sourceUrl?: string | null;
+  contactPageUrl?: string | null;
+  publicEmail?: string | null;
+  associatedArtists: string[];
+  associatedGenres: string[];
+  audienceLevel: BackendArtistTier;
+  applicationUrl?: string | null;
+  sources: { name: string; url: string | null; confidence?: number }[];
+  compatibilityScore?: number | null;
+  compatibilityExplanation?: string | null;
+  manager?: BackendManagerOpportunityDetails | null;
+}
+
+export interface BackendManagerSearchInput {
+  artist: string;
+  city: string;
+  genre: string;
+  target?: string | null;
+  limit: number;
+  mode: "deep";
+  artistProfile?: {
+    artistName?: string | null;
+    city?: string | null;
+    country?: string | null;
+    genres: string[];
+    estimatedLevel?: "emerging" | "developing" | "established" | "unknown";
+  };
+  similarArtists: Array<{
+    name: string;
+    genres: string[];
+    city: string | null;
+    country: string | null;
+    artistTier: BackendArtistTier;
+  }>;
+}
+
+export interface BackendManagerDiscoveryResult {
+  opportunities: BackendManagerOpportunity[];
+  warnings: string[];
+  fromCache: boolean;
+  metadata: { mode: "lightweight" | "deep"; keptOpportunities: number };
+}
+
 export interface BackendBookingSourceMetadata {
   providerName: string;
   sourceProvider: string;
@@ -423,6 +496,8 @@ export interface BackendPipelineResult {
   // independently of the concert-oriented booking pipeline since labels
   // aren't event-based (see src/pipeline.ts OpportunitySearchRunResult).
   labelOpportunities?: BackendLabelOpportunity[];
+  // High-confidence, bounded-cost manager results from the standard pipeline.
+  managerOpportunities?: BackendManagerOpportunity[];
   chartmetric?: BackendChartmetricArtistResult;
   // Cross-platform artistScaleScore for the analyzed artist plus its
   // comparison against the similar-artist sample (issue #219). Always

@@ -10,6 +10,7 @@ import type {
   OpportunityType,
   ArtistTier,
   SimilarArtist,
+  ManagerOpportunity,
 } from "@/types";
 import type { ArtistRadarRequest, ArtistRadarResponse } from "@/types/artistRadar";
 import type {
@@ -19,6 +20,7 @@ import type {
   BackendOpportunity,
   BackendPipelineResult,
   BackendSimilarArtist,
+  BackendManagerOpportunity,
 } from "./backendTypes";
 
 // "unknown" is intentionally absent: an unresolved tier must never be
@@ -192,6 +194,50 @@ function mapArtistScale(artistScale?: BackendArtistScale): ArtistScale | undefin
       differenceToAverage: artistScale.comparison.differenceToAverage,
       classification: artistScale.comparison.classification,
     },
+  };
+}
+
+export function mapManagerOpportunity(opportunity: BackendManagerOpportunity): ManagerOpportunity | null {
+  const details = opportunity.manager;
+  if (!details || !opportunity.sourceUrl || details.evidence.length === 0) return null;
+
+  const sourceLinks = Array.from(new Set([
+    opportunity.sourceUrl,
+    opportunity.websiteUrl,
+    opportunity.contactPageUrl,
+    opportunity.applicationUrl,
+    ...opportunity.sources.map((source) => source.url),
+    ...details.evidence.map((evidence) => evidence.sourceUrl),
+  ].filter((url): url is string => Boolean(url))));
+
+  return {
+    id: opportunity.id,
+    name: opportunity.name,
+    entityType: opportunity.opportunityType,
+    city: opportunity.city ?? null,
+    country: opportunity.country ?? null,
+    websiteUrl: opportunity.websiteUrl ?? null,
+    sourceUrl: opportunity.sourceUrl,
+    contactPageUrl: opportunity.contactPageUrl ?? null,
+    publicEmail: opportunity.publicEmail ?? null,
+    roster: details.roster,
+    relevantArtists: details.relevantArtists,
+    genres: details.managerGenres.length > 0 ? details.managerGenres : opportunity.associatedGenres,
+    typicalAudienceLevel: details.typicalAudienceLevel,
+    services: details.services,
+    acceptsSubmissions: details.acceptsSubmissions ?? null,
+    contactPolicy: details.contactPolicy ?? null,
+    relationshipStatus: details.relationshipStatus,
+    isActive: details.isActive ?? null,
+    compatibilityScore: opportunity.compatibilityScore ?? 0,
+    compatibilityExplanation: opportunity.compatibilityExplanation ?? "Compatibility is based on sourced management activity.",
+    evidence: details.evidence.map((evidence) => ({
+      sourceUrl: evidence.sourceUrl,
+      similarArtistName: evidence.similarArtistName ?? null,
+      relationshipStatus: evidence.relationshipStatus,
+      confidence: evidence.confidence,
+    })),
+    sourceLinks,
   };
 }
 
@@ -461,6 +507,10 @@ export function mapPipelineResultToArtistRadarResponse(
     kpis: buildKpis(similarArtists, bookingOpportunities),
     similarArtists,
     bookingOpportunities,
+    managerOpportunities: (result.managerOpportunities ?? []).flatMap((opportunity) => {
+      const mapped = mapManagerOpportunity(opportunity);
+      return mapped ? [mapped] : [];
+    }),
     topCities: includeBooking ? buildTopCities(bookingOpportunities) : [],
     sources: includeBooking ? buildSources(result) : [],
     bookingDiagnostics: includeBooking

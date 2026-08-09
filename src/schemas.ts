@@ -948,6 +948,28 @@ export const BookerOpportunityDetailsSchema = z.object({
   isActive: z.boolean().nullable().optional()
 });
 
+export const ManagementRelationshipStatusSchema = z.enum(["current", "former", "unknown"]);
+
+export const ManagerEvidenceSchema = z.object({
+  sourceUrl: z.string().trim().url().nullable(),
+  similarArtistName: z.string().trim().min(1).nullable().optional(),
+  relationshipStatus: ManagementRelationshipStatusSchema,
+  confidence: ConfidenceScoreSchema
+});
+
+export const ManagerOpportunityDetailsSchema = z.object({
+  roster: z.array(z.string().trim().min(1)).default([]),
+  relevantArtists: z.array(z.string().trim().min(1)).default([]),
+  managerGenres: z.array(z.string().trim().min(1)).default([]),
+  typicalAudienceLevel: ArtistTierSchema.default("unknown"),
+  services: z.array(z.string().trim().min(1)).default([]),
+  acceptsSubmissions: z.boolean().nullable().optional(),
+  contactPolicy: z.string().trim().min(1).nullable().optional(),
+  relationshipStatus: ManagementRelationshipStatusSchema.default("unknown"),
+  isActive: z.boolean().nullable().optional(),
+  evidence: z.array(ManagerEvidenceSchema).min(1)
+});
+
 export const PlaylistOpportunityDetailsSchema = z.object({
   platform: z.string().trim().min(1).nullable().optional(),
   playlistUrl: OptionalUrlSchema,
@@ -979,6 +1001,7 @@ const PRODUCER_OR_STUDIO_OPPORTUNITY_TYPES = [
 ] as const;
 
 const BOOKER_OPPORTUNITY_TYPES = ["booker", "booking_agency", "promoter"] as const;
+const MANAGER_OPPORTUNITY_TYPES = ["manager", "management_company"] as const;
 
 export const GenericOpportunitySchema = z
   .object({
@@ -1014,6 +1037,7 @@ export const GenericOpportunitySchema = z
     concert: ConcertOpportunityDetailsSchema.nullable().optional(),
     label: LabelOpportunityDetailsSchema.nullable().optional(),
     booker: BookerOpportunityDetailsSchema.nullable().optional(),
+    manager: ManagerOpportunityDetailsSchema.nullable().optional(),
     playlist: PlaylistOpportunityDetailsSchema.nullable().optional(),
     producerOrStudio: ProducerOrStudioOpportunityDetailsSchema.nullable().optional(),
     // Escape hatch for categories without a dedicated group yet (venue,
@@ -1040,6 +1064,13 @@ export const GenericOpportunitySchema = z
         code: z.ZodIssueCode.custom,
         path: ["booker"],
         message: "booker details only apply to booker, booking_agency or promoter opportunities"
+      });
+    }
+    if (value.manager && !(MANAGER_OPPORTUNITY_TYPES as readonly string[]).includes(value.opportunityType)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["manager"],
+        message: "manager details only apply to manager or management_company opportunities"
       });
     }
     if (value.playlist && value.opportunityType !== "playlist") {

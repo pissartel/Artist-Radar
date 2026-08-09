@@ -4,6 +4,7 @@ import ArtistHeader from "@/components/dashboard/ArtistHeader";
 import KpiGrid from "@/components/dashboard/KpiGrid";
 import SimilarArtistsSection from "@/components/dashboard/SimilarArtistsSection";
 import BookingSection from "@/components/dashboard/BookingSection";
+import ManagerOpportunitiesSection from "@/components/dashboard/ManagerOpportunitiesSection";
 import WarningsBanner from "@/components/dashboard/WarningsBanner";
 import {
   ArtistRadarEmptyOnboardingState,
@@ -27,7 +28,7 @@ export default function OverviewPage() {
     return <ArtistRadarErrorState message={state.message} onRetry={refetch} />;
   }
 
-  const { artist, kpis, similarArtists, bookingOpportunities, topCities, warnings } = state.data;
+  const { artist, kpis, similarArtists, bookingOpportunities, managerOpportunities, topCities, warnings } = state.data;
 
   return (
     <>
@@ -42,6 +43,7 @@ export default function OverviewPage() {
         metrics={artist.metrics}
         similarArtistCount={similarArtists.length}
       />
+      <ManagerOpportunitiesSection managers={managerOpportunities} />
     </>
   );
 }

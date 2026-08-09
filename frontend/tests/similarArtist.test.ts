@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   getCommercialExplanation,
   getCommercialTierLabel,
+  getNotorietyLabel,
   getScaleFitLabel,
+  hasKnownCommercialScale,
+  sortSimilarArtistsByMatch,
 } from "@/lib/similarArtist";
 import type { SimilarArtist } from "@/types";
 
@@ -45,6 +48,79 @@ describe("getScaleFitLabel", () => {
 
   it("returns Unknown when no commercialTier is present", () => {
     expect(getScaleFitLabel(undefined)).toBe("Unknown");
+  });
+});
+
+describe("hasKnownCommercialScale", () => {
+  it("treats missing and scale_unknown tiers as unavailable", () => {
+    expect(hasKnownCommercialScale(undefined)).toBe(false);
+    expect(hasKnownCommercialScale("scale_unknown")).toBe(false);
+  });
+
+  it("treats real commercial relationship tiers as displayable", () => {
+    expect(hasKnownCommercialScale("same_level")).toBe(true);
+    expect(hasKnownCommercialScale("major_reference")).toBe(true);
+  });
+});
+
+describe("getNotorietyLabel", () => {
+  it("does not render a notoriety label when every scale source is unknown", () => {
+    expect(getNotorietyLabel(baseArtist())).toBeNull();
+    expect(getNotorietyLabel(baseArtist({ commercialAbsoluteScale: "unknown" }))).toBeNull();
+  });
+
+  it("uses absolute commercial scale first when available", () => {
+    expect(getNotorietyLabel(baseArtist({ commercialAbsoluteScale: "major", artistTier: "emerging" }))).toBe("Major artist");
+    expect(getNotorietyLabel(baseArtist({ commercialAbsoluteScale: "developing" }))).toBe("Developing artist");
+  });
+
+  it("falls back to computed artist scale when available", () => {
+    expect(
+      getNotorietyLabel(
+        baseArtist({
+          artistScaleBand: "regional",
+          artistScaleScoreConfidence: "medium",
+          artistTier: "emerging",
+        }),
+      ),
+    ).toBe("Regional artist");
+  });
+
+  it("falls back to artist tier when no richer scale label is available", () => {
+    expect(getNotorietyLabel(baseArtist({ artistTier: "rising" }))).toBe("Rising artist");
+  });
+});
+
+describe("sortSimilarArtistsByMatch", () => {
+  it("orders close peer candidates before larger reference artists", () => {
+    const artists = [
+      baseArtist({
+        id: "as-it-is",
+        name: "As It Is",
+        matchScore: 82,
+        musicalMatchScore: 92,
+        commercialTier: "major_reference",
+      }),
+      baseArtist({
+        id: "bad-frequencies",
+        name: "Bad Frequencies",
+        matchScore: 70,
+        musicalMatchScore: 84,
+        commercialTier: "scale_unknown",
+      }),
+      baseArtist({
+        id: "broad-peak",
+        name: "Broad Peak",
+        matchScore: 76,
+        musicalMatchScore: 90,
+      }),
+    ];
+
+    expect(sortSimilarArtistsByMatch(artists).map((artist) => artist.name)).toEqual([
+      "Broad Peak",
+      "Bad Frequencies",
+      "As It Is",
+    ]);
   });
 });
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { SimilarArtist } from "@/types";
+import { sortSimilarArtistsByMatch } from "@/lib/similarArtist";
 import SimilarArtistCard from "./SimilarArtistCard";
 
 interface SimilarArtistsSectionProps {
@@ -11,7 +12,7 @@ const MAX_CAROUSEL_ARTISTS = 15;
 export default function SimilarArtistsSection({
   artists,
 }: SimilarArtistsSectionProps) {
-  const carouselArtists = artists.slice(0, MAX_CAROUSEL_ARTISTS);
+  const carouselArtists = sortSimilarArtistsByMatch(artists).slice(0, MAX_CAROUSEL_ARTISTS);
   return (
     <section className="mb-6">
       <div className="flex items-center justify-between mb-3">

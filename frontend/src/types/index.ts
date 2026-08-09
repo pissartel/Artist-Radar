@@ -230,6 +230,12 @@ export interface SimilarArtist {
   artistScaleBand?: ArtistScaleBand | null;
   artistScaleScoreConfidence?: ArtistScaleScoreConfidence;
   artistScaleScoreCoverage?: number;
+  bookingCategory?: string;
+  possibleUse?: string;
+  verificationStatus?: string;
+  localRelevance?: number;
+  sizeRelevance?: number;
+  sceneRelevance?: number;
   // Future fields expected from the similar-artist pipeline (not yet populated in V1):
   matchReasons?: string[];
   sharedGenres?: string[];

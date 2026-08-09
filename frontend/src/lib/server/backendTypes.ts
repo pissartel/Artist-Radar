@@ -206,7 +206,12 @@ export interface BackendSimilarArtist {
   city: string | null;
   country: string | null;
   reason: string;
+  reasons?: string[];
+  sourceUrls?: string[];
   artistTier: BackendArtistTier;
+  bookingCategory?: string;
+  possibleUse?: string;
+  verificationStatus?: string;
   totalRelevance: number;
   estimatedFollowers: number | null;
   spotifyId?: string | null;
@@ -219,6 +224,8 @@ export interface BackendSimilarArtist {
   // match" dimension, kept independently visible from the commercial-scale
   // fields below rather than folded into a single ambiguous percentage.
   genreRelevance: number;
+  localRelevance?: number;
+  sizeRelevance?: number;
   sceneRelevance: number;
   // Issue #201: additive Chartmetric-informed commercial-scale fields.
   commercialTier?: BackendCommercialTier;

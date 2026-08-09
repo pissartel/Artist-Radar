@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { SimilarArtist } from "@/types";
+import { sortSimilarArtistsByMatch } from "@/lib/similarArtist";
 import SimilarArtistCard from "./SimilarArtistCard";
 import Select from "@/components/ui/Select";
 
@@ -38,14 +39,14 @@ export default function SimilarArtistsExplorer({
   const filteredArtists = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    return artists.filter((artist) => {
+    return sortSimilarArtistsByMatch(artists.filter((artist) => {
       const matchesSearch = query === "" || artist.name.toLowerCase().includes(query);
       const matchesGenre = genre === "all" || artist.genres.includes(genre);
       const matchesLocation = location === "all" || artist.location === location;
       const matchesScore = artist.matchScore >= minScore;
 
       return matchesSearch && matchesGenre && matchesLocation && matchesScore;
-    });
+    }));
   }, [artists, search, genre, location, minScore]);
 
   return (

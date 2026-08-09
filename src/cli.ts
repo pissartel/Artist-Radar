@@ -77,11 +77,12 @@ function addOpportunityCommand(mode: Mode, description: string): void {
       });
       const paths = await exportOpportunities(input, result);
 
-      if (input.mode === "booking" && paths.artistJsonPath && paths.similarArtistsJsonPath && paths.bookingJsonPath && paths.bookingSummary) {
+      if (input.mode === "booking" && paths.artistJsonPath && paths.similarArtistsJsonPath && paths.bookingJsonPath && paths.professionalOpportunitiesJsonPath && paths.bookingSummary) {
         console.log(formatBookingOutputLog({
           artistJsonPath: paths.artistJsonPath,
           similarArtistsJsonPath: paths.similarArtistsJsonPath,
           bookingJsonPath: paths.bookingJsonPath,
+          professionalOpportunitiesJsonPath: paths.professionalOpportunitiesJsonPath,
           bookingSummary: paths.bookingSummary
         }));
       } else {

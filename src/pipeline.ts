@@ -50,6 +50,12 @@ import {
   type DiscoverBookerOpportunitiesOptions
 } from "./bookers/discoverBookerOpportunities.js";
 import type { BookerSearchInput } from "./bookers/types.js";
+import {
+  buildDefaultManagerDiscoveryOptions,
+  discoverManagerOpportunities,
+  type DiscoverManagerOpportunitiesOptions
+} from "./managers/discoverManagerOpportunities.js";
+import type { ManagerSearchInput } from "./managers/types.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
@@ -69,6 +75,7 @@ export interface RunOpportunitySearchOptions {
   artistConcertProviders?: ArtistConcertProvider[];
   labelDiscoveryOptions?: DiscoverLabelOpportunitiesOptions;
   bookerDiscoveryOptions?: DiscoverBookerOpportunitiesOptions;
+  managerDiscoveryOptions?: DiscoverManagerOpportunitiesOptions;
   // When provided, pipeline stage progress is recorded in the in-memory
   // execution store (see pipelineExecutionState.ts) so a status endpoint can
   // report it back to the caller while this call is still running.
@@ -112,6 +119,9 @@ export interface OpportunitySearchRunResult {
   // ranked independently of the concert-oriented booking pipeline for the
   // same reason labels are: they aren't event-based.
   bookerOpportunities?: GenericOpportunity[];
+  // High-confidence manager/company matches from the bounded, lightweight
+  // pipeline mode. Deeper searches are explicitly invoked by the Managers page.
+  managerOpportunities?: GenericOpportunity[];
   // Chartmetric audience-enrichment result for the main artist (issue
   // #142). Always populated by runOpportunitySearch (with a "skipped"/
   // "error" status rather than an exception on any failure) so callers can
@@ -273,6 +283,16 @@ export async function runOpportunitySearch(
         artistProfile: profile,
         similarArtists: similarArtistsForLiveSearch
       }, options.bookerDiscoveryOptions);
+      const managerOpportunities = await runManagerDiscoverySafely({
+        artist: input.artist,
+        city: input.city,
+        genre: input.genre,
+        target: input.target,
+        limit: Math.min(input.limit, 3),
+        artistProfile: profile,
+        similarArtists: similarArtistsForLiveSearch,
+        mode: "lightweight"
+      }, options.managerDiscoveryOptions);
       track("SCORING_RESULTS");
       track("PREPARING_OVERVIEW");
 
@@ -287,6 +307,7 @@ export async function runOpportunitySearch(
         ticketmaster: buildTicketmasterEvidenceSafely(bookingSearch),
         labelOpportunities,
         bookerOpportunities,
+        managerOpportunities,
         chartmetric,
         artistScale
       };
@@ -480,6 +501,28 @@ async function runBookerDiscoverySafely(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     debugLog("pipeline", "runOpportunitySearch booker discovery failed and was skipped", { message });
+    return [];
+  }
+}
+
+async function runManagerDiscoverySafely(
+  input: ManagerSearchInput,
+  options: DiscoverManagerOpportunitiesOptions | undefined
+): Promise<GenericOpportunity[]> {
+  try {
+    const discovery = await discoverManagerOpportunities(input, options ?? buildDefaultManagerDiscoveryOptions());
+    debugLog("pipeline", "runOpportunitySearch manager discovery summary", {
+      mode: discovery.metadata.mode,
+      candidateCount: discovery.metadata.rawCandidateCount,
+      keptOpportunities: discovery.metadata.keptOpportunities,
+      fromCache: discovery.fromCache,
+      warningsCount: discovery.warnings.length
+    });
+    return discovery.opportunities;
+  } catch (error) {
+    debugLog("pipeline", "runOpportunitySearch manager discovery failed and was skipped", {
+      message: error instanceof Error ? error.message : String(error)
+    });
     return [];
   }
 }

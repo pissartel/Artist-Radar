@@ -15,6 +15,7 @@ export interface ExportPaths {
   artistJsonPath?: string;
   similarArtistsJsonPath?: string;
   bookingJsonPath?: string;
+  professionalOpportunitiesJsonPath?: string;
   bookingSummary?: BookingOutputSummary;
 }
 
@@ -23,7 +24,7 @@ export interface BookingRequestOutputInput {
   similarArtists: OpportunitySearchRunResult["similarArtists"];
   bookingResult: Pick<
     OpportunitySearchRunResult,
-    "opportunities" | "venueCandidates" | "eventCandidates" | "bookingSearch" | "labelOpportunities" | "bookerOpportunities" | "chartmetric"
+    "opportunities" | "venueCandidates" | "eventCandidates" | "bookingSearch" | "labelOpportunities" | "bookerOpportunities" | "managerOpportunities" | "chartmetric"
   >;
   outputDir: string;
 }
@@ -32,6 +33,7 @@ export interface BookingRequestOutputPaths {
   artistJsonPath: string;
   similarArtistsJsonPath: string;
   bookingJsonPath: string;
+  professionalOpportunitiesJsonPath: string;
   summary: BookingOutputSummary;
 }
 
@@ -40,13 +42,14 @@ export interface BookingOutputSummary {
   bookingOpportunitiesCount: number;
   labelOpportunitiesCount: number;
   bookerOpportunitiesCount: number;
+  managerOpportunitiesCount: number;
   sourcesUsedCount: number;
   warningsCount: number;
 }
 
 export class BookingOutputWriteError extends Error {
   constructor(
-    readonly file: "artist.json" | "similar-artists.json" | "booking.json",
+    readonly file: "artist.json" | "similar-artists.json" | "booking.json" | "professional-opportunities.json",
     readonly intendedPath: string,
     readonly originalError: unknown
   ) {
@@ -177,6 +180,7 @@ export async function exportOpportunities(
       artistJsonPath: bookingRequestPaths.artistJsonPath,
       similarArtistsJsonPath: bookingRequestPaths.similarArtistsJsonPath,
       bookingJsonPath: bookingRequestPaths.bookingJsonPath,
+      professionalOpportunitiesJsonPath: bookingRequestPaths.professionalOpportunitiesJsonPath,
       bookingSummary: bookingRequestPaths.summary
     });
 
@@ -189,6 +193,7 @@ export async function exportOpportunities(
       artistJsonPath: bookingRequestPaths.artistJsonPath,
       similarArtistsJsonPath: bookingRequestPaths.similarArtistsJsonPath,
       bookingJsonPath: bookingRequestPaths.bookingJsonPath,
+      professionalOpportunitiesJsonPath: bookingRequestPaths.professionalOpportunitiesJsonPath,
       bookingSummary: bookingRequestPaths.summary
     };
   } else {
@@ -228,6 +233,7 @@ export async function writeBookingRequestOutputs({
   const artistJsonPath = path.join(outputDir, "artist.json");
   const similarArtistsJsonPath = path.join(outputDir, "similar-artists.json");
   const bookingJsonPath = path.join(outputDir, "booking.json");
+  const professionalOpportunitiesJsonPath = path.join(outputDir, "professional-opportunities.json");
   const flattenedSimilarArtists = flattenSimilarArtists(similarArtists);
   const bookingOpportunities = bookingResult.bookingSearch?.opportunities ?? bookingResult.opportunities;
   const bookingWarnings = bookingResult.bookingSearch?.warnings ?? [];
@@ -246,46 +252,56 @@ export async function writeBookingRequestOutputs({
       warnings: bookingWarnings,
       sourceMetadata,
       rejectedByReason
-    },
+    }
+  };
+  const professionalOpportunitiesOutput = {
     labels: {
       opportunities: bookingResult.labelOpportunities ?? []
     },
     bookers: {
       opportunities: bookingResult.bookerOpportunities ?? []
+    },
+    managers: {
+      opportunities: bookingResult.managerOpportunities ?? []
     }
   };
 
   await writeBookingJsonFile("artist.json", artistJsonPath, artistOutput);
   await writeBookingJsonFile("similar-artists.json", similarArtistsJsonPath, similarArtistsOutput);
   await writeBookingJsonFile("booking.json", bookingJsonPath, bookingOutput);
+  await writeBookingJsonFile("professional-opportunities.json", professionalOpportunitiesJsonPath, professionalOpportunitiesOutput);
 
   return {
     artistJsonPath,
     similarArtistsJsonPath,
     bookingJsonPath,
+    professionalOpportunitiesJsonPath,
     summary: {
       similarArtistsCount: flattenedSimilarArtists.length,
       bookingOpportunitiesCount: bookingOpportunities.length,
-      labelOpportunitiesCount: bookingOutput.labels.opportunities.length,
-      bookerOpportunitiesCount: bookingOutput.bookers.opportunities.length,
+      labelOpportunitiesCount: professionalOpportunitiesOutput.labels.opportunities.length,
+      bookerOpportunitiesCount: professionalOpportunitiesOutput.bookers.opportunities.length,
+      managerOpportunitiesCount: professionalOpportunitiesOutput.managers.opportunities.length,
       sourcesUsedCount: sourcesUsed.length,
       warningsCount: artistOutput.warnings.length + similarArtistsOutput.warnings.length + bookingOutput.booking.warnings.length
     }
   };
 }
 
-export function formatBookingOutputLog(paths: Required<Pick<ExportPaths, "artistJsonPath" | "similarArtistsJsonPath" | "bookingJsonPath" | "bookingSummary">>): string {
+export function formatBookingOutputLog(paths: Required<Pick<ExportPaths, "artistJsonPath" | "similarArtistsJsonPath" | "bookingJsonPath" | "professionalOpportunitiesJsonPath" | "bookingSummary">>): string {
   return [
-    "Booking outputs written:",
+    "Analysis outputs written:",
     `- Artist data JSON: ${paths.artistJsonPath}`,
     `- Similar artists JSON: ${paths.similarArtistsJsonPath}`,
     `- Booking opportunities JSON: ${paths.bookingJsonPath}`,
+    `- Professional opportunities JSON: ${paths.professionalOpportunitiesJsonPath}`,
     "",
-    "Booking output summary:",
+    "Analysis output summary:",
     `- Similar artists: ${paths.bookingSummary.similarArtistsCount}`,
     `- Booking opportunities: ${paths.bookingSummary.bookingOpportunitiesCount}`,
     `- Label opportunities: ${paths.bookingSummary.labelOpportunitiesCount}`,
     `- Booker/agency/promoter opportunities: ${paths.bookingSummary.bookerOpportunitiesCount}`,
+    `- Manager opportunities: ${paths.bookingSummary.managerOpportunitiesCount}`,
     `- Sources used: ${paths.bookingSummary.sourcesUsedCount}`,
     `- Warnings: ${paths.bookingSummary.warningsCount}`
   ].join("\n");
@@ -363,7 +379,7 @@ function isBookingMode(input: ArtistInput): boolean {
 }
 
 async function writeBookingJsonFile(
-  file: "artist.json" | "similar-artists.json" | "booking.json",
+  file: "artist.json" | "similar-artists.json" | "booking.json" | "professional-opportunities.json",
   intendedPath: string,
   content: unknown
 ): Promise<void> {

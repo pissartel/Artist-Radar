@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { discoverBookerOpportunities } from "../src/bookers/discoverBookerOpportunities.js";
 import type { BookerSearchInput } from "../src/bookers/types.js";
 import type { SimilarArtist } from "../src/schemas.js";
+import type { WebExtractProvider, WebExtractResult } from "../src/providers/web/WebExtractProvider.js";
 import type { WebSearchOptions, WebSearchProvider, WebSearchResult } from "../src/providers/web/WebSearchProvider.js";
 
 const now = new Date("2026-07-25T00:00:00Z");
@@ -32,6 +33,15 @@ function mockSearchProvider(byQuery: (query: string) => WebSearchResult[]): WebS
     providerName: "test-booker-search",
     async search(query: string, _options?: WebSearchOptions): Promise<WebSearchResult[]> {
       return byQuery(query);
+    }
+  };
+}
+
+function mockExtractProvider(byUrl: (url: string) => WebExtractResult | null): WebExtractProvider {
+  return {
+    providerName: "test-booker-extract",
+    async extract(url: string): Promise<WebExtractResult | null> {
+      return byUrl(url);
     }
   };
 }
@@ -237,6 +247,48 @@ describe("discoverBookerOpportunities", () => {
     const result = await discoverBookerOpportunities(baseInput, { webSearchProvider: provider, maxQueriesPerStrategy: 3, now });
     expect(result.opportunities.some((o) => o.sourceUrl === "https://example.test/generic-agency")).toBe(false);
     expect(result.metadata.droppedForMissingEvidence).toBeGreaterThan(0);
+  });
+
+  it("extracts promising agency search results with empty snippets before requiring representation evidence", async () => {
+    const provider = mockSearchProvider((query) => {
+      if (query.includes("pop punk booking agency")) {
+        return [{
+          title: "Rockin' Dogs booking agency",
+          url: "https://example.test/rockin-dogs-booking-agency",
+          snippet: null,
+          sourceProvider: "test-booker-search",
+          confidence: 0.7,
+          links: []
+        }];
+      }
+      return [];
+    });
+    const extractProvider = mockExtractProvider((url) => {
+      if (url === "https://example.test/rockin-dogs-booking-agency") {
+        return {
+          url,
+          title: "Rockin' Dogs booking agency",
+          text: "Rockin' Dogs is a punk rock booking agency with artists: The Example Band, Active Friends. The agency organizes shows and is active in 2025.",
+          markdown: null,
+          links: ["https://example.test/contact"],
+          sourceProvider: "test-booker-extract",
+          statusCode: 200
+        };
+      }
+      return null;
+    });
+
+    const result = await discoverBookerOpportunities(baseInput, {
+      webSearchProvider: provider,
+      webExtractProvider: extractProvider,
+      maxQueriesPerStrategy: 3,
+      now
+    });
+
+    const opportunity = result.opportunities.find((o) => o.sourceUrl === "https://example.test/rockin-dogs-booking-agency");
+    expect(opportunity?.opportunityType).toBe("booking_agency");
+    expect(opportunity?.booker?.roster).toContain("The Example Band");
+    expect(result.metadata.strategyCandidateCounts.genre_specialization).toBeGreaterThan(0);
   });
 });
 

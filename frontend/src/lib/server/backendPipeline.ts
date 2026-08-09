@@ -14,6 +14,8 @@ import type {
   BackendPipelineExecutionState,
   BackendPipelineResult,
   BackendRunOpportunitySearchOptions,
+  BackendManagerSearchInput,
+  BackendManagerDiscoveryResult,
 } from "./backendTypes";
 
 // The backend pipeline reads its API keys from the repo root .env, one level
@@ -35,3 +37,18 @@ export const ArtistInputSchema = {
 export const warnLog = loggerRuntime.warnLog as WarnLogFn;
 export const getPipelineExecutionState =
   pipelineExecutionStateRuntime.getPipelineExecutionState as GetPipelineExecutionStateFn;
+
+type DiscoverManagerOpportunitiesFn = (
+  input: BackendManagerSearchInput,
+  options: unknown,
+) => Promise<BackendManagerDiscoveryResult>;
+type BuildDefaultManagerDiscoveryOptionsFn = () => unknown;
+
+export async function runDeepManagerSearch(
+  input: BackendManagerSearchInput,
+): Promise<BackendManagerDiscoveryResult> {
+  const managerRuntime = await import("../../../../dist/managers/discoverManagerOpportunities.js");
+  const discover = managerRuntime.discoverManagerOpportunities as DiscoverManagerOpportunitiesFn;
+  const buildOptions = managerRuntime.buildDefaultManagerDiscoveryOptions as BuildDefaultManagerDiscoveryOptionsFn;
+  return discover(input, buildOptions());
+}

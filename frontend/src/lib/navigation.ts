@@ -9,6 +9,7 @@ const BASE_NAV_ITEMS: NavItem[] = [
   { label: "Overview", href: "/overview" },
   { label: "Similar Artists", href: "/similar-artists" },
   { label: "Opportunities", href: "/booking" },
+  { label: "Managers", href: "/managers" },
 ];
 
 // Settings is a placeholder shell with no real functionality yet — hidden

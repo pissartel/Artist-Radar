@@ -10,8 +10,10 @@ import {
   formatMonthlyListeners,
   getCommercialExplanation,
   getCommercialTierLabel,
+  getNotorietyLabel,
   getScaleFitLabel,
   getSharedGenres,
+  hasKnownCommercialScale,
 } from "@/lib/similarArtist";
 import { cardClassName as buildCardClassName } from "@/components/ui/Card";
 import { useProductFeatures } from "@/components/providers/ProductFeaturesProvider";
@@ -32,6 +34,27 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
+function formatOptionalLabel(value?: string): string | null {
+  if (!value) return null;
+  return value.replace(/_/g, " ");
+}
+
+function buildArtistSubtitle(artist: SimilarArtist, listeners: string | null): string {
+  return [artist.location || null, listeners ? `${listeners} monthly listeners` : null]
+    .filter((part): part is string => Boolean(part))
+    .join(" · ");
+}
+
+function DataSignal({ label, value }: { label: string; value: React.ReactNode }) {
+  if (value === null || value === undefined || value === "") return null;
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-widest text-foreground-muted">{label}</p>
+      <p className="text-sm font-semibold text-foreground mt-1 capitalize">{value}</p>
+    </div>
+  );
+}
+
 export default function SimilarArtistDetail({
   artist,
   referenceArtistGenres,
@@ -42,6 +65,9 @@ export default function SimilarArtistDetail({
   const sharedGenres = getSharedGenres(artist, referenceArtistGenres);
   const listeners = formatMonthlyListeners(artist.monthlyListeners);
   const platforms = artist.platforms ?? [];
+  const showCommercialScale = hasKnownCommercialScale(artist.commercialTier);
+  const notorietyLabel = getNotorietyLabel(artist);
+  const subtitle = buildArtistSubtitle(artist, listeners);
 
   return (
     <div className="max-w-3xl">
@@ -75,18 +101,18 @@ export default function SimilarArtistDetail({
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold text-foreground">{artist.name}</h1>
-              {/* Commercial-scale *relationship* to the analyzed artist
-                  (issue #201) — always shown, including "Scale unknown",
-                  replacing the old artistTier badge that mislabeled missing
-                  data as "Emerging". */}
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md border text-accent-text bg-accent-tint border-accent-tint whitespace-nowrap">
-                {getCommercialTierLabel(artist.commercialTier)}
-              </span>
+              {notorietyLabel && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md border text-foreground-secondary bg-white/5 border-border whitespace-nowrap">
+                  {notorietyLabel}
+                </span>
+              )}
+              {showCommercialScale && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md border text-accent-text bg-accent-tint border-accent-tint whitespace-nowrap">
+                  {getCommercialTierLabel(artist.commercialTier)}
+                </span>
+              )}
             </div>
-            <p className="text-sm text-foreground-muted mt-1">
-              {artist.location}
-              {listeners && <span> · {listeners} monthly listeners</span>}
-            </p>
+            {subtitle && <p className="text-sm text-foreground-muted mt-1">{subtitle}</p>}
           </div>
         </div>
         <MatchScoreBadge
@@ -99,26 +125,30 @@ export default function SimilarArtistDetail({
 
       <div className="mt-6 flex flex-col gap-4">
         <div className={cardClassName}>
-          <SectionTitle>Musical match vs. commercial scale</SectionTitle>
-          <div className="grid grid-cols-3 gap-3 text-center">
+          <SectionTitle>{showCommercialScale ? "Musical match vs. commercial scale" : "Match summary"}</SectionTitle>
+          <div className={`grid ${showCommercialScale ? "grid-cols-3" : "grid-cols-2"} gap-3 text-center`}>
             <div>
               <p className="text-[10px] uppercase tracking-widest text-foreground-muted">Musical match</p>
               <p className="text-base font-semibold text-foreground mt-1">
                 {artist.musicalMatchScore !== undefined ? `${artist.musicalMatchScore}%` : "—"}
               </p>
             </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-widest text-foreground-muted">Scale fit</p>
-              <p className="text-base font-semibold text-foreground mt-1">{getScaleFitLabel(artist.commercialTier)}</p>
-            </div>
+            {showCommercialScale && (
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-foreground-muted">Scale fit</p>
+                <p className="text-base font-semibold text-foreground mt-1">{getScaleFitLabel(artist.commercialTier)}</p>
+              </div>
+            )}
             <div>
               <p className="text-[10px] uppercase tracking-widest text-foreground-muted">Overall relevance</p>
               <p className="text-base font-semibold text-foreground mt-1">{artist.matchScore}%</p>
             </div>
           </div>
-          <p className="text-xs text-foreground-secondary leading-relaxed mt-4">
-            {getCommercialExplanation(artist)}
-          </p>
+          {showCommercialScale && (
+            <p className="text-xs text-foreground-secondary leading-relaxed mt-4">
+              {getCommercialExplanation(artist)}
+            </p>
+          )}
         </div>
 
         {artist.genres.length > 0 && (
@@ -162,6 +192,20 @@ export default function SimilarArtistDetail({
               </div>
             </>
           )}
+        </div>
+
+        <div className={cardClassName}>
+          <SectionTitle>Data signals</SectionTitle>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <DataSignal label="Category" value={formatOptionalLabel(artist.bookingCategory)} />
+            <DataSignal label="Notoriety" value={notorietyLabel} />
+            <DataSignal label="Use" value={formatOptionalLabel(artist.possibleUse)} />
+            <DataSignal label="Verification" value={formatOptionalLabel(artist.verificationStatus)} />
+            <DataSignal label="Audience" value={listeners ? `${listeners} followers/listeners` : null} />
+            <DataSignal label="Scene relevance" value={artist.sceneRelevance !== undefined ? `${artist.sceneRelevance}%` : null} />
+            <DataSignal label="Size relevance" value={artist.sizeRelevance !== undefined ? `${artist.sizeRelevance}%` : null} />
+            <DataSignal label="Sources" value={artist.sourceUrls?.length ? artist.sourceUrls.length : null} />
+          </div>
         </div>
 
         <div className={cardClassName}>

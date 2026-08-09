@@ -137,6 +137,8 @@ function mapSimilarArtist(artist: BackendSimilarArtist): SimilarArtist {
     matchScore: artist.totalRelevance,
     musicalMatchScore: artist.genreRelevance,
     reason: artist.reason,
+    matchReasons: artist.reasons,
+    sourceUrls: artist.sourceUrls,
     // "unknown" intentionally has no entry in ARTIST_TIER_MAP — omit the
     // field entirely rather than mislabel an unresolved tier.
     artistTier: artist.artistTier === "unknown" ? undefined : ARTIST_TIER_MAP[artist.artistTier],
@@ -158,6 +160,12 @@ function mapSimilarArtist(artist: BackendSimilarArtist): SimilarArtist {
     artistScaleBand: artist.artistScaleBand,
     artistScaleScoreConfidence: artist.artistScaleScoreConfidence,
     artistScaleScoreCoverage: artist.artistScaleScoreCoverage,
+    bookingCategory: artist.bookingCategory,
+    possibleUse: artist.possibleUse,
+    verificationStatus: artist.verificationStatus,
+    localRelevance: artist.localRelevance,
+    sizeRelevance: artist.sizeRelevance,
+    sceneRelevance: artist.sceneRelevance,
   };
 }
 

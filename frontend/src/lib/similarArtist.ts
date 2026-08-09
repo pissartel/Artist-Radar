@@ -1,4 +1,5 @@
 import type { CommercialTier, Opportunity, SimilarArtist } from "@/types";
+import { ARTIST_SCALE_BAND_LABELS } from "@/lib/artistScale";
 
 // Issue #201: human-readable labels for the commercial-scale *relationship*
 // tier — kept separate from the artist's own absolute scale (see
@@ -30,6 +31,70 @@ export function getCommercialTierLabel(tier?: CommercialTier): string {
 
 export function getScaleFitLabel(tier?: CommercialTier): string {
   return tier ? SCALE_FIT_LABELS[tier] : "Unknown";
+}
+
+export function hasKnownCommercialScale(tier?: CommercialTier): boolean {
+  return Boolean(tier && tier !== "scale_unknown");
+}
+
+export function getNotorietyLabel(artist: SimilarArtist): string | null {
+  switch (artist.commercialAbsoluteScale) {
+    case "major":
+      return "Major artist";
+    case "established":
+      return "Established artist";
+    case "developing":
+      return "Developing artist";
+    case "emerging":
+      return "Emerging artist";
+  }
+
+  if (
+    artist.artistScaleBand &&
+    artist.artistScaleScoreConfidence &&
+    artist.artistScaleScoreConfidence !== "unavailable"
+  ) {
+    return `${ARTIST_SCALE_BAND_LABELS[artist.artistScaleBand]} artist`;
+  }
+
+  switch (artist.artistTier) {
+    case "headliner":
+      return "Headliner";
+    case "established":
+      return "Established artist";
+    case "rising":
+      return "Rising artist";
+    case "emerging":
+      return "Emerging artist";
+  }
+
+  return null;
+}
+
+function getCommercialScaleSortPenalty(artist: SimilarArtist): number {
+  switch (artist.commercialTier) {
+    case "major_reference":
+      return 2;
+    case "aspirational":
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+export function sortSimilarArtistsByMatch(artists: SimilarArtist[]): SimilarArtist[] {
+  return [...artists].sort((a, b) => {
+    const scalePenaltyDiff = getCommercialScaleSortPenalty(a) - getCommercialScaleSortPenalty(b);
+    if (scalePenaltyDiff !== 0) return scalePenaltyDiff;
+
+    const musicalDiff = (b.musicalMatchScore ?? b.matchScore) - (a.musicalMatchScore ?? a.matchScore);
+    if (musicalDiff !== 0) return musicalDiff;
+
+    const overallDiff = b.matchScore - a.matchScore;
+    if (overallDiff !== 0) return overallDiff;
+
+    return a.name.localeCompare(b.name);
+  });
 }
 
 // A plain-language explanation of the commercial-scale relationship for the

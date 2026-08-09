@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { extractPublicContactSignals, pickBestContact } from "../booking/contactExtraction.js";
 import { matchBookingGenres } from "../booking/genreMatching.js";
-import { buildDefaultWebExtractProvider, getEnabledBookingSearchProviders, type WebProviderEnv } from "../providers/web/providers.js";
+import { buildDefaultWebExtractProvider, FallbackSearchProvider, getEnabledBookingSearchProviders, type WebProviderEnv } from "../providers/web/providers.js";
 import type { WebExtractProvider } from "../providers/web/WebExtractProvider.js";
 import type { WebSearchProvider, WebSearchResult } from "../providers/web/WebSearchProvider.js";
 import type { GenericOpportunity } from "../schemas.js";
@@ -13,6 +13,7 @@ import {
 } from "./bookerDiscoveryQueries.js";
 import {
   classifyBookerEntityType,
+  classifyPotentialBookerEntityType,
   extractBookerActivityStatus,
   extractBookerAudienceLevel,
   extractBookerRoster,
@@ -24,7 +25,7 @@ import {
 } from "./bookerSignalExtraction.js";
 import { scoreBookerCompatibility } from "./scoreBookerCompatibility.js";
 import type { BookerDiscoveryStrategy, BookerGeographicRelevance, BookerSearchInput, RawBookerCandidate } from "./types.js";
-import { warnLog } from "../utils/logger.js";
+import { debugLog, warnLog } from "../utils/logger.js";
 
 export interface DiscoverBookerOpportunitiesOptions {
   webSearchProvider: WebSearchProvider | null;
@@ -86,6 +87,7 @@ export async function discoverBookerOpportunities(
   ];
 
   const rawCandidates: RawBookerCandidate[] = [];
+  const extractionSeeds: RawBookerCandidate[] = [];
   const searchedQueries: string[] = [];
   const strategyCandidateCounts = emptyStrategyCounts();
   const providerWarnings: string[] = [];
@@ -99,6 +101,12 @@ export async function discoverBookerOpportunities(
         results = await webSearchProvider.search(query, {
           limit: Math.min(options.maxResultsPerQuery ?? 4, input.limit)
         });
+        debugLog("bookers", "booker search query completed", {
+          provider: webSearchProvider.providerName,
+          strategy,
+          query,
+          rawResultCount: results.length
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         providerWarnings.push(`${webSearchProvider.providerName} booker search failed for query "${query}": ${message}.`);
@@ -108,6 +116,24 @@ export async function discoverBookerOpportunities(
         const candidate = webResultToBookerCandidate(result, strategy);
         if (!candidate) {
           droppedForMissingEvidence += 1;
+          const extractionSeed = webResultToExtractionSeed(result, strategy);
+          if (extractionSeed) {
+            extractionSeeds.push(extractionSeed);
+            debugLog("bookers", "booker candidate queued for extraction", {
+              strategy,
+              query,
+              title: result.title ?? null,
+              url: result.url ?? null,
+              inferredEntityType: extractionSeed.entityType
+            });
+          }
+          debugLog("bookers", "booker candidate dropped for missing representation evidence", {
+            strategy,
+            query,
+            title: result.title ?? null,
+            url: result.url ?? null,
+            snippet: result.snippet?.slice(0, 240) ?? null
+          });
           continue;
         }
         rawCandidates.push(candidate);
@@ -117,7 +143,19 @@ export async function discoverBookerOpportunities(
   }
 
   if (options.webExtractProvider) {
-    const extractUrls = [...new Set(rawCandidates.map((candidate) => candidate.url).filter((url): url is string => Boolean(url)))]
+    const extractionCandidatesByUrl = new Map<string, { candidate: RawBookerCandidate; isSeed: boolean }>();
+    for (const candidate of rawCandidates) {
+      if (candidate.url) {
+        extractionCandidatesByUrl.set(candidate.url, { candidate, isSeed: false });
+      }
+    }
+    for (const candidate of extractionSeeds) {
+      if (candidate.url && !extractionCandidatesByUrl.has(candidate.url)) {
+        extractionCandidatesByUrl.set(candidate.url, { candidate, isSeed: true });
+      }
+    }
+
+    const extractUrls = [...extractionCandidatesByUrl.keys()]
       .slice(0, options.maxExtractPages ?? 6);
     for (const url of extractUrls) {
       let extracted;
@@ -134,9 +172,14 @@ export async function discoverBookerOpportunities(
       const text = [extracted.title, extracted.text, extracted.markdown].filter(Boolean).join(" ");
       const entityType = classifyBookerEntityType(text);
       if (!entityType) {
+        debugLog("bookers", "booker extracted page rejected for missing representation evidence", {
+          url,
+          title: extracted.title ?? null
+        });
         continue;
       }
-      const existing = rawCandidates.find((candidate) => candidate.url === url);
+      const existingEntry = extractionCandidatesByUrl.get(url);
+      const existing = existingEntry?.candidate;
       rawCandidates.push({
         name: extracted.title ?? existing?.name ?? url,
         url,
@@ -144,8 +187,17 @@ export async function discoverBookerOpportunities(
         strategy: existing?.strategy ?? "genre_specialization",
         entityType,
         text,
-        links: [],
+        links: extracted.links ?? existing?.links ?? [],
         confidence: extracted.statusCode && extracted.statusCode >= 200 && extracted.statusCode < 300 ? 0.75 : 0.55
+      });
+      if (existingEntry?.isSeed && existing) {
+        strategyCandidateCounts[existing.strategy] += 1;
+      }
+      debugLog("bookers", "booker extracted page accepted", {
+        url,
+        title: extracted.title ?? null,
+        entityType,
+        strategy: existing?.strategy ?? "genre_specialization"
       });
     }
   }
@@ -203,6 +255,27 @@ function webResultToBookerCandidate(result: WebSearchResult, strategy: BookerDis
     text,
     links: result.links ?? [],
     confidence: Math.max(0.4, result.confidence * 0.75)
+  };
+}
+
+function webResultToExtractionSeed(result: WebSearchResult, strategy: BookerDiscoveryStrategy): RawBookerCandidate | null {
+  if (!result.url) {
+    return null;
+  }
+  const text = [result.title, result.snippet, result.markdown, result.url, ...(result.links ?? [])].filter(Boolean).join(" ");
+  const entityType = classifyPotentialBookerEntityType(text);
+  if (!entityType) {
+    return null;
+  }
+  return {
+    name: result.title ?? result.url,
+    url: result.url,
+    sourceName: "booker_discovery_search_seed",
+    strategy,
+    entityType,
+    text,
+    links: result.links ?? [],
+    confidence: Math.max(0.25, result.confidence * 0.45)
   };
 }
 
@@ -388,11 +461,11 @@ function logBookerDiscoverySummary(
 export function buildDefaultBookerDiscoveryOptions(env: WebProviderEnv = process.env): DiscoverBookerOpportunitiesOptions {
   const webSearchProviders = getEnabledBookingSearchProviders(env);
   return {
-    webSearchProvider: webSearchProviders[0] ?? null,
+    webSearchProvider: webSearchProviders.length > 0 ? new FallbackSearchProvider(webSearchProviders) : null,
     webExtractProvider: buildDefaultWebExtractProvider(env),
     maxQueriesPerStrategy: 6,
     maxSimilarArtists: 4,
     maxResultsPerQuery: 4,
-    maxExtractPages: 6
+    maxExtractPages: 12
   };
 }

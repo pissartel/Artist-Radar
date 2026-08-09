@@ -47,6 +47,19 @@ export function classifyBookerEntityType(text: string): BookerEntityType | null 
   return null;
 }
 
+// Search providers such as Exa can return a strong title/URL match with no
+// snippet. This relaxed classifier is only used to decide whether a page is
+// worth extracting; final acceptance still goes through classifyBookerEntityType.
+export function classifyPotentialBookerEntityType(text: string): BookerEntityType | null {
+  if (BOOKING_AGENCY_PATTERN.test(text)) return "booking_agency";
+  if (PROMOTER_PATTERN.test(text)) return "promoter";
+  if (BOOKER_PATTERN.test(text)) return "booker";
+  if (/\b(bookings?|tour booking|artist agency|agence de booking)\b/i.test(text)) return "booking_agency";
+  if (/\b(promotions?|promoter|production|presents?)\b/i.test(text)) return "promoter";
+  if (/\bbooker\b/i.test(text)) return "booker";
+  return null;
+}
+
 const INACTIVE_PATTERN =
   /\b(on hiatus|no longer active|ceased operations?|closed down|d[ée]funt|dissous|n'op[èe]re plus|ferm[ée]|inactive since|discontinued|folded|plus en activit[ée])\b/i;
 const RECENT_YEAR_PATTERN = /\b(20[0-9]{2})\b/g;

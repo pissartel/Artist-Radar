@@ -77,6 +77,10 @@ export function useArtistRadarData(): UseArtistRadarDataResult {
     },
     enabled: Boolean(request),
     initialData: request ? () => readArtistRadarResponse(request) : undefined,
+    staleTime: 30 * 60 * 1_000,
+    gcTime: 24 * 60 * 60 * 1_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const executionId = request?.executionId ?? null;

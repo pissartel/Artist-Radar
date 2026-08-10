@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getOpportunitiesForVenue, getVenueById } from "@/lib/venue";
+import { toVenueEnrichmentRequest } from "@/lib/useVenueEnrichment";
 import type { Opportunity } from "@/types";
 
 function buildOpportunity(overrides: Partial<Opportunity> = {}): Opportunity {
@@ -54,7 +55,9 @@ describe("getVenueById", () => {
         venueCapacity: 450,
         venueConfidence: 80,
         venueImageUrl: "https://example.test/logo.png",
+        venueDescription: "Independent concert venue focused on emerging acts.",
         contact: "booking@lepointephemere.test",
+        contacts: [{ purpose: "booking", label: "Booking", value: "shows@lepointephemere.test", verified: true }],
       }),
     ];
 
@@ -65,6 +68,7 @@ describe("getVenueById", () => {
       name: "Le Point Ephemere",
       imageUrl: "https://example.test/logo.png",
       venueTypeLabel: null,
+      description: "Independent concert venue focused on emerging acts.",
       address: "200 Quai de Valmy",
       city: "Paris",
       country: "France",
@@ -72,6 +76,8 @@ describe("getVenueById", () => {
       confidence: 80,
       website: undefined,
       contact: "booking@lepointephemere.test",
+      contacts: [{ purpose: "booking", label: "Booking", value: "shows@lepointephemere.test", verified: true }],
+      venueType: "venue",
     });
   });
 
@@ -97,5 +103,18 @@ describe("getVenueById", () => {
 
     expect(venue?.capacity).toBe(450);
     expect(venue?.address).toBe("200 Quai de Valmy");
+  });
+});
+
+describe("toVenueEnrichmentRequest", () => {
+  it("does not send a stored event/programming page as the venue website", () => {
+    const request = toVenueEnrichmentRequest({
+      id: "venue-le-trianon-paris-france",
+      name: "Le Trianon",
+      venueTypeLabel: "Venue",
+      website: "https://www.letrianon.fr/fr/programmation/mina-tindle/",
+    });
+
+    expect(request.website).toBeNull();
   });
 });

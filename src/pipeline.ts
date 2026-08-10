@@ -457,6 +457,7 @@ export function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpp
     reason: opportunity.reason,
     score: opportunity.score,
     suggested_message: opportunity.fitSummary,
+    description: opportunity.target.description ?? null,
     date: opportunity.eventDate,
     dateRange: opportunity.dateRange,
     genres: opportunity.target.genres,
@@ -480,6 +481,17 @@ export function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpp
     lineup: opportunity.target.lineup ?? [],
     imageUrl: opportunity.imageUrl ?? undefined,
     ticketUrl: opportunity.ticketUrl ?? undefined,
+    contacts: opportunity.target.contacts.flatMap((contact) => {
+      if (!contact.value) return [];
+      return [{
+        purpose: "general" as const,
+        label: contact.type === "email" ? "Email" : contact.type === "phone" ? "Phone" : "Contact",
+        value: contact.value,
+        ...(contact.type === "contact_form" || contact.type === "social" ? { url: contact.value } : {}),
+        verified: contact.confidence >= 0.8,
+        ...(contact.sourceUrl ? { source: contact.sourceUrl } : {})
+      }];
+    }),
     matchBreakdown: opportunity.matchBreakdown,
     supportSlotPotential: opportunity.supportSlotPotential,
     relatedArtist: opportunity.derivedFromSimilarArtist

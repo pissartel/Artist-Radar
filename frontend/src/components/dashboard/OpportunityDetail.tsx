@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import type { MatchFactor, Opportunity, SimilarArtist } from "@/types";
 import type { VenueInfo } from "@/lib/venue";
+import type { CachedVenueEnrichment, VenueEnrichment } from "@/types/venueEnrichment";
+import { getOfficialVenueLink, VenueEnrichmentSkeleton } from "./VenueDetail";
 import { TYPE_LABELS } from "./BookingOpportunityCard";
 import SimilarArtistCard from "./SimilarArtistCard";
 import OpportunityActions from "./OpportunityActions";
@@ -22,26 +25,20 @@ import {
   getNegativeMatchFactors,
   getNeutralMatchFactors,
   getOpportunitySignal,
-  getOpportunitySource,
-  getOpportunitySourceUrl,
   getOrganizationTypeLabel,
   type OpportunityCardFamily,
   getPositiveMatchFactors,
-  getRecommendedAction,
-  getSourceEvidenceExcluding,
-  getTicketAction,
   getVenueTypeLabel,
-  isSameUrl,
   LINEUP_POSITION_LABELS,
   type OpportunitySignalKind,
 } from "@/lib/opportunity";
 import { cardClassName as buildCardClassName } from "@/components/ui/Card";
 import { useProductFeatures } from "@/components/providers/ProductFeaturesProvider";
+import { useVenueEnrichment } from "@/lib/useVenueEnrichment";
 
 interface OpportunityDetailProps {
   opportunity: Opportunity;
   relatedArtists: SimilarArtist[];
-  similarArtists: SimilarArtist[];
   venueInfo?: VenueInfo | null;
 }
 
@@ -61,24 +58,6 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 // links themselves must work now.
 function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value.trim());
-}
-
-function normalizeArtistKey(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-function findSimilarArtistByEvidenceName(artists: SimilarArtist[], name: string): SimilarArtist | undefined {
-  const evidenceKey = normalizeArtistKey(name);
-  if (!evidenceKey) return undefined;
-  const exact = artists.find((artist) => normalizeArtistKey(artist.name) === evidenceKey);
-  if (exact) return exact;
-  const singularEvidenceKey = evidenceKey.replace(/s$/, "");
-  return artists.find((artist) => normalizeArtistKey(artist.name).replace(/s$/, "") === singularEvidenceKey);
 }
 
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
@@ -101,6 +80,41 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
       )}
     </div>
   );
+}
+
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value?.trim())).map((value) => value.trim()))];
+}
+
+function socialLinkLabel(url: string): string {
+  const lower = url.toLowerCase();
+  if (lower.includes("instagram")) return "Instagram";
+  if (lower.includes("facebook")) return "Facebook";
+  if (lower.includes("linkedin")) return "LinkedIn";
+  if (lower.includes("twitter") || lower.includes("x.com")) return "X / Twitter";
+  return "Social";
+}
+
+function buildVenueInfoFromOpportunity(opportunity: Opportunity): VenueInfo {
+  return {
+    id: opportunity.venueId ?? opportunity.venueOpportunityId ?? opportunity.id,
+    name: opportunity.venue ?? opportunity.title,
+    imageUrl: opportunity.venueImageUrl ?? opportunity.imageUrl,
+    venueTypeLabel: getVenueTypeLabel(opportunity),
+    description: opportunity.venueDescription,
+    address: opportunity.address,
+    postalCode: opportunity.postalCode,
+    city: opportunity.city,
+    country: opportunity.country,
+    capacity: opportunity.venueCapacity ?? null,
+    confidence: opportunity.venueConfidence ?? null,
+    website: opportunity.venueWebsite,
+    contact: opportunity.contact ?? null,
+    contacts: opportunity.contacts,
+    sourceUrl: opportunity.sourceUrls?.[0],
+    sourceUrls: opportunity.sourceUrls ?? [],
+    venueType: opportunity.venueType ?? null,
+  };
 }
 
 // Single source of truth for the event/venue/organization facts block (issue
@@ -187,6 +201,8 @@ const SIGNAL_TONE_CLASSES: Record<OpportunitySignalKind, string> = {
 // feedback), instead of making the artist infer it from scattered fields.
 function OpportunitySignalBanner({ opportunity }: { opportunity: Opportunity }) {
   const signal = getOpportunitySignal(opportunity);
+  if (signal.kind === "venue_contact") return null;
+
   return (
     <div className={`rounded-xl border px-4 py-3 ${SIGNAL_TONE_CLASSES[signal.kind]}`}>
       <p className="text-sm font-semibold">{signal.label}</p>
@@ -383,56 +399,181 @@ function VenueSection({ opportunity, venueInfo }: { opportunity: Opportunity; ve
   );
 }
 
-function VenueArtistEvidenceList({
-  evidence,
-  similarArtists,
+function VenueOpportunityInformationSection({
+  enrichment,
+  isLoading,
+  error,
+  onRetry,
 }: {
-  evidence?: Opportunity["venueArtistEvidence"];
-  similarArtists: SimilarArtist[];
+  enrichment?: VenueEnrichment;
+  isLoading: boolean;
+  error: Error | null;
+  onRetry: () => void;
 }) {
-  if (!evidence || evidence.length === 0) return null;
+  const officialLink = getOfficialVenueLink(enrichment, enrichment?.website ?? null);
+  const secondaryWebsite = enrichment?.website && enrichment.website !== officialLink?.url ? enrichment.website : null;
+  const address = enrichment?.address;
+  const city = enrichment?.city;
+  const country = enrichment?.country;
+  const capacity = enrichment?.capacity;
+  const location = [city, country].filter(Boolean).join(", ");
+  const socialLinks = uniqueStrings([enrichment?.facebook, enrichment?.instagram, ...(enrichment?.otherSocialLinks ?? [])]);
+  const primaryLink = officialLink ?? (socialLinks[0]
+    ? { label: socialLinks[0].includes("facebook") ? "Facebook" : socialLinks[0].includes("instagram") ? "Instagram" : "Official page", organization: null, url: socialLinks[0] }
+    : null);
+  const secondaryLinks = uniqueStrings([secondaryWebsite, ...socialLinks]).filter((url) => url !== primaryLink?.url);
+  if (isLoading) return <VenueEnrichmentSkeleton />;
+  if (error) {
+    return (
+      <div className={cardClassName}>
+        <SectionTitle>Venue information</SectionTitle>
+        <p className="text-sm text-warning-text">Venue enrichment failed.</p>
+        <p className="text-xs text-foreground-muted mt-1 break-words">{error.message}</p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-3 text-xs font-medium text-accent-text hover:text-foreground border border-border-subtle px-3 py-1.5 rounded-lg transition-all"
+        >
+          Retry enrichment
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <p className="text-sm text-foreground-secondary">
-      Similar artist evidence:{" "}
-      {evidence.map((item, index) => (
-        <span key={`${item.similarArtistName}-${item.sourceUrl}`}>
-          {index > 0 && ", "}
-          {(() => {
-            const artist = findSimilarArtistByEvidenceName(similarArtists, item.similarArtistName);
-            return artist ? (
-              <Link
-                href={`/similar-artists/${artist.id}`}
-                className="text-accent-text hover:text-foreground transition-colors"
+    <div className={cardClassName}>
+      <SectionTitle>Venue information</SectionTitle>
+      {enrichment?.description && (
+        <p className="text-sm text-foreground-secondary leading-relaxed mb-3">{enrichment.description}</p>
+      )}
+      <div className="flex flex-col gap-1.5">
+        <InfoRow label="Type" value={enrichment?.type} />
+        <InfoRow label="Address" value={address} />
+        <InfoRow label="Location" value={location || null} />
+        <InfoRow label="Website" value={enrichment?.website ?? primaryLink?.url} />
+        <InfoRow label="Capacity" value={capacity != null ? `~${capacity.toLocaleString()}` : null} />
+      </div>
+      {(enrichment?.programsLiveMusic != null || enrichment?.booksEmergingArtists != null) && (
+        <div className="flex flex-col gap-1 mt-3 text-sm text-foreground-secondary">
+          {enrichment.programsLiveMusic != null && (
+            <p>Live music programming: {enrichment.programsLiveMusic ? "Yes" : "No"}</p>
+          )}
+          {enrichment.booksEmergingArtists != null && (
+            <p>Books emerging artists: {enrichment.booksEmergingArtists ? "Yes" : "No"}</p>
+          )}
+        </div>
+      )}
+      {enrichment?.genres && enrichment.genres.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-3">
+          {enrichment.genres.map((genre) => (
+            <span key={genre} className="text-xs text-foreground-secondary bg-white/5 border border-border-subtle px-2 py-1 rounded-md">
+              {genre}
+            </span>
+          ))}
+        </div>
+      )}
+      {primaryLink && (
+        <div className="mt-3">
+          {primaryLink.organization && (
+            <p className="text-xs text-foreground-muted mb-2">{primaryLink.organization}</p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {secondaryLinks.map((url) => (
+              <a
+                key={url}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex text-xs font-medium text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
               >
-                {item.similarArtistName}
-              </Link>
-            ) : (
-              <span>{item.similarArtistName}</span>
-            );
-          })()}
-          {item.eventName && <span className="text-foreground-muted"> ({item.eventName})</span>}
-        </span>
-      ))}
-    </p>
+                {socialLinkLabel(url)} ↗
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
 // Contacts grouped by purpose, each labeled with its trust source and
 // verification state — never an invented or inferred contact (issue #132
-// review feedback). The Contact/Get tickets external links live here too,
-// next to the rest of the contact/booking information (ticketing itself
-// moved into Source and ticketing below — issue #213).
-function ContactSection({ opportunity }: { opportunity: Opportunity }) {
-  const groups = getGroupedContacts(opportunity);
-  const contactAction = getContactAction(opportunity);
+// review feedback). If no public contact was found, the section says so
+// explicitly instead of falling back to generic outreach advice.
+function ContactSection({
+  opportunity,
+  enrichment,
+  isEnrichmentLoading = false,
+  enrichmentError,
+}: {
+  opportunity: Opportunity;
+  enrichment?: VenueEnrichment;
+  isEnrichmentLoading?: boolean;
+  enrichmentError?: Error | null;
+}) {
+  if (isEnrichmentLoading) {
+    return (
+      <div className={cardClassName}>
+        <SectionTitle>Contact</SectionTitle>
+        <div className="animate-pulse space-y-2">
+          <div className="h-3 w-28 rounded bg-white/10" />
+          <div className="h-3 w-52 rounded bg-white/10" />
+          <div className="h-3 w-40 rounded bg-white/10" />
+        </div>
+      </div>
+    );
+  }
+  if (enrichmentError) {
+    return (
+      <div className={cardClassName}>
+        <SectionTitle>Contact</SectionTitle>
+        <p className="text-sm text-foreground-muted">Contact enrichment unavailable because the venue lookup failed.</p>
+      </div>
+    );
+  }
 
-  if (groups.length === 0 && !contactAction) return null;
+  const enrichedContacts = [
+    enrichment?.bookingEmail
+      ? { purpose: "booking" as const, label: "Booking", value: enrichment.bookingEmail, source: "Venue enrichment" }
+      : null,
+    enrichment?.contactEmail
+      ? { purpose: "general" as const, label: "General", value: enrichment.contactEmail, source: "Venue enrichment" }
+      : null,
+    enrichment?.bookingContactName
+      ? { purpose: "booking" as const, label: "Booking contact", value: enrichment.bookingContactName, source: "Venue enrichment" }
+      : null,
+    enrichment?.phone
+      ? { purpose: "general" as const, label: "Phone", value: enrichment.phone, source: "Venue enrichment" }
+      : null,
+    enrichment?.programmingUrl
+      ? { purpose: "booking" as const, label: "Programming", value: enrichment.programmingUrl, url: enrichment.programmingUrl, source: "Venue enrichment" }
+      : null,
+    enrichment?.contactUrl
+      ? { purpose: "general" as const, label: "Contact page", value: enrichment.contactUrl, url: enrichment.contactUrl, source: "Venue enrichment" }
+      : null,
+  ]
+    .filter((contact): contact is NonNullable<typeof contact> => contact !== null)
+    .filter((contact, index, contacts) =>
+      contacts.findIndex((candidate) => candidate.value === contact.value) === index
+    );
+  const enrichedOpportunity: Opportunity = {
+    ...opportunity,
+    contacts: [...(opportunity.contacts ?? []), ...enrichedContacts],
+    contact: enrichment?.bookingEmail ?? enrichment?.contactEmail ?? enrichment?.contactUrl ?? opportunity.contact,
+  };
+  const groups = getGroupedContacts(enrichedOpportunity);
+  const contactAction = getContactAction(enrichedOpportunity);
+  const hasContact = groups.length > 0 || Boolean(contactAction);
 
   return (
     <div className={cardClassName}>
-      <SectionTitle>Contact information</SectionTitle>
+      <SectionTitle>Contact</SectionTitle>
       <div className="flex flex-col gap-3">
+        {!hasContact && (
+          <p className="text-sm text-foreground-secondary leading-relaxed">
+            No public contact found yet.
+          </p>
+        )}
         {groups.map((group) => (
           <div key={group.purpose}>
             <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-1">
@@ -454,19 +595,7 @@ function ContactSection({ opportunity }: { opportunity: Opportunity }) {
                     ) : (
                       <span className="text-foreground-secondary">{contact.value}</span>
                     )}
-                    <span
-                      className={`text-[9px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded-md border ${
-                        contact.verified
-                          ? "text-success-text bg-success-tint border-success-tint"
-                          : "text-foreground-muted bg-white/5 border-border"
-                      }`}
-                    >
-                      {contact.verified ? "Verified" : "Unverified"}
-                    </span>
                   </div>
-                  {contact.source && (
-                    <p className="text-[11px] text-foreground-muted mt-0.5">via {contact.source}</p>
-                  )}
                 </li>
               ))}
             </ul>
@@ -486,6 +615,67 @@ function ContactSection({ opportunity }: { opportunity: Opportunity }) {
         )}
       </div>
     </div>
+  );
+}
+
+function DebugRawData({
+  opportunity,
+  enrichmentQuery,
+}: {
+  opportunity: Opportunity;
+  enrichmentQuery: {
+    data?: CachedVenueEnrichment;
+    isLoading: boolean;
+    isFetching: boolean;
+    isError: boolean;
+    error: Error | null;
+  };
+}) {
+  const [copied, setCopied] = useState(false);
+  const rawData = {
+    opportunity,
+    venueEnrichment: {
+      status: enrichmentQuery.isLoading
+        ? "loading"
+        : enrichmentQuery.isError
+          ? "error"
+          : enrichmentQuery.data
+            ? "success"
+            : "not_requested",
+      isFetching: enrichmentQuery.isFetching,
+      cacheHit: enrichmentQuery.data?.cacheHit ?? null,
+      enrichedAt: enrichmentQuery.data?.enrichedAt ?? null,
+      enrichmentVersion: enrichmentQuery.data?.enrichmentVersion ?? null,
+      error: enrichmentQuery.error?.message ?? null,
+      data: enrichmentQuery.data?.enrichment ?? null,
+    },
+  };
+  const serialized = JSON.stringify(rawData, null, 2);
+
+  async function copyRawData() {
+    await navigator.clipboard.writeText(serialized);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <details className={cardClassName}>
+      <summary className="text-[10px] font-semibold text-foreground-muted uppercase tracking-widest cursor-pointer">
+        Raw data (debug)
+      </summary>
+      <div className="flex justify-end mt-3">
+        <button
+          type="button"
+          onClick={copyRawData}
+          className="text-xs font-medium text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all"
+        >
+          {copied ? "Copied" : "Copy raw data"}
+        </button>
+      </div>
+      <pre className="text-[11px] text-foreground-muted bg-background rounded-lg p-3 mt-2 overflow-x-auto">
+        {serialized}
+      </pre>
+    </details>
   );
 }
 
@@ -524,127 +714,56 @@ function MatchFactorSection({
   );
 }
 
+function LinkedArtistText({ text, artists }: { text: string; artists: SimilarArtist[] }) {
+  const matches = artists
+    .filter((artist) => artist.name && text.toLocaleLowerCase().includes(artist.name.toLocaleLowerCase()))
+    .sort((left, right) => right.name.length - left.name.length);
+  if (matches.length === 0) return text;
+
+  const pattern = new RegExp(
+    `(${matches.map((artist) => artist.name.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&")).join("|")})`,
+    "gi",
+  );
+  const artistsByName = new Map(matches.map((artist) => [artist.name.toLocaleLowerCase(), artist]));
+
+  return text.split(pattern).map((part, index) => {
+    const artist = artistsByName.get(part.toLocaleLowerCase());
+    return artist ? (
+      <Link
+        key={`${artist.id}-${index}`}
+        href={`/similar-artists/${artist.id}`}
+        className="text-accent-text hover:text-foreground underline underline-offset-2 transition-colors"
+      >
+        {part}
+      </Link>
+    ) : part;
+  });
+}
+
 function WhyItMatchesSection({
   factors,
-  opportunity,
-  similarArtists,
+  relatedArtists,
 }: {
   factors: MatchFactor[];
-  opportunity: Opportunity;
-  similarArtists: SimilarArtist[];
+  relatedArtists: SimilarArtist[];
 }) {
-  const hasVenueEvidence = Boolean(opportunity.venueArtistEvidence?.length);
-  if (factors.length === 0 && !hasVenueEvidence) return null;
+  if (factors.length === 0) return null;
 
   return (
     <div className={cardClassName}>
       <SectionTitle>Why it matches</SectionTitle>
-      {factors.length > 0 && (
-        <ul className="flex flex-col gap-2">
-          {factors.map((factor) => (
-            <li key={factor.code} className="flex items-start gap-2 text-sm">
-              <span className="text-success-text flex-shrink-0" aria-hidden="true">✓</span>
-              <span className="text-foreground-secondary">
-                {factor.label}
-                {factor.detail && factor.detail !== factor.label && (
-                  <span className="block text-xs text-foreground-muted mt-0.5">{factor.detail}</span>
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {hasVenueEvidence && (
-        <div className={factors.length > 0 ? "mt-3" : undefined}>
-          <VenueArtistEvidenceList evidence={opportunity.venueArtistEvidence} similarArtists={similarArtists} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Official event URL, source provider, and ticket URL — kept separate from
-// the Venue section above and from the detailed Source evidence list below
-// (issue #213), so the event's own source is never confused with the
-// venue's own official site.
-function SourceAndTicketingSection({ opportunity }: { opportunity: Opportunity }) {
-  const family = getCardFamily(opportunity);
-  const rawEventUrl = getOpportunitySourceUrl(opportunity);
-  // For a venue opportunity, the source URL and the venue's official
-  // website (rendered above in the Venue/Event information section) are
-  // often the exact same link — never show it a second time here (PR #218
-  // review feedback: "no identical source shown twice").
-  const eventUrl = isSameUrl(rawEventUrl, opportunity.venueWebsite) ? null : rawEventUrl;
-  const sourceProvider = getOpportunitySource(opportunity);
-  const ticketAction = getTicketAction(opportunity);
-
-  if (!eventUrl && !sourceProvider && !ticketAction) return null;
-
-  return (
-    <div className={cardClassName}>
-      <SectionTitle>Source and ticketing</SectionTitle>
-      <div className="flex flex-col gap-1.5">
-        <InfoRow label="Source" value={sourceProvider} />
-      </div>
-      <div className="flex flex-wrap items-center gap-2 mt-3">
-        {eventUrl && (
-          <a
-            href={eventUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs font-medium text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
-          >
-            {getSourceLinkLabel(eventUrl, family)}
-          </a>
-        )}
-        {ticketAction && (
-          <a
-            href={ticketAction.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs font-medium text-accent-text hover:text-foreground border border-border-subtle hover:border-border-accent-hover hover:bg-accent-tint px-3 py-1.5 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:shadow-focus"
-          >
-            {ticketAction.label}
-          </a>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Every source used to build this opportunity, each with what it contributed
-// and a direct link — not only the domain name (issue #132 review feedback).
-// Excludes anything already shown in Source and ticketing above, so the same
-// source/URL is never displayed twice (issue #213 review feedback) — when
-// nothing distinct remains, the whole section is hidden rather than repeating
-// the event/ticket link under a second heading.
-function SourceEvidenceSection({ opportunity }: { opportunity: Opportunity }) {
-  const eventUrl = getOpportunitySourceUrl(opportunity);
-  const ticketAction = getTicketAction(opportunity);
-  const evidence = getSourceEvidenceExcluding(opportunity, [eventUrl, ticketAction?.href]);
-  if (evidence.length === 0) return null;
-
-  return (
-    <div className={cardClassName}>
-      <SectionTitle>Source evidence</SectionTitle>
-      <ul className="flex flex-col gap-3">
-        {evidence.map((item) => (
-          <li key={item.url} className="text-sm">
-            <p className="font-medium text-foreground-secondary">{item.title ?? item.website ?? item.url}</p>
-            {item.title && item.website && (
-              <p className="text-xs text-foreground-muted">{item.website}</p>
-            )}
-            {item.retrievedInfo && (
-              <p className="text-xs text-foreground-muted mt-0.5">Retrieved: {item.retrievedInfo}</p>
-            )}
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block mt-1 text-xs text-accent-text hover:text-foreground transition-colors break-all"
-            >
-              View source ↗
-            </a>
+      <ul className="flex flex-col gap-2">
+        {factors.map((factor) => (
+          <li key={factor.code} className="flex items-start gap-2 text-sm">
+            <span className="text-success-text flex-shrink-0" aria-hidden="true">✓</span>
+            <span className="text-foreground-secondary">
+              <LinkedArtistText text={factor.label} artists={relatedArtists} />
+              {factor.detail && factor.detail !== factor.label && (
+                <span className="block text-xs text-foreground-muted mt-0.5">
+                  <LinkedArtistText text={factor.detail} artists={relatedArtists} />
+                </span>
+              )}
+            </span>
           </li>
         ))}
       </ul>
@@ -655,7 +774,6 @@ function SourceEvidenceSection({ opportunity }: { opportunity: Opportunity }) {
 export default function OpportunityDetail({
   opportunity,
   relatedArtists,
-  similarArtists,
   venueInfo,
 }: OpportunityDetailProps) {
   const { debugUIVisible } = useProductFeatures();
@@ -664,9 +782,26 @@ export default function OpportunityDetail({
   const positiveFactors = getPositiveMatchFactors(opportunity);
   const negativeFactors = getNegativeMatchFactors(opportunity);
   const neutralFactors = getNeutralMatchFactors(opportunity);
-  const recommendedAction = getRecommendedAction(opportunity);
   const eventInfoRows = buildEventInfoRows(opportunity).filter((row) => Boolean(row.value));
   const family = getCardFamily(opportunity);
+  const venueForEnrichment = family === "venue" ? buildVenueInfoFromOpportunity(opportunity) : null;
+  const venueEnrichmentQuery = useVenueEnrichment(venueForEnrichment);
+  const venueEnrichment = venueEnrichmentQuery.data?.enrichment;
+  const hasEnrichedContact = Boolean(
+    venueEnrichment?.bookingEmail ||
+    venueEnrichment?.contactEmail ||
+    venueEnrichment?.contactUrl ||
+    venueEnrichment?.phone,
+  );
+  const resolvedNeutralFactors = family !== "venue"
+    ? neutralFactors
+    : !venueEnrichmentQuery.data
+      ? []
+      : neutralFactors.filter((factor) => {
+          if (factor.code === "capacity_fit" && venueEnrichment?.capacity != null) return false;
+          if (factor.code === "contact_available" && hasEnrichedContact) return false;
+          return true;
+        });
 
   // A full poster is shown right below the header when an image is
   // available; the header thumbnail then falls back to the letter avatar so
@@ -702,9 +837,6 @@ export default function OpportunityDetail({
             </div>
             <p className="text-sm text-foreground-muted mt-1">
               {opportunity.location}
-              {opportunity.city && opportunity.country && (
-                <span> · {opportunity.city}, {opportunity.country}</span>
-              )}
               {formattedDate && <span> · {formattedDate}</span>}
               {opportunity.time && <span> · {opportunity.time}</span>}
             </p>
@@ -718,7 +850,7 @@ export default function OpportunityDetail({
             label="match"
             positiveFactors={positiveFactors}
             negativeFactors={negativeFactors}
-            neutralFactors={neutralFactors}
+            neutralFactors={resolvedNeutralFactors}
           />
         </div>
       </div>
@@ -739,7 +871,7 @@ export default function OpportunityDetail({
             details" cards. Titled per family: a venue-type opportunity IS
             the venue, not an event, so its facts must never be labeled
             "Event information". */}
-        {eventInfoRows.length > 0 && (
+        {family !== "venue" && eventInfoRows.length > 0 && (
           <div className={family === "event" ? buildCardClassName("stat", "border-border-accent bg-accent-tint") : cardClassName}>
             <SectionTitle>{INFO_SECTION_TITLES[family]}</SectionTitle>
             <div className="flex flex-col gap-1.5">
@@ -760,22 +892,28 @@ export default function OpportunityDetail({
             entity, distinct from the event itself, linking to its canonical
             page. Only rendered once a venue was actually resolved. */}
         <VenueSection opportunity={opportunity} venueInfo={venueInfo} />
+        {family === "venue" && (
+          <VenueOpportunityInformationSection
+            enrichment={venueEnrichment}
+            isLoading={venueEnrichmentQuery.isLoading}
+            error={venueEnrichmentQuery.error}
+            onRetry={() => void venueEnrichmentQuery.refetch()}
+          />
+        )}
 
         {/* 5. Contact information. */}
-        <ContactSection opportunity={opportunity} />
+        <ContactSection
+          opportunity={opportunity}
+          enrichment={family === "venue" ? venueEnrichment : undefined}
+          isEnrichmentLoading={family === "venue" && venueEnrichmentQuery.isLoading}
+          enrichmentError={family === "venue" ? venueEnrichmentQuery.error : null}
+        />
 
         {/* 6. Match analysis: why it matches, things to consider, missing or
-            unverified information, recommended action. */}
-        <WhyItMatchesSection factors={positiveFactors} opportunity={opportunity} similarArtists={similarArtists} />
+            unverified information. */}
+        <WhyItMatchesSection factors={positiveFactors} relatedArtists={relatedArtists} />
         <MatchFactorSection title="Things to consider" factors={negativeFactors} tone="warning" />
-        <MatchFactorSection title="Missing or unverified information" factors={neutralFactors} tone="neutral" />
-
-        {recommendedAction && (
-          <div className={cardClassName}>
-            <SectionTitle>Recommended action</SectionTitle>
-            <p className="text-sm text-foreground-secondary leading-relaxed">{recommendedAction}</p>
-          </div>
-        )}
+        <MatchFactorSection title="Missing or unverified information" factors={resolvedNeutralFactors} tone="neutral" />
 
         {relatedArtists.length > 0 && (
           <div className={cardClassName}>
@@ -788,21 +926,8 @@ export default function OpportunityDetail({
           </div>
         )}
 
-        {/* 7. Source and ticketing: official event URL, source provider,
-            ticket URL, and source evidence — kept separate from the venue
-            section above (issue #213). */}
-        <SourceAndTicketingSection opportunity={opportunity} />
-        <SourceEvidenceSection opportunity={opportunity} />
-
         {debugUIVisible && (
-          <details className={cardClassName}>
-            <summary className="text-[10px] font-semibold text-foreground-muted uppercase tracking-widest cursor-pointer">
-              Raw data (debug)
-            </summary>
-            <pre className="text-[11px] text-foreground-muted bg-background rounded-lg p-3 mt-3 overflow-x-auto">
-              {JSON.stringify(opportunity, null, 2)}
-            </pre>
-          </details>
+          <DebugRawData opportunity={opportunity} enrichmentQuery={venueEnrichmentQuery} />
         )}
       </div>
     </div>

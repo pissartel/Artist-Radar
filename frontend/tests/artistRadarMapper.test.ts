@@ -724,6 +724,8 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     ["a Shotgun artist profile page", "https://shotgun.live/en/users/artists/minawarren"],
     ["a Bandsintown event/ticketing page", "https://bandsintown.com/e/neon-riot-monsters-art"],
     ["a generic /events/ listing page", "https://agenda.example/events/monsters-art-night"],
+    ["a venue event page under /programmation/", "https://www.letrianon.fr/fr/programmation/mina-tindle/"],
+    ["a Concert Archives artist page", "https://www.concertarchives.org/bands/two-trains-left"],
     // Reported bug: an Instagram post about a show at the venue was being
     // shown as if it were the venue's own official website.
     ["an Instagram post", "https://www.instagram.com/p/DTizQeyCNWO/"],

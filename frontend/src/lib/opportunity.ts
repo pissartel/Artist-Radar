@@ -108,7 +108,6 @@ export function getUrlHostname(url: string): string | null {
 }
 
 export function getOpportunitySource(opportunity: Opportunity): string | null {
-  if (opportunity.sourceProvider) return opportunity.sourceProvider;
   const url = opportunity.sourceUrls?.[0];
   if (!url) return null;
   return getUrlHostname(url);
@@ -478,8 +477,8 @@ export function getOpportunitySignal(opportunity: Opportunity): OpportunitySigna
   if (opportunity.type === "venue") {
     return {
       kind: "venue_contact",
-      label: "Venue to contact",
-      description: "No confirmed event yet — this venue can be contacted about future booking opportunities.",
+      label: "Venue",
+      description: "Venue profile.",
     };
   }
 

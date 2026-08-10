@@ -62,7 +62,6 @@ export default function OpportunityDetailPage({ params }: OpportunityDetailPageP
     <OpportunityDetail
       opportunity={opportunity}
       relatedArtists={relatedArtists}
-      similarArtists={similarArtists}
       venueInfo={venueInfo}
     />
   );

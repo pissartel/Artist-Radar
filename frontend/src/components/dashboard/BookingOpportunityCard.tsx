@@ -79,7 +79,7 @@ function VenueCardMeta({ opportunity }: { opportunity: Opportunity }) {
         {opportunity.venueCapacity != null && (
           <FactPill>~{opportunity.venueCapacity.toLocaleString()} capacity</FactPill>
         )}
-        <FactPill>{opportunity.contact ? "Contact available" : "No contact found"}</FactPill>
+        {opportunity.contact && <FactPill>Contact available</FactPill>}
       </div>
       {opportunity.recentEvents.length > 0 && (
         <p className="text-[11px] text-foreground-muted mt-1.5 truncate">

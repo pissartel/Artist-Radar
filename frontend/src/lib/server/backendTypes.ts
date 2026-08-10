@@ -310,6 +310,7 @@ export interface BackendOpportunity {
   reason: string;
   score: number;
   suggested_message: string;
+  description?: string | null;
   date?: string | null;
   time?: string | null;
   dateRange?: { start: string; end: string } | null;

@@ -5,6 +5,7 @@ import {
   getGroupedContacts,
   getLineupCompletenessLabel,
   getLineupEntries,
+  getOpportunitySource,
   getOpportunitySignal,
   getRecommendedAction,
   getSourceEvidence,
@@ -76,6 +77,17 @@ describe("getRecommendedAction", () => {
   it("returns null when neither field has content", () => {
     const opportunity = buildOpportunity({ description: "" });
     expect(getRecommendedAction(opportunity)).toBeNull();
+  });
+});
+
+describe("getOpportunitySource", () => {
+  it("never exposes internal provider names as user-facing sources", () => {
+    const opportunity = buildOpportunity({
+      sourceProvider: "openai_web_search",
+      sourceUrls: ["https://venue.example/events"],
+    });
+
+    expect(getOpportunitySource(opportunity)).toBe("venue.example");
   });
 });
 

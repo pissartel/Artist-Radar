@@ -462,6 +462,9 @@ export interface Opportunity {
   time?: string;
   deadline?: string;
   description: string;
+  // Source-grounded description of the venue/target. Kept separate from
+  // description, which is the generated suggested action in legacy data.
+  venueDescription?: string;
   tags: string[];
   matchScore: number;
   matchReasons: string[];

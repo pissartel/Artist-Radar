@@ -26,35 +26,45 @@ describe("OpportunityDetail content (issue #132 review feedback)", () => {
     expect(source).toMatch(/showPoster \? undefined : opportunity\.imageUrl/);
   });
 
+  it("renders the header location only once instead of appending city and country again", () => {
+    expect(source).toMatch(/\{opportunity\.location\}/);
+    expect(source).not.toMatch(/<span> · \{opportunity\.city\}, \{opportunity\.country\}<\/span>/);
+  });
+
   it("renders a dedicated Line-up section", () => {
     expect(source).toMatch(/Line-up/);
   });
 
-  it("renders a dedicated Contact information section with a verification label", () => {
-    expect(source).toMatch(/Contact information/);
-    expect(source).toMatch(/Verified/);
-    expect(source).toMatch(/Unverified/);
+  it("renders a dedicated Contact section without technical provenance or verification chips", () => {
+    expect(source).toMatch(/<SectionTitle>Contact<\/SectionTitle>/);
+    expect(source).toMatch(/No public contact found yet\./);
+    expect(source).not.toMatch(/>Verified</);
+    expect(source).not.toMatch(/>Unverified</);
+    expect(source).not.toMatch(/via \{contact\.source\}/);
+  });
+
+  it("shows a contact shimmer while venue enrichment is loading", () => {
+    expect(source).toMatch(/isEnrichmentLoading/);
+    expect(source).toMatch(/animate-pulse space-y-2/);
+    expect(source).toMatch(/<SectionTitle>Contact<\/SectionTitle>[\s\S]*?<div className="animate-pulse/);
   });
 
   it("renders concise, actionable match-analysis sections", () => {
     expect(source).toMatch(/Why it matches/);
     expect(source).toMatch(/Things to consider/);
     expect(source).toMatch(/Missing or unverified information/);
-    expect(source).toMatch(/Recommended action/);
+    expect(source).not.toMatch(/Recommended action/);
   });
 
-  it("renders a dedicated Source evidence section listing every source, not only the first", () => {
-    expect(source).toMatch(/Source evidence/);
-    expect(source).toMatch(/getSourceEvidenceExcluding\(opportunity, \[eventUrl, ticketAction\?\.href\]\)/);
+  it("links similar-artist names mentioned in Why it matches to their detail page", () => {
+    expect(source).toMatch(/LinkedArtistText/);
+    expect(source).toMatch(/href={\`\/similar-artists\/\${artist\.id}\`}/);
+    expect(source).toMatch(/<WhyItMatchesSection factors={positiveFactors} relatedArtists={relatedArtists} \/>/);
   });
 
-  it("renders the source attribution as a clickable link, not plain text", () => {
-    expect(source).toMatch(/href=\{item\.url\}/);
-    expect(source).toMatch(/target="_blank"/);
-  });
-
-  it("shows what kind of opportunity this is (support slot, open call, venue contact, or general event)", () => {
+  it("shows useful opportunity signals but hides the generic venue-contact banner", () => {
     expect(source).toMatch(/OpportunitySignalBanner/);
+    expect(source).toMatch(/signal\.kind === "venue_contact"/);
   });
 
   it("renders a dedicated Venue section linking to the canonical venue page (issue #213)", () => {
@@ -69,9 +79,10 @@ describe("OpportunityDetail content (issue #132 review feedback)", () => {
     );
   });
 
-  it("renders a dedicated Source and ticketing section, separate from the Venue section", () => {
-    expect(source).toMatch(/Source and ticketing/);
-    expect(source).toMatch(/<SourceAndTicketingSection opportunity={opportunity} \/>/);
+  it("does not render technical source sections on the detail page", () => {
+    expect(source).not.toMatch(/Source and ticketing/);
+    expect(source).not.toMatch(/Source evidence/);
+    expect(source).not.toMatch(/openai_web_search/);
   });
 
   it("shows lineup completeness alongside the line-up", () => {
@@ -91,17 +102,45 @@ describe("OpportunityDetail content (issue #132 review feedback)", () => {
     expect(source).toMatch(/contact\.url \|\| isHttpUrl\(contact\.value\)/);
   });
 
-  // PR #218 review feedback: "Source evidence" must never repeat a source
-  // already shown in "Source and ticketing".
-  it("excludes the event/ticket URL already shown in Source and ticketing from Source evidence", () => {
-    expect(source).toMatch(/getSourceEvidenceExcluding\(opportunity, \[eventUrl, ticketAction\?\.href\]\)/);
+  it("does not repeat venue similar-artist evidence after the match factor", () => {
+    expect(source).toMatch(/<WhyItMatchesSection factors={positiveFactors} relatedArtists={relatedArtists} \/>/);
+    expect(source).not.toMatch(/Similar artist evidence/);
+    expect(source).not.toMatch(/href={item\.sourceUrl}/);
   });
 
-  it("shows venue similar-artist evidence in Why it matches and links artist names internally", () => {
-    expect(source).toMatch(/<WhyItMatchesSection factors={positiveFactors} opportunity={opportunity} similarArtists={similarArtists} \/>/);
-    expect(source).toMatch(/Similar artist evidence/);
-    expect(source).toMatch(/href={`\/similar-artists\/\$\{artist\.id\}`}/);
-    expect(source).not.toMatch(/href={item\.sourceUrl}/);
+  it("enriches the single venue information card with the cached venue pipeline", () => {
+    expect(source).toMatch(/VenueOpportunityInformationSection/);
+    expect(source).toMatch(/useVenueEnrichment\(venueForEnrichment\)/);
+    expect(source).not.toMatch(/Official venue presence/);
+    expect(source).toMatch(/<SectionTitle>Venue information<\/SectionTitle>/);
+    expect(source).toMatch(/VenueEnrichmentSkeleton/);
+    expect(source).toMatch(/Live music programming:/);
+    expect(source).toMatch(/Books emerging artists:/);
+    expect(source).toMatch(/enrichment\?\.programmingUrl/);
+    expect(source).toMatch(/enrichment\?\.contactUrl/);
+    expect(source).toMatch(/<InfoRow label="Website"/);
+  });
+
+  it("updates debug raw data with enrichment status and supports copying the complete payload", () => {
+    expect(source).toMatch(/venueEnrichment:/);
+    expect(source).toMatch(/cacheHit:/);
+    expect(source).toMatch(/isFetching:/);
+    expect(source).toMatch(/navigator\.clipboard\.writeText\(serialized\)/);
+    expect(source).toMatch(/Copy raw data/);
+  });
+
+  it("shows the real enrichment error and a deliberate retry action instead of an empty venue card", () => {
+    expect(source).toMatch(/Venue enrichment failed\./);
+    expect(source).toMatch(/Retry enrichment/);
+    expect(source).toMatch(/Contact enrichment unavailable because the venue lookup failed\./);
+  });
+
+  it("hides stale missing capacity/contact factors until enrichment finishes and removes resolved ones", () => {
+    expect(source).toMatch(/const resolvedNeutralFactors = family !== "venue"/);
+    expect(source).toMatch(/!venueEnrichmentQuery\.data/);
+    expect(source).toMatch(/factor\.code === "capacity_fit"/);
+    expect(source).toMatch(/factor\.code === "contact_available"/);
+    expect(source).toMatch(/factors={resolvedNeutralFactors}/);
   });
 });
 
@@ -126,5 +165,51 @@ describe("OpportunityActions content (issue #130/#132 review feedback)", () => {
 
   it("no longer renders large Interested/Contacted text toggle buttons at the page bottom", () => {
     expect(source).not.toMatch(/TextToggleButton/);
+  });
+});
+
+describe("BookingExplorer content", () => {
+  const source = readSource("src/components/dashboard/BookingExplorer.tsx");
+
+  it("does not expose source-provider filtering in the user-facing opportunity list", () => {
+    expect(source).not.toMatch(/All sources/);
+    expect(source).not.toMatch(/getOpportunitySource/);
+  });
+});
+
+describe("VenueDetail content", () => {
+  const source = readSource("src/components/dashboard/VenueDetail.tsx");
+
+  it("keeps enrichment sources out of the venue detail UI", () => {
+    expect(source).not.toMatch(/<SectionTitle>Sources<\/SectionTitle>/);
+    expect(source).not.toMatch(/enrichment\.sources\.map/);
+  });
+
+  it("renders a dedicated official venue presence link only when one exists", () => {
+    expect(source).toMatch(/getOfficialVenueLink\(enrichment, website\)/);
+    expect(source).toMatch(/Official website/);
+    expect(source).toMatch(/Official page/);
+    expect(source).toMatch(/Venue page/);
+  });
+
+  it("keeps social links inside Venue information and uses one as fallback when no website exists", () => {
+    expect(source).not.toMatch(/<SectionTitle>Official links<\/SectionTitle>/);
+    expect(source).toMatch(/const primaryLink = officialLink \?\?/);
+    expect(source).toMatch(/secondaryLinks\.map/);
+    expect(source).toMatch(/<InfoRow label="Location"/);
+  });
+
+  it("uses a shimmer skeleton while venue enrichment is loading", () => {
+    expect(source).toMatch(/function VenueEnrichmentSkeleton/);
+    expect(source).toMatch(/animate-pulse/);
+    expect(source).toMatch(/enrichmentQuery\.isLoading && <VenueEnrichmentSkeleton \/>/);
+    expect(source).toMatch(/enrichmentQuery\.isLoading && <VenueContactSkeleton \/>/);
+  });
+
+  it("keeps Venue information strictly sourced from enrichment and does not list programmed artists", () => {
+    expect(source).toMatch(/enrichment\?\.description/);
+    expect(source).not.toMatch(/enrichment\?\.description \?\? venue\.description/);
+    expect(source).not.toMatch(/enrichment\.programmedArtists\.slice/);
+    expect(source).not.toMatch(/venue\.contacts \?\? \[\]/);
   });
 });

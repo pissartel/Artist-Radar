@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import type { Opportunity, OpportunityCategory } from "@/types";
 import {
   CATEGORY_LABELS,
-  getOpportunitySource,
   sortOpportunities,
   type OpportunitySortOption,
 } from "@/lib/opportunity";
@@ -44,7 +43,6 @@ export default function BookingExplorer({
   const [minScore, setMinScore] = useState(0);
   const [dateFilter, setDateFilter] = useState<PresenceFilter>("all");
   const [contactFilter, setContactFilter] = useState<PresenceFilter>("all");
-  const [source, setSource] = useState("all");
   const [sortBy, setSortBy] = useState<OpportunitySortOption>("best_match");
 
   const categories = useMemo(
@@ -56,18 +54,6 @@ export default function BookingExplorer({
     () =>
       Array.from(
         new Set(opportunities.map((opportunity) => opportunity.city ?? opportunity.location)),
-      ).sort(),
-    [opportunities],
-  );
-
-  const sources = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          opportunities
-            .map((opportunity) => getOpportunitySource(opportunity))
-            .filter((value): value is string => Boolean(value)),
-        ),
       ).sort(),
     [opportunities],
   );
@@ -87,10 +73,9 @@ export default function BookingExplorer({
       const matchesContact =
         contactFilter === "all" ||
         (contactFilter === "has" ? Boolean(opportunity.contact) : !opportunity.contact);
-      const matchesSource = source === "all" || getOpportunitySource(opportunity) === source;
 
       return (
-        matchesCategory && matchesCity && matchesScore && matchesDate && matchesContact && matchesSource
+        matchesCategory && matchesCity && matchesScore && matchesDate && matchesContact
       );
     });
 
@@ -102,7 +87,6 @@ export default function BookingExplorer({
     minScore,
     dateFilter,
     contactFilter,
-    source,
     sortBy,
     artistCity,
     artistCountry,
@@ -162,16 +146,6 @@ export default function BookingExplorer({
             <option value="all">Any contact</option>
             <option value="has">Has contact</option>
             <option value="missing">No contact yet</option>
-          </Select>
-        )}
-        {sources.length > 0 && (
-          <Select dense value={source} onChange={(event) => setSource(event.target.value)}>
-            <option value="all">All sources</option>
-            {sources.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
           </Select>
         )}
         <Select

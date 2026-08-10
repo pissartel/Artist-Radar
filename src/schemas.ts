@@ -609,6 +609,9 @@ export const OpportunitySchema = z.object({
   reason: z.string().trim().min(1),
   score: z.number().int().min(0).max(100),
   suggested_message: z.string().trim().min(1),
+  // Source-grounded venue/target description, kept separately from the
+  // generated outreach suggestion above.
+  description: z.string().trim().min(1).nullable().optional(),
   date: z.string().trim().min(1).nullable().optional(),
   dateRange: OpportunityDateRangeSchema.nullable().optional(),
   // Genres associated with the target (venue/festival/organization programming, or
@@ -652,6 +655,14 @@ export const OpportunitySchema = z.object({
   imageUrl: z.string().trim().url().nullable().optional(),
   // Ticket/booking purchase URL, when a source reports it. Never guessed.
   ticketUrl: OptionalUrlSchema,
+  contacts: z.array(z.object({
+    purpose: z.enum(["booking", "management", "press", "submissions", "partnerships", "general"]),
+    label: z.string().trim().min(1),
+    value: z.string().trim().min(1),
+    url: z.string().trim().url().optional(),
+    verified: z.boolean().optional(),
+    source: z.string().trim().min(1).optional()
+  })).default([]),
   // Structured positive/negative match factors (issue #130 review feedback).
   // Frontend must render this instead of parsing `reason`/`suggested_message`.
   matchBreakdown: OpportunityMatchBreakdownSchema.optional(),

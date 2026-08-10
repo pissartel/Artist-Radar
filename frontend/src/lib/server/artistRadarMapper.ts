@@ -275,6 +275,7 @@ const NON_VENUE_WEBSITE_DOMAINS = [
   "last.fm",
   "allevents.in",
   "wegow.com",
+  "concertarchives.org",
 ];
 
 // Path segments identifying an artist profile, event listing, calendar, or
@@ -282,7 +283,7 @@ const NON_VENUE_WEBSITE_DOMAINS = [
 // feedback: "ne jamais mapper une page artiste, un calendrier artiste, une
 // billetterie de concert, une page événement ou une source d'agrégateur
 // vers venueWebsite").
-const NON_VENUE_WEBSITE_PATH_PATTERN = /\/(artists?|events?|calendar|tickets?|billetterie|billets|e|tour)(\/|$)/i;
+const NON_VENUE_WEBSITE_PATH_PATTERN = /\/(artists?|events?|calendar|tickets?|billetterie|billets|e|tour|agenda|programme|programmation|concerts?)(\/|$)/i;
 
 function isLikelyVenueWebsite(url: string): boolean {
   try {
@@ -342,6 +343,7 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
     country: opportunity.country ?? undefined,
     date: opportunity.date ?? undefined,
     description: opportunity.suggested_message,
+    venueDescription: opportunity.description ?? undefined,
     tags: [],
     matchScore: opportunity.score,
     matchReasons: [opportunity.reason],
@@ -373,6 +375,12 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
     lineupEntries: opportunity.lineupEntries ?? undefined,
     relatedArtist: opportunity.relatedArtist ?? null,
     venueArtistEvidence: opportunity.venueArtistEvidence ?? [],
+    relatedSimilarArtistIds: [
+      ...new Set([
+        ...(opportunity.relatedArtist?.name ? [slugify(opportunity.relatedArtist.name)] : []),
+        ...(opportunity.venueArtistEvidence ?? []).map((evidence) => slugify(evidence.similarArtistName)),
+      ]),
+    ],
     imageUrl: opportunity.imageUrl ?? undefined,
   };
 }

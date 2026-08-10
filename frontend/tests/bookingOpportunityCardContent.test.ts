@@ -13,6 +13,7 @@ describe("BookingOpportunityCard content", () => {
     const venueSection = source.slice(source.indexOf("function VenueCardMeta"), source.indexOf("function OrganizationCardMeta"));
 
     expect(venueSection).toContain("Contact available");
+    expect(venueSection).not.toContain("No contact found");
     expect(venueSection).not.toContain("opportunity.genres");
   });
 

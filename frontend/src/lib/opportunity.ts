@@ -108,6 +108,7 @@ export function getUrlHostname(url: string): string | null {
 }
 
 export function getOpportunitySource(opportunity: Opportunity): string | null {
+  if (opportunity.sourceProvider) return opportunity.sourceProvider;
   const url = opportunity.sourceUrls?.[0];
   if (!url) return null;
   return getUrlHostname(url);

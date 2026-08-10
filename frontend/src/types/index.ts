@@ -240,9 +240,6 @@ export interface SimilarArtist {
   matchReasons?: string[];
   sharedGenres?: string[];
   sourceUrls?: string[];
-  // Human-readable provider that discovered the source (Ticketmaster,
-  // OpenAgenda, native fetch, etc.). Kept separate from sourceUrls hostnames.
-  sourceProvider?: string | null;
   relatedVenues?: string[];
 }
 
@@ -486,6 +483,9 @@ export interface Opportunity {
   // prefers over the flat `lineup`/`headliner` strings when available.
   lineupEntries?: LineupEntry[];
   sourceUrls?: string[];
+  // Human-readable provider that discovered the source (Ticketmaster,
+  // OpenAgenda, native fetch, etc.). Kept separate from sourceUrls hostnames.
+  sourceProvider?: string | null;
   // Richer per-source evidence the detail page prefers over `sourceUrls`
   // when the backend provides it.
   sourceEvidence?: OpportunitySourceEvidence[];

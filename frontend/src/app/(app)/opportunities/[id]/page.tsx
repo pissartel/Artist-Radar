@@ -10,6 +10,7 @@ import {
 } from "@/components/dashboard/ArtistRadarStates";
 import { useArtistRadarData } from "@/lib/useArtistRadarData";
 import { getOpportunityById } from "@/lib/opportunity";
+import { getVenueById } from "@/lib/venue";
 
 interface OpportunityDetailPageProps {
   params: Promise<{ id: string }>;
@@ -55,6 +56,14 @@ export default function OpportunityDetailPage({ params }: OpportunityDetailPageP
   const relatedArtists = similarArtists.filter((artist) =>
     opportunity.relatedSimilarArtistIds?.includes(artist.id),
   );
+  const venueInfo = opportunity.venueId ? getVenueById(bookingOpportunities, opportunity.venueId) : null;
 
-  return <OpportunityDetail opportunity={opportunity} relatedArtists={relatedArtists} similarArtists={similarArtists} />;
+  return (
+    <OpportunityDetail
+      opportunity={opportunity}
+      relatedArtists={relatedArtists}
+      similarArtists={similarArtists}
+      venueInfo={venueInfo}
+    />
+  );
 }

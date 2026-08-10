@@ -240,6 +240,9 @@ export interface SimilarArtist {
   matchReasons?: string[];
   sharedGenres?: string[];
   sourceUrls?: string[];
+  // Human-readable provider that discovered the source (Ticketmaster,
+  // OpenAgenda, native fetch, etc.). Kept separate from sourceUrls hostnames.
+  sourceProvider?: string | null;
   relatedVenues?: string[];
 }
 

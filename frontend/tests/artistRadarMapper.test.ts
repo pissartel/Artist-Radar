@@ -619,7 +619,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
 
     expect(opportunity?.venue).toBe("Le Point Ephemere");
     expect(opportunity?.venueId).toBeTruthy();
-    expect(opportunity?.venueOpportunityId).toBeUndefined();
+    expect(opportunity?.venueOpportunityId).toBe(opportunity?.venueId);
     expect(opportunity?.venueType).toBe("venue");
     expect(opportunity?.venueImageUrl).toBe("https://le-point-ephemere.example/logo.png");
     expect(opportunity?.venueConfidence).toBe(80);
@@ -1149,6 +1149,39 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     const response = mapPipelineResultToArtistRadarResponse(result, request);
 
     expect(response.bookingOpportunities[0]?.location).toBe("France");
+  });
+
+  it("maps event venues to a canonical venue page and preserves the source provider label", () => {
+    const result = buildResult({
+      opportunities: [
+        {
+          name: "Punk Night at La Maroquinerie",
+          displayTitle: "Punk Night",
+          type: "event",
+          city: "Paris",
+          country: "France",
+          source_url: "https://example.test/events/punk-night",
+          sourceProvider: "openagenda",
+          contact: null,
+          reason: "Strong genre match.",
+          score: 79,
+          suggested_message: "Track this event.",
+          venueName: "La Maroquinerie",
+        },
+      ],
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, request);
+    const opportunity = response.bookingOpportunities[0];
+
+    expect(opportunity?.venueId).toBe("la-maroquinerie-paris-france");
+    expect(opportunity?.venueOpportunityId).toBe("la-maroquinerie-paris-france");
+    expect(opportunity?.sourceProvider).toBe("openagenda");
+    expect(opportunity?.sourceEvidence?.[0]).toEqual({
+      url: "https://example.test/events/punk-night",
+      title: "Punk Night",
+      retrievedInfo: "Source provider: openagenda",
+    });
   });
 
   it("falls back to request artist name and genre when the backend profile is missing them", () => {

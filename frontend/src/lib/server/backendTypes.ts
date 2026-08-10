@@ -305,11 +305,13 @@ export interface BackendOpportunity {
   city: string | null;
   country: string | null;
   source_url: string | null;
+  sourceProvider?: string | null;
   contact: string | null;
   reason: string;
   score: number;
   suggested_message: string;
   date?: string | null;
+  time?: string | null;
   dateRange?: { start: string; end: string } | null;
   genres?: string[];
   venueCapacity?: number | null;
@@ -325,7 +327,26 @@ export interface BackendOpportunity {
   venueImageUrl?: string | null;
   venueConfidence?: number | null;
   recentEvents?: string[];
+  headliner?: string[];
   lineup?: string[];
+  lineupEntries?: Array<{
+    name: string;
+    position?: "headliner" | "support" | "opener" | "other";
+    externalUrl?: string;
+  }>;
+  contacts?: Array<{
+    purpose: "booking" | "management" | "press" | "submissions" | "partnerships" | "general";
+    label: string;
+    value: string;
+    url?: string;
+    verified?: boolean;
+    source?: string;
+  }>;
+  sourceEvidence?: Array<{
+    url: string;
+    title?: string;
+    retrievedInfo?: string;
+  }>;
   relatedArtist?: BackendOpportunityRelatedArtist | null;
   venueArtistEvidence?: BackendOpportunityVenueArtistEvidence[];
   imageUrl?: string | null;

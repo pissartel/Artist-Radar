@@ -604,6 +604,7 @@ export const OpportunitySchema = z.object({
   city: z.string().trim().min(1).nullable(),
   country: z.string().trim().min(1).nullable(),
   source_url: z.string().trim().url().nullable(),
+  sourceProvider: z.string().trim().min(1).nullable().optional(),
   contact: z.string().trim().min(1).nullable(),
   reason: z.string().trim().min(1),
   score: z.number().int().min(0).max(100),

@@ -59,13 +59,13 @@ describe("OpportunityDetail content (issue #132 review feedback)", () => {
 
   it("renders a dedicated Venue section linking to the canonical venue page (issue #213)", () => {
     expect(source).toMatch(/<SectionTitle>Venue<\/SectionTitle>/);
-    expect(source).toMatch(/href={`\/venues\/\$\{opportunity\.venueOpportunityId\}`}/);
+    expect(source).toMatch(/href={`\/venues\/\$\{canonicalVenueId\}`}/);
     expect(source).toMatch(/View venue details/);
   });
 
-  it("only renders the Venue section for a live event opportunity with a resolved venueOpportunityId", () => {
+  it("only renders the Venue section for a live event opportunity with a resolved venueId", () => {
     expect(source).toMatch(
-      /if \(!isLiveEventOpportunity\(opportunity\) \|\| !opportunity\.venueOpportunityId \|\| !opportunity\.venue\) return null;/,
+      /if \(!isLiveEventOpportunity\(opportunity\) \|\| !canonicalVenueId \|\| !opportunity\.venue\) return null;/,
     );
   });
 

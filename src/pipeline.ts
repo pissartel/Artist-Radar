@@ -452,6 +452,7 @@ export function mapBookingOpportunityToLegacyOpportunity(opportunity: BookingOpp
     city: opportunity.city,
     country: opportunity.country,
     source_url: opportunity.sourceUrl,
+    sourceProvider: opportunity.sourceProvider,
     contact: opportunity.contact,
     reason: opportunity.reason,
     score: opportunity.score,

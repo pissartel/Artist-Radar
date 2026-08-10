@@ -91,7 +91,12 @@ app.post("/slack/command", async (req, res) => {
   });
 });
 
-app.post("/run-issue", async (req, res) => {
+app.post("/run-issue", handleRunIssue);
+app.post("/run-claude-feature", withAgent("claude", handleRunIssue));
+app.post("/run-codex-feature", withAgent("codex", handleRunIssue));
+app.post("/run-kimi-feature", withAgent("kimi", handleRunIssue));
+
+async function handleRunIssue(req, res) {
   const { issueNumber, projectItemId } = req.body;
   let agent;
   try {
@@ -135,7 +140,7 @@ app.post("/run-issue", async (req, res) => {
       error: String(error.message)
     });
   }
-});
+}
 
 async function runAgentForIssue(issueNumber, channel, projectItemId, agent) {
   const resolvedChannel = channel || process.env.SLACK_CHANNEL_ID;
@@ -373,7 +378,12 @@ async function setProjectItemStatus(projectItemId, optionId) {
   return json;
 }
 
-app.post("/run-pr-feedback", async (req, res) => {
+app.post("/run-pr-feedback", handleRunPrFeedback);
+app.post("/run-claude-fix", withAgent("claude", handleRunPrFeedback));
+app.post("/run-codex-fix", withAgent("codex", handleRunPrFeedback));
+app.post("/run-kimi-fix", withAgent("kimi", handleRunPrFeedback));
+
+async function handleRunPrFeedback(req, res) {
   const { prNumber, branchName, feedbacks } = req.body;
   let agent;
   try {
@@ -413,7 +423,14 @@ app.post("/run-pr-feedback", async (req, res) => {
       error: String(error.message)
     });
   }
-});
+}
+
+function withAgent(agent, handler) {
+  return (req, res) => {
+    req.body = { ...req.body, agent };
+    return handler(req, res);
+  };
+}
 
 async function runAgentForPrFeedback({
   prNumber,

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { MatchFactor, Opportunity, SimilarArtist } from "@/types";
+import type { VenueInfo } from "@/lib/venue";
 import { TYPE_LABELS } from "./BookingOpportunityCard";
 import SimilarArtistCard from "./SimilarArtistCard";
 import OpportunityActions from "./OpportunityActions";
@@ -10,6 +11,7 @@ import OpportunityImage from "@/components/common/OpportunityImage";
 import {
   formatOpportunityDate,
   getAdditionalMetadata,
+  getContactActionForValue,
   getCardFamily,
   getContactAction,
   getDisplayTitle,
@@ -40,6 +42,7 @@ interface OpportunityDetailProps {
   opportunity: Opportunity;
   relatedArtists: SimilarArtist[];
   similarArtists: SimilarArtist[];
+  venueInfo?: VenueInfo | null;
 }
 
 const cardClassName = buildCardClassName("stat");
@@ -301,42 +304,55 @@ function SupportSlotPotentialSection({ opportunity }: { opportunity: Opportunity
 // presents itself as the venue in the Event information card above, so
 // rendering this too would just duplicate it. Missing fields are omitted
 // individually rather than hiding the whole section.
-function VenueSection({ opportunity }: { opportunity: Opportunity }) {
-  if (!isLiveEventOpportunity(opportunity) || !opportunity.venueOpportunityId || !opportunity.venue) return null;
+function VenueSection({ opportunity, venueInfo }: { opportunity: Opportunity; venueInfo?: VenueInfo | null }) {
+  const canonicalVenueId = opportunity.venueId ?? opportunity.venueOpportunityId;
+  if (!isLiveEventOpportunity(opportunity) || !canonicalVenueId || !opportunity.venue) return null;
 
-  const location = [opportunity.city, opportunity.country].filter(Boolean).join(", ");
-  const venueTypeLabel = getVenueTypeLabel(opportunity);
-  const bookingContactAction = getContactAction(opportunity);
+  const venueName = venueInfo?.name ?? opportunity.venue;
+  const venueImageUrl = venueInfo?.imageUrl ?? opportunity.venueImageUrl;
+  const venueTypeLabel = venueInfo?.venueTypeLabel ?? getVenueTypeLabel(opportunity);
+  const venueAddress = venueInfo?.address ?? opportunity.address;
+  const venueCity = venueInfo?.city ?? opportunity.city;
+  const venueCountry = venueInfo?.country ?? opportunity.country;
+  const venueCapacity = venueInfo?.capacity ?? opportunity.venueCapacity;
+  const venueConfidence = venueInfo?.confidence ?? opportunity.venueConfidence;
+  const venueWebsite = venueInfo?.website ?? opportunity.venueWebsite;
+  const location = [venueCity, venueCountry].filter(Boolean).join(", ");
+  const bookingContactAction = venueInfo?.contact
+    ? getContactActionForValue(venueInfo.contact)
+    : getContactAction(opportunity);
 
   return (
     <div className={cardClassName}>
       <SectionTitle>Venue</SectionTitle>
       <div className="flex items-start gap-3">
-        <OpportunityImage src={opportunity.venueImageUrl} alt={opportunity.venue} variant="thumbnail" className="w-11 h-11" />
+        <Link href={`/venues/${canonicalVenueId}`} className="flex-shrink-0">
+          <OpportunityImage src={venueImageUrl} alt={venueName} variant="thumbnail" className="w-11 h-11" />
+        </Link>
         <div className="min-w-0 flex-1">
           <Link
-            href={`/venues/${opportunity.venueOpportunityId}`}
+            href={`/venues/${canonicalVenueId}`}
             className="text-sm font-semibold text-foreground hover:text-accent-text transition-colors"
           >
-            {opportunity.venue}
+            {venueName}
           </Link>
           <div className="flex flex-col gap-1.5 mt-2">
             <InfoRow label="Type" value={venueTypeLabel} />
-            <InfoRow label="Address" value={opportunity.address} />
+            <InfoRow label="Address" value={venueAddress} />
             <InfoRow label="Location" value={location || null} />
             <InfoRow
               label="Capacity"
-              value={opportunity.venueCapacity != null ? `~${opportunity.venueCapacity.toLocaleString()}` : null}
+              value={venueCapacity != null ? `~${venueCapacity.toLocaleString()}` : null}
             />
             <InfoRow
               label="Confidence"
-              value={opportunity.venueConfidence != null ? `${opportunity.venueConfidence}/100` : null}
+              value={venueConfidence != null ? `${venueConfidence}/100` : null}
             />
           </div>
           <div className="flex flex-wrap items-center gap-2 mt-3">
-            {opportunity.venueWebsite && (
+            {venueWebsite && (
               <a
-                href={opportunity.venueWebsite}
+                href={venueWebsite}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-accent-text hover:text-foreground transition-colors"
@@ -355,7 +371,7 @@ function VenueSection({ opportunity }: { opportunity: Opportunity }) {
               </a>
             )}
             <Link
-              href={`/venues/${opportunity.venueOpportunityId}`}
+              href={`/venues/${canonicalVenueId}`}
               className="text-xs text-accent-text hover:text-foreground transition-colors"
             >
               View venue details →
@@ -562,7 +578,7 @@ function SourceAndTicketingSection({ opportunity }: { opportunity: Opportunity }
   const sourceProvider = getOpportunitySource(opportunity);
   const ticketAction = getTicketAction(opportunity);
 
-  if (!eventUrl && !ticketAction) return null;
+  if (!eventUrl && !sourceProvider && !ticketAction) return null;
 
   return (
     <div className={cardClassName}>
@@ -640,6 +656,7 @@ export default function OpportunityDetail({
   opportunity,
   relatedArtists,
   similarArtists,
+  venueInfo,
 }: OpportunityDetailProps) {
   const { debugUIVisible } = useProductFeatures();
   const formattedDate = formatOpportunityDate(opportunity.date);
@@ -742,7 +759,7 @@ export default function OpportunityDetail({
         {/* 4c. Venue section (issue #213): the venue as its own reusable
             entity, distinct from the event itself, linking to its canonical
             page. Only rendered once a venue was actually resolved. */}
-        <VenueSection opportunity={opportunity} />
+        <VenueSection opportunity={opportunity} venueInfo={venueInfo} />
 
         {/* 5. Contact information. */}
         <ContactSection opportunity={opportunity} />

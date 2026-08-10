@@ -321,6 +321,15 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
   // name + city/country link to the same canonical venue page. Absent
   // whenever no venue name was resolved (issue #213 acceptance criterion).
   const venueId = opportunity.venueOpportunityId?.trim() || (venueName ? slugify(`${venueName}-${opportunity.city ?? ""}-${opportunity.country ?? ""}`) : undefined);
+  const sourceEvidence = opportunity.sourceEvidence?.length
+    ? opportunity.sourceEvidence
+    : opportunity.source_url
+      ? [{
+          url: opportunity.source_url,
+          title: opportunity.displayTitle || opportunity.name,
+          retrievedInfo: opportunity.sourceProvider ? `Source provider: ${opportunity.sourceProvider}` : undefined,
+        }]
+      : undefined;
 
   return {
     id: slugify(`${opportunity.name}-${opportunity.city ?? "unknown"}`),
@@ -339,8 +348,11 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
     matchBreakdown: opportunity.matchBreakdown,
     supportSlotPotential: opportunity.supportSlotPotential ?? null,
     sourceUrls: opportunity.source_url ? [opportunity.source_url] : [],
+    sourceProvider: opportunity.sourceProvider ?? null,
+    sourceEvidence,
     contact: opportunity.contact,
     ticketUrl: opportunity.ticketUrl ?? null,
+    contacts: opportunity.contacts ?? undefined,
     genres: opportunity.genres ?? [],
     venueCapacity: opportunity.venueCapacity ?? null,
     address: opportunity.address ?? undefined,
@@ -350,13 +362,15 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
     providerVenueId: opportunity.providerVenueId ?? undefined,
     venue: venueName,
     venueId,
-    venueOpportunityId: opportunity.venueOpportunityId ?? undefined,
+    venueOpportunityId: venueId,
     venueType: opportunity.venueType ?? undefined,
     venueWebsite: mapVenueWebsite(opportunity, category),
     venueImageUrl: opportunity.venueImageUrl ?? undefined,
     venueConfidence: opportunity.venueConfidence != null ? Math.round(opportunity.venueConfidence * 100) : null,
     recentEvents: opportunity.recentEvents ?? [],
+    headliner: opportunity.headliner ?? [],
     lineup: opportunity.lineup ?? [],
+    lineupEntries: opportunity.lineupEntries ?? undefined,
     relatedArtist: opportunity.relatedArtist ?? null,
     venueArtistEvidence: opportunity.venueArtistEvidence ?? [],
     imageUrl: opportunity.imageUrl ?? undefined,

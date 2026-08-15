@@ -20,12 +20,50 @@ const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 let running = false;
 
 const repo = process.env.GITHUB_REPO || "pissartel/Artist-Radar";
+const SUPPORTED_AGENTS = ["claude", "codex", "kimi"];
+
+function resolveAgent(value) {
+  const agent = String(value || process.env.DEFAULT_AGENT || "claude").trim().toLowerCase();
+  if (!SUPPORTED_AGENTS.includes(agent)) {
+    throw new Error(`Unsupported agent "${agent}". Choose claude, codex, or kimi.`);
+  }
+  return agent;
+}
+
+function agentLabel(agent) {
+  return agent === "claude" ? "Claude Code" : agent === "codex" ? "Codex" : "Kimi Code";
+}
+
+function requireEnv(name) {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`Missing ${name} in .env`);
+  return value;
+}
+
+function buildAgentCommand(agent, promptFile) {
+  const repoPath = requireEnv("REPO_PATH");
+  const quotedRepo = JSON.stringify(repoPath);
+  const quotedPrompt = JSON.stringify(promptFile);
+
+  if (agent === "claude") {
+    const binary = JSON.stringify(requireEnv("CLAUDE_BIN"));
+    return `cd ${quotedRepo} && cat ${quotedPrompt} | ${binary} -p --allowedTools "Read,Write,Edit,MultiEdit,Glob,Grep,Bash(git:*),Bash(gh:*),Bash(npm:*),Bash(pnpm:*),Bash(yarn:*),Bash(node:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(rg:*),Bash(mkdir:*),Bash(cp:*),Bash(mv:*),Bash(rm:*),Bash(touch:*)"`;
+  }
+
+  if (agent === "codex") {
+    const binary = JSON.stringify(requireEnv("CODEX_BIN"));
+    return `cd ${quotedRepo} && cat ${quotedPrompt} | ${binary} exec --dangerously-bypass-approvals-and-sandbox -C ${quotedRepo} -`;
+  }
+
+  const binary = JSON.stringify(process.env.KIMI_BIN?.trim() || "kimi");
+  return `cd ${quotedRepo} && ${binary} --auto --prompt "$(cat ${quotedPrompt})"`;
+}
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 app.get("/", (_req, res) => {
-  res.send("Slack Claude bot is running.");
+  res.send("Slack development bot is running.");
 });
 
 app.post("/slack/command", async (req, res) => {
@@ -35,24 +73,32 @@ app.post("/slack/command", async (req, res) => {
   const match = text.match(/issue\s+#?(\d+)/i);
 
   if (!match) {
-    return res.send("Usage: `/dev issue #42`");
+    return res.send("Usage: `/dev issue #42 [claude|codex|kimi]`");
   }
 
+  const agent = resolveAgent(text.match(/\b(claude|codex|kimi)\b/i)?.[1]);
+
   if (running) {
-    return res.send("Another Claude task is already running.");
+    return res.send("Another development task is already running.");
   }
 
   const issueNumber = match[1];
 
-  res.send(`Starting Claude Code for issue #${issueNumber}...`);
+  res.send(`Starting ${agentLabel(agent)} for issue #${issueNumber}...`);
 
-  runClaudeForIssue(issueNumber, channel).catch((error) => {
-    console.error("Unhandled Claude task error:", error);
+  runAgentForIssue(issueNumber, channel, undefined, agent).catch((error) => {
+    console.error("Unhandled development task error:", error);
   });
 });
 
 app.post("/run-issue", async (req, res) => {
   const { issueNumber, projectItemId } = req.body;
+  let agent;
+  try {
+    agent = resolveAgent(req.body.agent ?? req.body.provider);
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
 
   if (!issueNumber) {
     return res.status(400).json({
@@ -65,20 +111,22 @@ app.post("/run-issue", async (req, res) => {
     return res.status(409).json({
       success: false,
       issueNumber,
-      error: "Claude already running"
+      error: "Another development task is already running"
     });
   }
 
   try {
-    await runClaudeForIssue(
+    await runAgentForIssue(
       String(issueNumber),
       process.env.SLACK_CHANNEL_ID,
-      projectItemId
+      projectItemId,
+      agent
     );
 
     return res.json({
       success: true,
-      issueNumber
+      issueNumber,
+      agent
     });
   } catch (error) {
     return res.status(500).json({
@@ -89,7 +137,7 @@ app.post("/run-issue", async (req, res) => {
   }
 });
 
-async function runClaudeForIssue(issueNumber, channel, projectItemId) {
+async function runAgentForIssue(issueNumber, channel, projectItemId, agent) {
   const resolvedChannel = channel || process.env.SLACK_CHANNEL_ID;
 
   if (!resolvedChannel) {
@@ -128,7 +176,7 @@ Important:
 - Do not ask to fetch the GitHub issue. The full issue content is provided below.
 
 Git base preparation:
-- The worker already prepared the repository before starting Claude.
+- The worker already prepared the repository before starting the development agent.
 - Base branch: ${baseBranch}
 - Previous issue branch found: ${previousBranchFound ? "yes" : "no"}
 - Create the implementation branch from this base branch.
@@ -173,7 +221,7 @@ Report honestly:
 Do not claim tests passed if they were not executed.
 `;
 
-    const promptFile = `/tmp/artist-radar-claude-issue-${issueNumber}.txt`;
+    const promptFile = `/tmp/artist-radar-${agent}-issue-${issueNumber}.txt`;
     await fs.writeFile(promptFile, prompt, "utf8");
 
     await setProjectItemStatus(
@@ -183,22 +231,19 @@ Do not claim tests passed if they were not executed.
 
     await slack.chat.postMessage({
       channel: resolvedChannel,
-      text: `Claude Code started for issue #${issueNumber}: ${issue.title}\nBase branch: ${baseBranch}`
+      text: `${agentLabel(agent)} started for issue #${issueNumber}: ${issue.title}\nBase branch: ${baseBranch}`
     });
 
-    const claudeCommand = `
-cd "${process.env.REPO_PATH}" &&
-cat "${promptFile}" | "${process.env.CLAUDE_BIN}" -p --allowedTools "Read,Write,Edit,MultiEdit,Glob,Grep,Bash(git:*),Bash(gh:*),Bash(npm:*),Bash(pnpm:*),Bash(yarn:*),Bash(node:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(rg:*),Bash(mkdir:*),Bash(cp:*),Bash(mv:*),Bash(rm:*),Bash(touch:*)"
-`;
+    const agentCommand = buildAgentCommand(agent, promptFile);
 
-    const { stdout, stderr } = await execAsync(claudeCommand, {
+    const { stdout, stderr } = await execAsync(agentCommand, {
       timeout: 1000 * 60 * 60
     });
 
     await slack.chat.postMessage({
       channel: resolvedChannel,
       text:
-        `Claude Code finished issue #${issueNumber}.\n\n` +
+        `${agentLabel(agent)} finished issue #${issueNumber}.\n\n` +
         `Stdout:\n\`\`\`${stdout.slice(-2500)}\`\`\`\n\n` +
         `Stderr:\n\`\`\`${stderr.slice(-1500)}\`\`\``
     });
@@ -211,7 +256,7 @@ cat "${promptFile}" | "${process.env.CLAUDE_BIN}" -p --allowedTools "Read,Write,
   } catch (error) {
     await slack.chat.postMessage({
       channel: resolvedChannel,
-      text: `Claude Code failed for issue #${issueNumber}.\n\`\`\`${String(
+      text: `${agentLabel(agent)} failed for issue #${issueNumber}.\n\`\`\`${String(
         error.message
       ).slice(0, 2500)}\`\`\``
     });
@@ -232,7 +277,7 @@ async function prepareGitBase(issueNumber) {
 
   if (status.trim()) {
     throw new Error(
-      "Working tree is not clean. Commit, stash, or discard local changes before running Claude."
+      "Working tree is not clean. Commit, stash, or discard local changes before running a development agent."
     );
   }
 
@@ -330,6 +375,12 @@ async function setProjectItemStatus(projectItemId, optionId) {
 
 app.post("/run-pr-feedback", async (req, res) => {
   const { prNumber, branchName, feedbacks } = req.body;
+  let agent;
+  try {
+    agent = resolveAgent(req.body.agent ?? req.body.provider);
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
 
   if (!prNumber || !branchName || !Array.isArray(feedbacks) || feedbacks.length === 0) {
     return res.status(400).json({
@@ -341,19 +392,20 @@ app.post("/run-pr-feedback", async (req, res) => {
   if (running) {
     return res.status(409).json({
       success: false,
-      error: "Claude already running"
+      error: "Another development task is already running"
     });
   }
 
   try {
-    await runClaudeForPrFeedback({
+    await runAgentForPrFeedback({
       prNumber,
       branchName,
       feedbacks,
-      channel: process.env.SLACK_CHANNEL_ID
+      channel: process.env.SLACK_CHANNEL_ID,
+      agent
     });
 
-    return res.json({ success: true, prNumber });
+    return res.json({ success: true, prNumber, agent });
   } catch (error) {
     return res.status(500).json({
       success: false,
@@ -363,11 +415,12 @@ app.post("/run-pr-feedback", async (req, res) => {
   }
 });
 
-async function runClaudeForPrFeedback({
+async function runAgentForPrFeedback({
   prNumber,
   branchName,
   feedbacks,
-  channel
+  channel,
+  agent
 }) {
   const resolvedChannel = channel || process.env.SLACK_CHANNEL_ID;
 
@@ -391,7 +444,7 @@ ${feedback.body}`;
 
     await slack.chat.postMessage({
       channel: resolvedChannel,
-      text: `Claude PR feedback started for PR #${prNumber}\nBranch: ${branchName}\nFeedback comments: ${feedbacks.length}`
+      text: `${agentLabel(agent)} PR feedback started for PR #${prNumber}\nBranch: ${branchName}\nFeedback comments: ${feedbacks.length}`
     });
 
     const { stdout: status } = await execAsync(
@@ -401,7 +454,7 @@ ${feedback.body}`;
 
     if (status.trim()) {
       throw new Error(
-        "Working tree is not clean. Commit, stash, or discard local changes before running Claude."
+        "Working tree is not clean. Commit, stash, or discard local changes before running a development agent."
       );
     }
 
@@ -450,15 +503,12 @@ Instructions:
 - Do not claim tests passed if they were not executed.
 `;
 
-    const promptFile = `/tmp/artist-radar-claude-pr-${prNumber}.txt`;
+    const promptFile = `/tmp/artist-radar-${agent}-pr-${prNumber}.txt`;
     await fs.writeFile(promptFile, prompt, "utf8");
 
-    const claudeCommand = `
-cd "${process.env.REPO_PATH}" &&
-cat "${promptFile}" | "${process.env.CLAUDE_BIN}" -p --allowedTools "Read,Write,Edit,MultiEdit,Glob,Grep,Bash(git:*),Bash(gh:*),Bash(npm:*),Bash(pnpm:*),Bash(yarn:*),Bash(node:*),Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(rg:*),Bash(mkdir:*),Bash(cp:*),Bash(mv:*),Bash(rm:*),Bash(touch:*)"
-`;
+    const agentCommand = buildAgentCommand(agent, promptFile);
 
-    const { stdout, stderr } = await execAsync(claudeCommand, {
+    const { stdout, stderr } = await execAsync(agentCommand, {
       timeout: 1000 * 60 * 60
     });
 
@@ -466,7 +516,7 @@ cat "${promptFile}" | "${process.env.CLAUDE_BIN}" -p --allowedTools "Read,Write,
 
     await execAsync(
       `"${process.env.GH_BIN}" pr comment ${prNumber} --repo "${repo}" --body ${JSON.stringify(
-        `✅ Claude processed feedback\n\nProcessed comment IDs:\n${processedIds}`
+        `✅ ${agentLabel(agent)} processed feedback\n\nProcessed comment IDs:\n${processedIds}`
       )}`,
       { timeout: 1000 * 30 }
     );
@@ -474,7 +524,7 @@ cat "${promptFile}" | "${process.env.CLAUDE_BIN}" -p --allowedTools "Read,Write,
     await slack.chat.postMessage({
       channel: resolvedChannel,
       text:
-        `Claude PR feedback finished for PR #${prNumber}.\n\n` +
+        `${agentLabel(agent)} PR feedback finished for PR #${prNumber}.\n\n` +
         `Processed comments: ${feedbacks.length}\n\n` +
         `Stdout:\n\`\`\`${stdout.slice(-2500)}\`\`\`\n\n` +
         `Stderr:\n\`\`\`${stderr.slice(-1500)}\`\`\``
@@ -484,7 +534,7 @@ cat "${promptFile}" | "${process.env.CLAUDE_BIN}" -p --allowedTools "Read,Write,
   } catch (error) {
     await slack.chat.postMessage({
       channel: resolvedChannel,
-      text: `Claude PR feedback failed for PR #${prNumber}.\n\`\`\`${String(
+      text: `${agentLabel(agent)} PR feedback failed for PR #${prNumber}.\n\`\`\`${String(
         error.message
       ).slice(0, 2500)}\`\`\``
     });

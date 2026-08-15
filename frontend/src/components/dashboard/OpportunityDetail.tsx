@@ -11,6 +11,7 @@ import SimilarArtistCard from "./SimilarArtistCard";
 import OpportunityActions from "./OpportunityActions";
 import MatchScoreBadge from "@/components/common/MatchScoreBadge";
 import OpportunityImage from "@/components/common/OpportunityImage";
+import OpportunityMap from "./OpportunityMap";
 import {
   formatOpportunityDate,
   getAdditionalMetadata,
@@ -881,6 +882,8 @@ export default function OpportunityDetail({
             </div>
           </div>
         )}
+
+        <OpportunityMap opportunity={opportunity} />
 
         {/* 4. Line-up. */}
         <LineupSection opportunity={opportunity} relatedArtists={relatedArtists} />

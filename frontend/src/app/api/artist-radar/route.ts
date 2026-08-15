@@ -1,6 +1,7 @@
 import { mapPipelineResultToArtistRadarResponse } from "@/lib/server/artistRadarMapper";
 import { ArtistInputSchema, runOpportunitySearch, warnLog } from "@/lib/server/backendPipeline";
 import type { ArtistRadarRequest } from "@/types/artistRadar";
+import { geocodeOpportunities } from "@/lib/server/geocodeOpportunities";
 
 interface RawRequestBody {
   artistName?: unknown;
@@ -183,6 +184,7 @@ export async function POST(request: Request): Promise<Response> {
       Object.keys(searchOptions).length > 0 ? searchOptions : undefined
     );
     const response = mapPipelineResultToArtistRadarResponse(result, artistRadarRequest);
+    response.bookingOpportunities = await geocodeOpportunities(response.bookingOpportunities);
 
     return Response.json(response, { status: 200 });
   } catch (error) {

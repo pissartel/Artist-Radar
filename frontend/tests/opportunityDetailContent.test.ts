@@ -142,6 +142,24 @@ describe("OpportunityDetail content (issue #132 review feedback)", () => {
     expect(source).toMatch(/factor\.code === "contact_available"/);
     expect(source).toMatch(/factors={resolvedNeutralFactors}/);
   });
+
+  it("renders the cached opportunity coordinates through the map component", () => {
+    expect(source).toMatch(/OpportunityMap opportunity={opportunity}/);
+  });
+});
+
+describe("OpportunityMap content (issue #133)", () => {
+  const source = readSource("src/components/dashboard/OpportunityMap.tsx");
+
+  it("distinguishes approximate and exact locations", () => {
+    expect(source).toMatch(/Approximate location/);
+    expect(source).toMatch(/Exact address location/);
+  });
+
+  it("provides an Open in Maps action and OpenStreetMap attribution", () => {
+    expect(source).toMatch(/Open in Maps/);
+    expect(source).toMatch(/OpenStreetMap contributors/);
+  });
 });
 
 describe("OpportunityActions content (issue #130/#132 review feedback)", () => {

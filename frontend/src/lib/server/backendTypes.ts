@@ -304,6 +304,9 @@ export interface BackendOpportunity {
   type: string;
   city: string | null;
   country: string | null;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   source_url: string | null;
   sourceProvider?: string | null;
   contact: string | null;

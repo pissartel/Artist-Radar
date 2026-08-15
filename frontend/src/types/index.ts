@@ -456,6 +456,9 @@ export interface Opportunity {
   longitude?: number | null;
   normalizedLocation?: NormalizedLocation;
   providerVenueId?: string;
+  // Address-level coordinates are exact enough to identify the venue;
+  // city-level coordinates must be labelled as approximate in the UI.
+  locationPrecision?: "exact" | "approximate";
   // Kind of venue when known (e.g. "venue", "bar", "association", "festival",
   // "cultural_centre"), distinct from the opportunity's own `type`.
   venueType?: string;

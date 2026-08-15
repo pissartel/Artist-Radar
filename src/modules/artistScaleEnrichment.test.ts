@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { computeArtistScaleForAnalysis } from "./artistScaleEnrichment.js";
+import {
+  combineCompatibilityWithArtistScale,
+  computeArtistScaleForAnalysis
+} from "./artistScaleEnrichment.js";
 import { groupSimilarArtistsByTier } from "./similarArtistsFinder.js";
 import {
   ArtistProfileSchema,
@@ -61,6 +64,27 @@ function buildChartmetricSimilarArtist(name: string, metrics: Partial<Chartmetri
     }
   });
 }
+
+describe("combineCompatibilityWithArtistScale", () => {
+  it("keeps the existing compatibility unchanged when scale evidence is unavailable", () => {
+    expect(combineCompatibilityWithArtistScale(76, null, 42)).toBe(76);
+  });
+
+  it("rewards comparable scale and penalizes a completely different scale", () => {
+    const peer = combineCompatibilityWithArtistScale(80, 50, 54);
+    const majorGap = combineCompatibilityWithArtistScale(80, 10, 90);
+
+    expect(peer).toBeGreaterThan(majorGap);
+    expect(majorGap).toBeLessThan(70);
+  });
+
+  it("supports configurable weights while keeping the result bounded", () => {
+    expect(combineCompatibilityWithArtistScale(80, 10, 90, {
+      existingRelevance: 0.7,
+      artistScaleFit: 0.3
+    })).toBe(56);
+  });
+});
 
 describe("computeArtistScaleForAnalysis", () => {
   it("computes scores for the main artist and every similar artist, preferring Chartmetric over fallback data when both exist", () => {

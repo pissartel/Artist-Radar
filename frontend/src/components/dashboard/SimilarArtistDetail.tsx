@@ -17,9 +17,16 @@ import {
 } from "@/lib/similarArtist";
 import { cardClassName as buildCardClassName } from "@/components/ui/Card";
 import { useProductFeatures } from "@/components/providers/ProductFeaturesProvider";
+import {
+  ARTIST_SCALE_BAND_LABELS,
+  ARTIST_SCALE_CONFIDENCE_LABELS,
+  describeRelativeArtistScale,
+  getArtistScaleConfidenceClass,
+} from "@/lib/artistScale";
 
 interface SimilarArtistDetailProps {
   artist: SimilarArtist;
+  analyzedArtistScaleScore?: number | null;
   referenceArtistGenres: string[];
   relatedOpportunities: Opportunity[];
 }
@@ -57,6 +64,7 @@ function DataSignal({ label, value }: { label: string; value: React.ReactNode })
 
 export default function SimilarArtistDetail({
   artist,
+  analyzedArtistScaleScore,
   referenceArtistGenres,
   relatedOpportunities,
 }: SimilarArtistDetailProps) {
@@ -68,6 +76,12 @@ export default function SimilarArtistDetail({
   const showCommercialScale = hasKnownCommercialScale(artist.commercialTier);
   const notorietyLabel = getNotorietyLabel(artist);
   const subtitle = buildArtistSubtitle(artist, listeners);
+  const hasArtistScale =
+    artist.artistScaleScore !== null &&
+    artist.artistScaleScore !== undefined &&
+    artist.artistScaleBand &&
+    artist.artistScaleScoreConfidence &&
+    artist.artistScaleScoreConfidence !== "unavailable";
 
   return (
     <div className="max-w-3xl">
@@ -124,6 +138,30 @@ export default function SimilarArtistDetail({
       </div>
 
       <div className="mt-6 flex flex-col gap-4">
+        {hasArtistScale && (
+          <div className={cardClassName}>
+            <SectionTitle>Artist Scale</SectionTitle>
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-base font-semibold text-foreground">
+                  {ARTIST_SCALE_BAND_LABELS[artist.artistScaleBand!]} artist
+                </p>
+                <p className="text-sm text-foreground-secondary mt-1">
+                  Score: {artist.artistScaleScore} / 100
+                </p>
+              </div>
+              <span
+                className={`text-[10px] font-medium px-2 py-1 rounded-md border ${getArtistScaleConfidenceClass(artist.artistScaleScoreConfidence!)}`}
+              >
+                {ARTIST_SCALE_CONFIDENCE_LABELS[artist.artistScaleScoreConfidence!]}
+              </span>
+            </div>
+            <p className="text-xs text-foreground-secondary leading-relaxed mt-3">
+              {describeRelativeArtistScale(artist.artistScaleScore!, analyzedArtistScaleScore)}
+            </p>
+          </div>
+        )}
+
         <div className={cardClassName}>
           <SectionTitle>{showCommercialScale ? "Musical match vs. commercial scale" : "Match summary"}</SectionTitle>
           <div className={`grid ${showCommercialScale ? "grid-cols-3" : "grid-cols-2"} gap-3 text-center`}>

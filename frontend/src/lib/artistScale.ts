@@ -43,3 +43,16 @@ export function getArtistScaleConfidenceClass(confidence: ArtistScaleScoreConfid
       return "text-foreground-muted bg-white/5 border-border";
   }
 }
+
+export function describeRelativeArtistScale(candidateScore: number, analyzedScore?: number | null): string {
+  if (analyzedScore === null || analyzedScore === undefined) {
+    return "Audience position relative to your artist is unavailable.";
+  }
+
+  const difference = candidateScore - analyzedScore;
+  if (difference >= 20) return "Substantially larger audience than your artist.";
+  if (difference >= 8) return "Slightly larger audience than your artist.";
+  if (difference <= -20) return "Substantially smaller audience than your artist.";
+  if (difference <= -8) return "Slightly smaller audience than your artist.";
+  return "Similar audience size to your artist.";
+}

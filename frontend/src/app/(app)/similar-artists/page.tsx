@@ -1,6 +1,5 @@
 "use client";
 
-import ArtistScalePanel from "@/components/dashboard/ArtistScalePanel";
 import SimilarArtistsExplorer from "@/components/dashboard/SimilarArtistsExplorer";
 import WarningsBanner from "@/components/dashboard/WarningsBanner";
 import {
@@ -25,7 +24,7 @@ export default function SimilarArtistsPage() {
     return <ArtistRadarErrorState message={state.message} onRetry={refetch} />;
   }
 
-  const { similarArtists, warnings, artistScale } = state.data;
+  const { similarArtists, warnings } = state.data;
 
   return (
     <>
@@ -37,7 +36,6 @@ export default function SimilarArtistsPage() {
           and find useful references for your outreach.
         </p>
       </div>
-      <ArtistScalePanel artistScale={artistScale} />
       <SimilarArtistsExplorer artists={similarArtists} />
     </>
   );

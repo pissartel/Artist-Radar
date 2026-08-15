@@ -1,5 +1,4 @@
 import type { CommercialTier, Opportunity, SimilarArtist } from "@/types";
-import { ARTIST_SCALE_BAND_LABELS } from "@/lib/artistScale";
 
 // Issue #201: human-readable labels for the commercial-scale *relationship*
 // tier — kept separate from the artist's own absolute scale (see
@@ -47,14 +46,6 @@ export function getNotorietyLabel(artist: SimilarArtist): string | null {
       return "Developing artist";
     case "emerging":
       return "Emerging artist";
-  }
-
-  if (
-    artist.artistScaleBand &&
-    artist.artistScaleScoreConfidence &&
-    artist.artistScaleScoreConfidence !== "unavailable"
-  ) {
-    return `${ARTIST_SCALE_BAND_LABELS[artist.artistScaleBand]} artist`;
   }
 
   switch (artist.artistTier) {

@@ -42,8 +42,19 @@ export interface ComputeArtistScaleForAnalysisInput {
   similarArtists: SimilarArtistsByTier;
   comparisonThresholds?: ArtistScaleComparisonThresholds;
   scoreOptions?: ArtistScaleScoreOptions;
+  compatibilityWeights?: ArtistScaleCompatibilityWeights;
   now?: Date;
 }
+
+export interface ArtistScaleCompatibilityWeights {
+  existingRelevance: number;
+  artistScaleFit: number;
+}
+
+export const DEFAULT_ARTIST_SCALE_COMPATIBILITY_WEIGHTS: ArtistScaleCompatibilityWeights = {
+  existingRelevance: 0.85,
+  artistScaleFit: 0.15
+};
 
 export interface ComputeArtistScaleForAnalysisResult {
   artistScale: ArtistScale;
@@ -87,8 +98,16 @@ export function computeArtistScaleForAnalysis(
     if (!result) {
       return artist;
     }
+    const compatibility = combineCompatibilityWithArtistScale(
+      artist.totalRelevance,
+      mainResult.confidence === "unavailable" ? null : mainResult.artistScaleScore,
+      result.confidence === "unavailable" ? null : result.artistScaleScore,
+      input.compatibilityWeights
+    );
     return {
       ...artist,
+      totalRelevance: compatibility,
+      relevanceToUserArtist: compatibility,
       artistScaleScore: result.confidence === "unavailable" ? null : result.artistScaleScore,
       artistScaleBand: result.confidence === "unavailable" ? null : result.scaleBand,
       artistScaleScoreConfidence: result.confidence,
@@ -109,6 +128,33 @@ export function computeArtistScaleForAnalysis(
     },
     similarArtists: annotatedSimilarArtists
   };
+}
+
+/**
+ * Adds scale fit to the existing compatibility without creating a competing
+ * score. The existing score remains dominant (and is itself led by genre),
+ * while a large commercial-size gap progressively lowers compatibility.
+ * Missing scale evidence leaves compatibility unchanged.
+ */
+export function combineCompatibilityWithArtistScale(
+  existingRelevance: number,
+  analyzedArtistScale: number | null,
+  similarArtistScale: number | null,
+  weights: ArtistScaleCompatibilityWeights = DEFAULT_ARTIST_SCALE_COMPATIBILITY_WEIGHTS
+): number {
+  if (analyzedArtistScale === null || similarArtistScale === null) {
+    return existingRelevance;
+  }
+
+  const totalWeight = weights.existingRelevance + weights.artistScaleFit;
+  if (totalWeight <= 0 || weights.existingRelevance < 0 || weights.artistScaleFit < 0) {
+    throw new Error("Artist scale compatibility weights must be non-negative and sum above zero.");
+  }
+
+  const scaleFit = Math.max(0, 100 - Math.abs(analyzedArtistScale - similarArtistScale) * 1.25);
+  return Math.max(0, Math.min(100, Math.round(
+    (existingRelevance * weights.existingRelevance + scaleFit * weights.artistScaleFit) / totalWeight
+  )));
 }
 
 function buildMainArtistScaleScoreInput(

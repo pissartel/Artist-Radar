@@ -396,9 +396,9 @@ async function enrichSimilarArtistsWithChartmetricSafely(
 
 // Artist-scale scoring/comparison (issue #219) is an additive, best-effort
 // step, mirroring enrichSimilarArtistsWithChartmetricSafely above: a failure
-// here must never take down the rest of the analysis and must never change
-// which similar artists exist or their ordering — on any failure this
-// degrades to the unenriched groups plus an "unavailable" artistScale.
+// here must never take down the rest of the analysis. When scale evidence is
+// available it reinforces each candidate's single compatibility score; on
+// failure this degrades to the original scores plus unavailable scale data.
 function computeArtistScaleSafely(
   profile: ArtistProfile,
   mainArtistChartmetric: ArtistEnrichmentResult,

@@ -31,7 +31,7 @@ export default function SimilarArtistDetailPage({ params }: SimilarArtistDetailP
     return <ArtistRadarErrorState message={state.message} onRetry={refetch} />;
   }
 
-  const { artist, similarArtists, bookingOpportunities } = state.data;
+  const { artist, artistScale, similarArtists, bookingOpportunities } = state.data;
   const similarArtist = getSimilarArtistById(similarArtists, id);
 
   if (!similarArtist) {
@@ -57,6 +57,7 @@ export default function SimilarArtistDetailPage({ params }: SimilarArtistDetailP
   return (
     <SimilarArtistDetail
       artist={similarArtist}
+      analyzedArtistScaleScore={artistScale?.artistScaleScore}
       referenceArtistGenres={artist.genres}
       relatedOpportunities={relatedOpportunities}
     />

@@ -8,6 +8,7 @@ import {
   sortSimilarArtistsByMatch,
 } from "@/lib/similarArtist";
 import type { SimilarArtist } from "@/types";
+import { describeRelativeArtistScale } from "@/lib/artistScale";
 
 function baseArtist(overrides: Partial<SimilarArtist> = {}): SimilarArtist {
   return {
@@ -38,6 +39,18 @@ describe("getCommercialTierLabel", () => {
     expect(getCommercialTierLabel(undefined)).not.toMatch(/same level/i);
     expect(getCommercialTierLabel("scale_unknown")).not.toMatch(/emerging/i);
     expect(getCommercialTierLabel("scale_unknown")).not.toMatch(/same level/i);
+  });
+});
+
+describe("describeRelativeArtistScale", () => {
+  it("describes larger, similar, and smaller candidates relative to the analyzed artist", () => {
+    expect(describeRelativeArtistScale(70, 50)).toContain("larger");
+    expect(describeRelativeArtistScale(54, 50)).toContain("Similar");
+    expect(describeRelativeArtistScale(30, 50)).toContain("smaller");
+  });
+
+  it("is explicit when the analyzed artist scale is unavailable", () => {
+    expect(describeRelativeArtistScale(54, null)).toContain("unavailable");
   });
 });
 
@@ -74,7 +87,7 @@ describe("getNotorietyLabel", () => {
     expect(getNotorietyLabel(baseArtist({ commercialAbsoluteScale: "developing" }))).toBe("Developing artist");
   });
 
-  it("falls back to computed artist scale when available", () => {
+  it("does not expose computed artist scale outside the detail view", () => {
     expect(
       getNotorietyLabel(
         baseArtist({
@@ -83,7 +96,7 @@ describe("getNotorietyLabel", () => {
           artistTier: "emerging",
         }),
       ),
-    ).toBe("Regional artist");
+    ).toBe("Emerging artist");
   });
 
   it("falls back to artist tier when no richer scale label is available", () => {

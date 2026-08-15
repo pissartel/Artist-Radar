@@ -3,6 +3,10 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ArtistRadarClientError, fetchArtistRadarData } from "@/lib/artistRadarClient";
+import {
+  readArtistRadarResponse,
+  writeArtistRadarResponse,
+} from "@/lib/artistRadarResponseCache";
 import { readOnboardingRequest } from "@/lib/onboardingRequest";
 import type { ArtistRadarRequest, ArtistRadarResponse } from "@/types/artistRadar";
 
@@ -56,8 +60,14 @@ export function useArtistRadarData(): UseArtistRadarDataResult {
 
   const query: UseQueryResult<ArtistRadarResponse> = useQuery({
     queryKey: buildQueryKey(request ?? null),
-    queryFn: () => fetchArtistRadarData(request as ArtistRadarRequest),
+    queryFn: async () => {
+      const activeRequest = request as ArtistRadarRequest;
+      const data = await fetchArtistRadarData(activeRequest);
+      writeArtistRadarResponse(activeRequest, data);
+      return data;
+    },
     enabled: Boolean(request),
+    initialData: request ? () => readArtistRadarResponse(request) : undefined,
   });
 
   const executionId = request?.executionId ?? null;

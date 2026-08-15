@@ -15,6 +15,8 @@ const BASE_TABS: BookingTabName[] = [
   "Contacts",
 ];
 
+const OVERVIEW_OPPORTUNITY_LIMIT = 10;
+
 const EMPTY_STATE_MESSAGE: Record<BookingTabName, string> = {
   All: "No booking opportunities found in this analysis",
   Concerts: "No concert opportunities found in this analysis",
@@ -42,7 +44,7 @@ function EmptyTabState({ message }: { message: string }) {
 
 function RawJsonTab({ opportunities }: { opportunities: Opportunity[] }) {
   return (
-    <pre className="bg-background rounded-xl p-4 border border-border text-xs text-success-text overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed font-mono shadow-card">
+    <pre className="h-full bg-background rounded-xl p-4 border border-border text-xs text-success-text overflow-auto leading-relaxed font-mono shadow-card">
       {JSON.stringify(opportunities, null, 2)}
     </pre>
   );
@@ -72,6 +74,7 @@ export default function BookingTabs({ opportunities }: BookingTabsProps) {
     () => filterBookingOpportunities(opportunities, activeTab),
     [opportunities, activeTab],
   );
+  const visibleOpportunities = activeOpportunities.slice(0, OVERVIEW_OPPORTUNITY_LIMIT);
 
   return (
     <div>
@@ -95,17 +98,29 @@ export default function BookingTabs({ opportunities }: BookingTabsProps) {
         ))}
       </div>
 
-      {activeTab === "Raw JSON" ? (
-        <RawJsonTab opportunities={opportunities} />
-      ) : activeOpportunities.length > 0 ? (
-        <div className="flex flex-col gap-3">
-          {activeOpportunities.map((opportunity) => (
-            <BookingOpportunityCard key={opportunity.id} opportunity={opportunity} />
-          ))}
-        </div>
-      ) : (
-        <EmptyTabState message={EMPTY_STATE_MESSAGE[activeTab]} />
-      )}
+      <div
+        role="region"
+        aria-label={`${activeTab} opportunities`}
+        tabIndex={0}
+        className="h-[min(70vh,640px)] min-h-80 overflow-y-auto overscroll-contain pr-1 focus-visible:outline-none focus-visible:shadow-focus [scrollbar-gutter:stable]"
+      >
+        {activeTab === "Raw JSON" ? (
+          <RawJsonTab opportunities={opportunities} />
+        ) : activeOpportunities.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {visibleOpportunities.map((opportunity) => (
+              <BookingOpportunityCard key={opportunity.id} opportunity={opportunity} />
+            ))}
+            {activeOpportunities.length > OVERVIEW_OPPORTUNITY_LIMIT && (
+              <p className="pb-1 text-center text-xs text-foreground-muted">
+                Showing the top {OVERVIEW_OPPORTUNITY_LIMIT} of {activeOpportunities.length}
+              </p>
+            )}
+          </div>
+        ) : (
+          <EmptyTabState message={EMPTY_STATE_MESSAGE[activeTab]} />
+        )}
+      </div>
     </div>
   );
 }

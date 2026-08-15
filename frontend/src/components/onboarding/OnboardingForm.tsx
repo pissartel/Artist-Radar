@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { clearArtistRadarResponse } from "@/lib/artistRadarResponseCache";
 import type { MainGoal, OnboardingFormData } from "@/types";
 import FormField from "@/components/onboarding/FormField";
 import OnboardingStepLayout from "@/components/onboarding/OnboardingStepLayout";
@@ -87,6 +88,8 @@ export default function OnboardingForm({ showChartmetricToggle }: OnboardingForm
     } catch {
       // localStorage unavailable — safe to ignore, dashboard still uses mock data.
     }
+
+    clearArtistRadarResponse();
 
     router.push("/analyzing");
   }

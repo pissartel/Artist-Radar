@@ -1,4 +1,7 @@
 @import "../styles/tokens.css";
+@import "leaflet/dist/leaflet.css";
+@import "leaflet.markercluster/dist/MarkerCluster.css";
+@import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
 @tailwind base;
 @tailwind components;
@@ -69,3 +72,14 @@ textarea:-webkit-autofill:focus {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.18);
 }
+
+.leaflet-container { background: var(--surface); font-family: inherit; }
+.ecosystem-marker-wrap { background: transparent; border: 0; }
+.ecosystem-marker { display: block; width: 22px; height: 22px; border: 3px solid #fff; border-radius: 999px; background: var(--marker-color); box-shadow: 0 2px 9px rgba(0,0,0,.65); }
+.ecosystem-marker-artist { border-radius: 5px; transform: rotate(45deg); }
+.ecosystem-marker-approximate { border-style: dashed; opacity: .8; }
+.ecosystem-popup { display: grid; gap: 5px; color: #17141f; }
+.ecosystem-popup p, .ecosystem-popup small { margin: 0; }
+.ecosystem-popup small { color: #6e6c7a; }
+.ecosystem-popup a { color: #6b21a8; font-weight: 600; }
+.marker-cluster div { background: var(--primary); color: white; font-weight: 700; }

@@ -67,6 +67,18 @@ function joinLocation(city?: string | null, country?: string | null): string {
   return [dedupedCity, country].filter((part): part is string => Boolean(part)).join(", ");
 }
 
+function normalizedLocation(city?: string | null, country?: string | null, address?: string | null, latitude?: number | null, longitude?: number | null) {
+  const hasCoordinates = typeof latitude === "number" && typeof longitude === "number";
+  if (!city && !country && !hasCoordinates) return undefined;
+  return {
+    ...(country ? { country } : {}),
+    ...(city ? { city } : {}),
+    ...(address ? { address } : {}),
+    ...(hasCoordinates ? { latitude, longitude } : {}),
+    precision: hasCoordinates ? "exact" as const : city ? "city" as const : "country" as const,
+  };
+}
+
 function mapArtistProfile(profile: BackendArtistProfile, request: ArtistRadarRequest, chartmetric?: BackendPipelineResult["chartmetric"]): ArtistProfile {
   const name = profile.artistName ?? request.artistName;
   const city = profile.city ?? request.location;
@@ -103,6 +115,7 @@ function mapArtistProfile(profile: BackendArtistProfile, request: ArtistRadarReq
     platforms,
     spotify: profile.spotify ?? undefined,
     metrics: mapArtistMetrics(profile, genres, chartmetric),
+    normalizedLocation: normalizedLocation(city, country),
   };
 }
 
@@ -166,6 +179,7 @@ function mapSimilarArtist(artist: BackendSimilarArtist): SimilarArtist {
     localRelevance: artist.localRelevance,
     sizeRelevance: artist.sizeRelevance,
     sceneRelevance: artist.sceneRelevance,
+    normalizedLocation: normalizedLocation(artist.city, artist.country),
   };
 }
 
@@ -361,6 +375,13 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
     postalCode: opportunity.postalCode ?? undefined,
     latitude: opportunity.latitude ?? null,
     longitude: opportunity.longitude ?? null,
+    normalizedLocation: normalizedLocation(
+      opportunity.city,
+      opportunity.country,
+      opportunity.address,
+      opportunity.latitude,
+      opportunity.longitude
+    ),
     providerVenueId: opportunity.providerVenueId ?? undefined,
     venue: venueName,
     venueId,

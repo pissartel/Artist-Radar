@@ -41,6 +41,18 @@ export interface ArtistMetrics {
   spotifyUrl: string | null;
 }
 
+export type LocationPrecision = "exact" | "city" | "country";
+
+export interface NormalizedLocation {
+  country?: string;
+  countryCode?: string;
+  city?: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+  precision: LocationPrecision;
+}
+
 export interface ArtistProfile {
   id: string;
   name: string;
@@ -57,6 +69,7 @@ export interface ArtistProfile {
   platforms?: Platform[];
   spotify?: SpotifyMetadata;
   metrics?: ArtistMetrics;
+  normalizedLocation?: NormalizedLocation;
 }
 
 export interface KpiMetric {
@@ -241,6 +254,7 @@ export interface SimilarArtist {
   sharedGenres?: string[];
   sourceUrls?: string[];
   relatedVenues?: string[];
+  normalizedLocation?: NormalizedLocation;
 }
 
 // V1 scope: booking opportunities plus labels (issue #197).
@@ -440,6 +454,7 @@ export interface Opportunity {
   postalCode?: string;
   latitude?: number | null;
   longitude?: number | null;
+  normalizedLocation?: NormalizedLocation;
   providerVenueId?: string;
   // Kind of venue when known (e.g. "venue", "bar", "association", "festival",
   // "cultural_centre"), distinct from the opportunity's own `type`.

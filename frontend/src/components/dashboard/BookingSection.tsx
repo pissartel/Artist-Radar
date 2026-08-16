@@ -37,7 +37,7 @@ export default function BookingSection({
         </Link>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] gap-5">
-        <div className="min-w-0">
+        <div className="min-w-0 lg:h-full">
           <BookingTabs opportunities={opportunities} />
         </div>
         <div className="min-w-0">

@@ -77,7 +77,7 @@ export default function BookingTabs({ opportunities }: BookingTabsProps) {
   const visibleOpportunities = activeOpportunities.slice(0, OVERVIEW_OPPORTUNITY_LIMIT);
 
   return (
-    <div>
+    <div className="lg:flex lg:h-full lg:flex-col">
       <div className="flex gap-1 mb-4 overflow-x-auto pb-1 bg-surface-elevated/50 rounded-xl p-1.5 border border-border">
         {TABS.map((tab) => (
           <button
@@ -102,7 +102,7 @@ export default function BookingTabs({ opportunities }: BookingTabsProps) {
         role="region"
         aria-label={`${activeTab} opportunities`}
         tabIndex={0}
-        className="h-[min(70vh,640px)] min-h-80 overflow-y-auto overscroll-contain pr-1 focus-visible:outline-none focus-visible:shadow-focus [scrollbar-gutter:stable]"
+        className="h-[min(70vh,640px)] min-h-80 overflow-y-auto overscroll-contain pr-1 focus-visible:outline-none focus-visible:shadow-focus [scrollbar-gutter:stable] lg:h-auto lg:flex-1"
       >
         {activeTab === "Raw JSON" ? (
           <RawJsonTab opportunities={opportunities} />

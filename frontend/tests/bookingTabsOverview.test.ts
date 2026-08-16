@@ -15,6 +15,7 @@ describe("overview opportunity panel", () => {
 
   it("keeps the results panel height stable and scrolls its contents", () => {
     expect(source).toContain("h-[min(70vh,640px)]");
+    expect(source).toContain("lg:h-auto lg:flex-1");
     expect(source).toContain("overflow-y-auto");
     expect(source).toContain("overscroll-contain");
     expect(source).toContain('role="region"');

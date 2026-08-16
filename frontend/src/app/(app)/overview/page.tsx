@@ -12,6 +12,10 @@ import {
   ArtistRadarLoadingState,
 } from "@/components/dashboard/ArtistRadarStates";
 import { useArtistRadarData } from "@/lib/useArtistRadarData";
+import {
+  selectOverviewMapOpportunities,
+  selectOverviewSimilarArtists,
+} from "@/lib/overviewSelection";
 
 export default function OverviewPage() {
   const { state, refetch } = useArtistRadarData();
@@ -37,7 +41,11 @@ export default function OverviewPage() {
       <KpiGrid metrics={kpis} />
       <SimilarArtistsSection artists={similarArtists} />
 
-      <EcosystemMap artist={artist} similarArtists={similarArtists} opportunities={bookingOpportunities} />
+      <EcosystemMap
+        artist={artist}
+        similarArtists={selectOverviewSimilarArtists(similarArtists)}
+        opportunities={selectOverviewMapOpportunities(bookingOpportunities)}
+      />
 
       <BookingSection
         opportunities={bookingOpportunities}

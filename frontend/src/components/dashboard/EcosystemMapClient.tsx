@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import L from "leaflet";
 import "leaflet.markercluster";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
@@ -14,9 +15,18 @@ type MapEntity = {
 };
 
 const CACHE_KEY = "artist-radar:geocodes:v1";
+const SIMILAR_ARTIST_COLOR = "#c084fc";
 const TYPE_COLORS: Record<OpportunityType, string> = {
   venue: "#3b82f6", concert: "#f97316", opening_slot: "#f43f5e",
   festival: "#eab308", organization: "#22c55e", label: "#14b8a6",
+};
+const TYPE_LABELS: Record<OpportunityType, string> = {
+  venue: "Venues",
+  concert: "Concerts",
+  festival: "Festivals",
+  opening_slot: "Opening Slots",
+  organization: "Bookers / agencies / promoters",
+  label: "Labels",
 };
 
 function readCache(): Record<string, GeocodedLocation> {
@@ -29,7 +39,7 @@ function toResolved(location: NormalizedLocation | undefined, cache: Record<stri
   return cache[locationCacheKey(location)];
 }
 
-function MapLayers({ entities, center }: { entities: MapEntity[]; center?: GeocodedLocation }) {
+function MapLayers({ entities, center, onNavigate }: { entities: MapEntity[]; center?: GeocodedLocation; onNavigate: (href: string) => void }) {
   const map = useMap();
   useEffect(() => {
     if (center?.boundingBox?.length === 4) {
@@ -41,25 +51,27 @@ function MapLayers({ entities, center }: { entities: MapEntity[]; center?: Geoco
     const clusters = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 48, spiderfyOnMaxZoom: true });
     for (const entity of entities) {
       const approximate = entity.location.precision === "country";
-      const color = entity.kind === "artist" ? "#c084fc" : TYPE_COLORS[entity.type ?? "organization"];
+      const color = entity.kind === "artist" ? SIMILAR_ARTIST_COLOR : TYPE_COLORS[entity.type ?? "organization"];
       const icon = L.divIcon({
         className: "ecosystem-marker-wrap",
         html: `<span class="ecosystem-marker ${entity.kind === "artist" ? "ecosystem-marker-artist" : ""} ${approximate ? "ecosystem-marker-approximate" : ""}" style="--marker-color:${color}" aria-hidden="true"></span>`,
         iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -12],
       });
       const marker = L.marker([entity.location.latitude, entity.location.longitude], { icon, title: entity.title });
+      marker.on("click", () => onNavigate(entity.detailHref));
       const node = document.createElement("div");
       node.className = "ecosystem-popup";
       const title = document.createElement("strong"); title.textContent = entity.title; node.append(title);
       const subtitle = document.createElement("p"); subtitle.textContent = entity.subtitle; node.append(subtitle);
       if (approximate) { const note = document.createElement("small"); note.textContent = "Approximate country-level location"; node.append(note); }
-      const link = document.createElement("a"); link.href = entity.detailHref; link.textContent = "View details →"; node.append(link);
+      const link = document.createElement("button"); link.type = "button"; link.textContent = "View details →";
+      link.addEventListener("click", () => onNavigate(entity.detailHref)); node.append(link);
       marker.bindPopup(node, { maxWidth: 260 });
       clusters.addLayer(marker);
     }
     map.addLayer(clusters);
     return () => { map.removeLayer(clusters); };
-  }, [entities, map]);
+  }, [entities, map, onNavigate]);
   return null;
 }
 
@@ -74,9 +86,12 @@ function collectLocations(artist: EcosystemMapProps["artist"], opportunities: Op
 }
 
 export default function EcosystemMapClient({ artist, opportunities, similarArtists }: EcosystemMapProps) {
-  const [showOpportunities, setShowOpportunities] = useState(true);
+  const router = useRouter();
+  const navigateToDetail = useCallback((href: string) => router.push(href), [router]);
   const [showArtists, setShowArtists] = useState(true);
-  const [type, setType] = useState<"all" | OpportunityType>("all");
+  const [visibleTypes, setVisibleTypes] = useState<Set<OpportunityType>>(
+    () => new Set(opportunities.map((item) => item.type)),
+  );
   const [cache, setCache] = useState<Record<string, GeocodedLocation>>({});
   const [loading, setLoading] = useState(true);
 
@@ -108,35 +123,37 @@ export default function EcosystemMapClient({ artist, opportunities, similarArtis
       const location = toResolved(item.normalizedLocation, cache); if (!location) continue;
       visible.push({ id: `artist-${item.id}`, kind: "artist", title: item.name, subtitle: `${item.matchScore}% overall relevance · ${item.location || "Location available"}`, detailHref: `/similar-artists/${item.id}`, location });
     }
-    if (showOpportunities) for (const item of opportunities) {
-      if (type !== "all" && item.type !== type) continue;
+    for (const item of opportunities) {
+      if (!visibleTypes.has(item.type)) continue;
       const location = toResolved(item.normalizedLocation, cache); if (!location) continue;
       visible.push({ id: `opportunity-${item.id}`, kind: "opportunity", title: item.title, subtitle: `${item.type.replace("_", " ")} · ${item.matchScore}% match · ${item.location}`, detailHref: `/opportunities/${item.id}`, type: item.type, score: item.matchScore, location });
     }
     return visible;
-  }, [cache, opportunities, showArtists, showOpportunities, similarArtists, type]);
+  }, [cache, opportunities, showArtists, similarArtists, visibleTypes]);
   const types = [...new Set(opportunities.map((item) => item.type))];
+  const toggleType = (value: OpportunityType) => setVisibleTypes((current) => {
+    const next = new Set(current);
+    if (next.has(value)) next.delete(value); else next.add(value);
+    return next;
+  });
 
-  return <section className="mb-8" aria-labelledby="ecosystem-map-title">
-    <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div><h2 id="ecosystem-map-title" className="text-sm font-semibold uppercase tracking-widest text-foreground">Geographic ecosystem</h2><p className="mt-1 text-xs text-foreground-muted">Similar artists and booking opportunities around your scene.</p></div>
-      <div className="flex flex-wrap items-center gap-2" aria-label="Map filters">
-        <button type="button" aria-pressed={showOpportunities} onClick={() => setShowOpportunities((value) => !value)} className={`rounded-full border px-3 py-1.5 text-xs ${showOpportunities ? "border-primary bg-accent-tint text-accent-text" : "border-border text-foreground-muted"}`}>Opportunities</button>
-        <button type="button" aria-pressed={showArtists} onClick={() => setShowArtists((value) => !value)} className={`rounded-full border px-3 py-1.5 text-xs ${showArtists ? "border-primary bg-accent-tint text-accent-text" : "border-border text-foreground-muted"}`}>Similar artists</button>
-        <label className="sr-only" htmlFor="map-opportunity-type">Opportunity type</label>
-        <select id="map-opportunity-type" value={type} onChange={(event) => setType(event.target.value as "all" | OpportunityType)} disabled={!showOpportunities} className="rounded-lg border border-input-border bg-input-background px-3 py-1.5 text-xs text-foreground disabled:opacity-50">
-          <option value="all">All opportunity types</option>{types.map((value) => <option key={value} value={value}>{value.replace("_", " ")}</option>)}
-        </select>
+  return <section className="mb-8" aria-label="Geographic ecosystem map">
+    <div className="mb-3 flex flex-wrap items-center gap-2" aria-label="Map filters">
+        <button type="button" aria-pressed={showArtists} onClick={() => setShowArtists((value) => !value)} style={showArtists ? { borderColor: SIMILAR_ARTIST_COLOR, color: SIMILAR_ARTIST_COLOR, backgroundColor: `${SIMILAR_ARTIST_COLOR}1a` } : undefined} className={`rounded-full border px-3 py-1.5 text-xs ${showArtists ? "" : "border-border text-foreground-muted"}`}><i className="mr-1.5 inline-block h-2.5 w-2.5 rotate-45 rounded-sm" style={{ backgroundColor: SIMILAR_ARTIST_COLOR }} />Similar Artists</button>
+        {types.map((value) => {
+          const active = visibleTypes.has(value);
+          const color = TYPE_COLORS[value];
+          return <button key={value} type="button" aria-pressed={active} onClick={() => toggleType(value)} style={active ? { borderColor: color, color, backgroundColor: `${color}1a` } : undefined} className={`rounded-full border px-3 py-1.5 text-xs ${active ? "" : "border-border text-foreground-muted"}`}><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />{TYPE_LABELS[value]}</button>;
+        })}
       </div>
-    </div>
     <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-card">
       {center ? <MapContainer center={[center.latitude, center.longitude]} zoom={center.precision === "country" ? 5 : 9} scrollWheelZoom className="h-[430px] min-h-[60vh] w-full sm:min-h-0 sm:h-[520px]" aria-label="Interactive map of opportunities and similar artists">
         <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        <MapLayers entities={entities} center={center} />
+        <MapLayers entities={entities} center={center} onNavigate={navigateToDetail} />
       </MapContainer> : <div className="flex h-[430px] items-center justify-center px-6 text-center text-sm text-foreground-muted">{loading ? "Locating the artist ecosystem…" : "No reliable location is available for this map."}</div>}
       <div className="flex flex-wrap gap-x-4 gap-y-2 border-t border-border px-4 py-3 text-xs text-foreground-muted" aria-label="Map legend">
-        <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rotate-45 rounded-sm bg-accent-text" />Similar artist</span>
-        {types.map((value) => <span key={value}><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: TYPE_COLORS[value] }} />{value.replace("_", " ")}</span>)}
+        <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rotate-45 rounded-sm" style={{ backgroundColor: SIMILAR_ARTIST_COLOR }} />Similar Artist</span>
+        {types.map((value) => <span key={value}><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: TYPE_COLORS[value] }} />{TYPE_LABELS[value]}</span>)}
         <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full border border-dashed border-foreground-muted" />Approximate</span>
         <span className="ml-auto">{entities.length} visible · markers cluster automatically</span>
       </div>

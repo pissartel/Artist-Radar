@@ -1,18 +1,16 @@
 import Link from "next/link";
 import type { SimilarArtist } from "@/types";
-import { sortSimilarArtistsByMatch } from "@/lib/similarArtist";
+import { selectOverviewSimilarArtists } from "@/lib/overviewSelection";
 import SimilarArtistCard from "./SimilarArtistCard";
 
 interface SimilarArtistsSectionProps {
   artists: SimilarArtist[];
 }
 
-const MAX_CAROUSEL_ARTISTS = 15;
-
 export default function SimilarArtistsSection({
   artists,
 }: SimilarArtistsSectionProps) {
-  const carouselArtists = sortSimilarArtistsByMatch(artists).slice(0, MAX_CAROUSEL_ARTISTS);
+  const carouselArtists = selectOverviewSimilarArtists(artists);
   return (
     <section className="mb-6">
       <div className="flex items-center justify-between mb-3">

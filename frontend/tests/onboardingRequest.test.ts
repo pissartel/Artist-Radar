@@ -54,6 +54,15 @@ describe("readOnboardingRequest", () => {
     expect(request?.features).toBeUndefined();
   });
 
+  it("preserves the explicitly selected country separately from the city", () => {
+    stubLocalStorage(JSON.stringify(onboardingData()));
+
+    expect(readOnboardingRequest()).toMatchObject({
+      location: "Bordeaux",
+      referenceCountry: "France"
+    });
+  });
+
   it("omits the Chartmetric feature field when checked but the toggle was never server-verified as visible (defense in depth against stale/forged data)", () => {
     stubLocalStorage(
       JSON.stringify(

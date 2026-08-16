@@ -21,7 +21,7 @@ export interface ExportPaths {
 export interface BookingRequestOutputInput {
   artistData: OpportunitySearchRunResult["artistProfile"];
   similarArtists: OpportunitySearchRunResult["similarArtists"];
-  bookingResult: Pick<OpportunitySearchRunResult, "opportunities" | "venueCandidates" | "eventCandidates" | "bookingSearch" | "labelOpportunities">;
+  bookingResult: Pick<OpportunitySearchRunResult, "opportunities" | "venueCandidates" | "eventCandidates" | "bookingSearch" | "labelOpportunities" | "supportSlotOpportunities">;
   outputDir: string;
 }
 
@@ -234,6 +234,13 @@ export async function writeBookingRequestOutputs({
     },
     labels: {
       opportunities: bookingResult.labelOpportunities ?? []
+    },
+    supportSlots: bookingResult.supportSlotOpportunities ?? {
+      referenceCountry: null,
+      referenceCountrySource: "unresolved",
+      opportunities: [],
+      rejected: [],
+      warnings: ["Support-slot discovery was not run."]
     }
   };
 

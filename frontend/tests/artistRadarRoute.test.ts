@@ -186,6 +186,22 @@ describe("POST /api/artist-radar", () => {
     expect(runOpportunitySearch).toHaveBeenCalledWith(expect.anything(), undefined);
   });
 
+  it("forwards the explicit reference country to the backend pipeline input", async () => {
+    runOpportunitySearch.mockResolvedValueOnce({
+      artistProfile: { artistName: "Tuesday Fall", city: "Bordeaux", country: "France", genres: ["pop punk"], socialLinks: {}, platformStats: {} },
+      similarArtists: {},
+      opportunities: [],
+    });
+    const { POST } = await import("@/app/api/artist-radar/route");
+
+    await POST(jsonRequest({ ...VALID_BODY, referenceCountry: "France" }));
+
+    expect(runOpportunitySearch).toHaveBeenCalledWith(
+      expect.objectContaining({ referenceCountry: "France" }),
+      undefined,
+    );
+  });
+
   it("forwards a valid features.chartmetricArtistEnrichment toggle to the pipeline (issue #142)", async () => {
     runOpportunitySearch.mockResolvedValueOnce({
       artistProfile: {

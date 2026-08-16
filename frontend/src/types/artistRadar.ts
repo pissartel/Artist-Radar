@@ -5,6 +5,8 @@ export interface ArtistRadarRequest {
   artistName: string;
   genre: string;
   location: string;
+  /** Explicit user-selected country used to scope support-slot concert discovery. */
+  referenceCountry?: string;
   // Defaults to true: booking is the current product focus.
   // When false, booking-related fields in the response are left empty.
   enableBooking?: boolean;

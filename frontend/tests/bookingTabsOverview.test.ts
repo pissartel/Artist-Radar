@@ -9,7 +9,7 @@ describe("overview opportunity panel", () => {
   );
 
   it("caps the opportunities rendered in each overview tab", () => {
-    expect(source).toContain("const OVERVIEW_OPPORTUNITY_LIMIT = 10");
+    expect(source).toContain('import { OVERVIEW_OPPORTUNITY_LIMIT } from "@/lib/overviewSelection"');
     expect(source).toContain("activeOpportunities.slice(0, OVERVIEW_OPPORTUNITY_LIMIT)");
   });
 

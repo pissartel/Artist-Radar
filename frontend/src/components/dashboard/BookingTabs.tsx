@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Opportunity } from "@/types";
 import { filterBookingOpportunities, type BookingTabName } from "@/lib/opportunity";
+import { OVERVIEW_OPPORTUNITY_LIMIT } from "@/lib/overviewSelection";
 import { useProductFeatures } from "@/components/providers/ProductFeaturesProvider";
 import BookingOpportunityCard from "./BookingOpportunityCard";
 
@@ -14,8 +15,6 @@ const BASE_TABS: BookingTabName[] = [
   "Opening Slots",
   "Contacts",
 ];
-
-const OVERVIEW_OPPORTUNITY_LIMIT = 10;
 
 const EMPTY_STATE_MESSAGE: Record<BookingTabName, string> = {
   All: "No booking opportunities found in this analysis",

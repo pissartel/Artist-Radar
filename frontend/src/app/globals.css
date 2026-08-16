@@ -81,5 +81,5 @@ textarea:-webkit-autofill:focus {
 .ecosystem-popup { display: grid; gap: 5px; color: #17141f; }
 .ecosystem-popup p, .ecosystem-popup small { margin: 0; }
 .ecosystem-popup small { color: #6e6c7a; }
-.ecosystem-popup a { color: #6b21a8; font-weight: 600; }
+.ecosystem-popup button { padding: 0; border: 0; background: transparent; color: #6b21a8; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
 .marker-cluster div { background: var(--primary); color: white; font-weight: 700; }

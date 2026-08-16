@@ -4,6 +4,7 @@ import ArtistHeader from "@/components/dashboard/ArtistHeader";
 import KpiGrid from "@/components/dashboard/KpiGrid";
 import SimilarArtistsSection from "@/components/dashboard/SimilarArtistsSection";
 import BookingSection from "@/components/dashboard/BookingSection";
+import EcosystemMap from "@/components/dashboard/EcosystemMap";
 import WarningsBanner from "@/components/dashboard/WarningsBanner";
 import {
   ArtistRadarEmptyOnboardingState,
@@ -35,6 +36,8 @@ export default function OverviewPage() {
       <ArtistHeader artist={artist} />
       <KpiGrid metrics={kpis} />
       <SimilarArtistsSection artists={similarArtists} />
+
+      <EcosystemMap artist={artist} similarArtists={similarArtists} opportunities={bookingOpportunities} />
 
       <BookingSection
         opportunities={bookingOpportunities}

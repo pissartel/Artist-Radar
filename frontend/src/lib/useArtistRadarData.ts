@@ -9,6 +9,7 @@ import {
 } from "@/lib/artistRadarResponseCache";
 import { readOnboardingRequest } from "@/lib/onboardingRequest";
 import type { ArtistRadarRequest, ArtistRadarResponse } from "@/types/artistRadar";
+import { createPreviewArtistRadarResponse } from "@/lib/previewData";
 
 export type ArtistRadarDataState =
   | { status: "checking-onboarding" }
@@ -33,6 +34,7 @@ function buildQueryKey(request: ArtistRadarRequest | null) {
     request?.genre ?? null,
     request?.location ?? null,
     request?.enableBooking ?? null,
+    request?.previewData ?? null,
   ] as const;
 }
 
@@ -62,7 +64,9 @@ export function useArtistRadarData(): UseArtistRadarDataResult {
     queryKey: buildQueryKey(request ?? null),
     queryFn: async () => {
       const activeRequest = request as ArtistRadarRequest;
-      const data = await fetchArtistRadarData(activeRequest);
+      const data = activeRequest.previewData
+        ? createPreviewArtistRadarResponse(activeRequest)
+        : await fetchArtistRadarData(activeRequest);
       writeArtistRadarResponse(activeRequest, data);
       return data;
     },

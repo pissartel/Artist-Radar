@@ -28,6 +28,7 @@ const VALID_BODY = {
   artistName: "Tuesday Fall",
   genre: "pop punk",
   location: "Bordeaux",
+  referenceCountry: "France",
   enableBooking: true,
 };
 

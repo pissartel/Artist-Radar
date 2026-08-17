@@ -578,6 +578,10 @@ export interface OnboardingFormData {
   // Chartmetric feature field, instead of re-deriving (and potentially
   // getting wrong) an environment check in the browser.
   chartmetricToggleVisible: boolean;
+  // Non-production-only shortcut for deterministic UI data. Visibility is
+  // snapshotted so stale or edited localStorage cannot enable it in production.
+  usePreviewData: boolean;
+  previewDataToggleVisible: boolean;
 }
 
 export interface DashboardData {

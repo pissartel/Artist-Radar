@@ -25,9 +25,10 @@ export interface OnboardingFormProps {
   // enrichment" checkbox may render for this request. Never computed
   // client-side — see lib/server/chartmetricToggle.ts for why.
   showChartmetricToggle: boolean;
+  showPreviewDataToggle: boolean;
 }
 
-export default function OnboardingForm({ showChartmetricToggle }: OnboardingFormProps) {
+export default function OnboardingForm({ showChartmetricToggle, showPreviewDataToggle }: OnboardingFormProps) {
   const router = useRouter();
   const [formData, setFormData] = useState<OnboardingFormData>({
     artistName: "",
@@ -42,6 +43,8 @@ export default function OnboardingForm({ showChartmetricToggle }: OnboardingForm
     targetLocation: "",
     mainGoal: "booking_opportunities",
     useChartmetricEnrichment: false,
+    usePreviewData: false,
+    previewDataToggleVisible: showPreviewDataToggle,
     // Snapshot of the server-verified visibility at render time, replayed by
     // onboardingRequest.ts so a later request can never include the
     // Chartmetric feature field unless this request was genuinely eligible
@@ -252,6 +255,19 @@ export default function OnboardingForm({ showChartmetricToggle }: OnboardingForm
               className="h-4 w-4 rounded border-border"
             />
             Use Chartmetric enrichment
+          </label>
+        )}
+
+        {showPreviewDataToggle && (
+          <label htmlFor="usePreviewData" className="flex items-center gap-2 text-sm text-foreground-secondary">
+            <input
+              id="usePreviewData"
+              type="checkbox"
+              checked={formData.usePreviewData}
+              onChange={(e) => updateField("usePreviewData", e.target.checked)}
+              className="h-4 w-4 rounded border-border"
+            />
+            Use preview data
           </label>
         )}
 

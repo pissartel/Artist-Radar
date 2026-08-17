@@ -25,6 +25,7 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
   const artistName = onboarding.artistName?.trim();
   const genre = onboarding.mainGenre?.trim();
   const location = onboarding.city?.trim() || onboarding.countryOfOrigin?.trim();
+  const referenceCountry = onboarding.countryOfOrigin?.trim();
 
   if (!artistName || !genre || !location) {
     return null;
@@ -39,6 +40,8 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
   // stored form data, even if `useChartmetricEnrichment` were somehow true.
   const chartmetricArtistEnrichment =
     onboarding.chartmetricToggleVisible === true && onboarding.useChartmetricEnrichment === true;
+  const previewData =
+    onboarding.previewDataToggleVisible === true && onboarding.usePreviewData === true;
 
   return {
     artistName,
@@ -47,5 +50,7 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
     enableBooking: onboarding.mainGoal !== "similar_artists",
     ...(spotifyUrl ? { spotifyUrl } : {}),
     ...(chartmetricArtistEnrichment ? { features: { chartmetricArtistEnrichment: true } } : {}),
+    ...(previewData ? { previewData: true } : {}),
+    ...(previewData && referenceCountry ? { referenceCountry } : {}),
   };
 }

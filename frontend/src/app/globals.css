@@ -75,9 +75,11 @@ textarea:-webkit-autofill:focus {
 
 .leaflet-container { background: var(--surface); font-family: inherit; }
 .ecosystem-marker-wrap { background: transparent; border: 0; }
-.ecosystem-marker { display: block; width: 22px; height: 22px; border: 3px solid #fff; border-radius: 999px; background: var(--marker-color); box-shadow: 0 2px 9px rgba(0,0,0,.65); }
-.ecosystem-marker-artist { border-radius: 5px; transform: rotate(45deg); }
+.ecosystem-marker { display: grid; width: 30px; height: 30px; place-items: center; border: 2px solid #fff; border-radius: 999px; background: var(--marker-color); color: #fff; box-shadow: 0 2px 9px rgba(0,0,0,.65); }
+.ecosystem-marker svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .ecosystem-marker-approximate { border-style: dashed; opacity: .8; }
+.ecosystem-key-icon { display: inline-flex; width: 15px; height: 15px; margin-right: 6px; vertical-align: -3px; color: currentColor; }
+.ecosystem-key-icon svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .ecosystem-popup { display: grid; gap: 5px; color: #17141f; }
 .ecosystem-popup p, .ecosystem-popup small { margin: 0; }
 .ecosystem-popup small { color: #6e6c7a; }

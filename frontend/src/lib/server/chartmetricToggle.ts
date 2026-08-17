@@ -38,3 +38,10 @@ export function isChartmetricToggleVisible(): boolean {
   }
   return process.env.NEXT_PUBLIC_ENABLE_CHARTMETRIC_TOGGLE === "true";
 }
+
+export function isPreviewDataToggleVisible(): boolean {
+  return resolveChartmetricEnvironment({
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    NODE_ENV: process.env.NODE_ENV,
+  }) !== "production";
+}

@@ -13,6 +13,9 @@ export interface ArtistRadarRequest {
   // Optional client-generated id used to poll GET /api/artist-radar/status/[executionId]
   // for real-time pipeline stage progress while this request is in flight.
   executionId?: string;
+  // Client-only, non-production preview path. Never sent to the API.
+  previewData?: boolean;
+  referenceCountry?: string;
   // Explicit, per-request feature toggles (issue #142). Currently only the
   // Chartmetric audience-enrichment preview toggle, only ever shown/settable
   // in preview and development (see lib/server/chartmetricToggle.ts) — the

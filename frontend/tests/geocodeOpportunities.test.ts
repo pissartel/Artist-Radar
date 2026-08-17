@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { geocodeOpportunity } from "@/lib/server/geocodeOpportunities";
+import { geocodeOpportunities, geocodeOpportunity } from "@/lib/server/geocodeOpportunities";
 import type { Opportunity } from "@/types";
 
 function opportunity(overrides: Partial<Opportunity> = {}): Opportunity {
@@ -52,5 +52,17 @@ describe("opportunity geocoding", () => {
     const fetcher = vi.fn(async () => new Response(null, { status: 503 }));
     const original = opportunity();
     await expect(geocodeOpportunity(original, fetcher as typeof fetch)).resolves.toEqual(original);
+  });
+
+  it("only geocodes opportunity types that can display a detail map", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify([{ lat: "48.8566", lon: "2.3522" }]), { status: 200 }));
+    const festival = opportunity({ id: "festival", type: "festival", category: "festival" });
+    const concert = opportunity({ id: "concert", type: "concert", category: "concert" });
+
+    const result = await geocodeOpportunities([festival, concert], fetcher as typeof fetch);
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result[0]).toEqual(festival);
+    expect(result[1]).toMatchObject({ latitude: 48.8566, longitude: 2.3522 });
   });
 });

@@ -358,15 +358,6 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
     location: joinLocation(opportunity.city, opportunity.country) || "Location unknown",
     city: opportunity.city ?? undefined,
     country: opportunity.country ?? undefined,
-    address: opportunity.address ?? undefined,
-    latitude: opportunity.latitude ?? undefined,
-    longitude: opportunity.longitude ?? undefined,
-    locationPrecision:
-      opportunity.latitude != null && opportunity.longitude != null
-        ? opportunity.address
-          ? "exact"
-          : "approximate"
-        : undefined,
     date: opportunity.date ?? undefined,
     description: opportunity.suggested_message,
     venueDescription: opportunity.description ?? undefined,
@@ -387,6 +378,12 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
     postalCode: opportunity.postalCode ?? undefined,
     latitude: opportunity.latitude ?? null,
     longitude: opportunity.longitude ?? null,
+    locationPrecision:
+      opportunity.latitude != null && opportunity.longitude != null
+        ? opportunity.address
+          ? "exact"
+          : "approximate"
+        : undefined,
     normalizedLocation: normalizedLocation(
       opportunity.city,
       opportunity.country,

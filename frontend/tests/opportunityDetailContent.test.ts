@@ -150,15 +150,26 @@ describe("OpportunityDetail content (issue #132 review feedback)", () => {
 
 describe("OpportunityMap content (issue #133)", () => {
   const source = readSource("src/components/dashboard/OpportunityMap.tsx");
+  const clientSource = readSource("src/components/dashboard/OpportunityMapClient.tsx");
+
+  it("only renders for concerts, venues and opening slots", () => {
+    expect(source).toMatch(/\["concert", "venue", "opening_slot"\]/);
+  });
 
   it("distinguishes approximate and exact locations", () => {
-    expect(source).toMatch(/Approximate location/);
-    expect(source).toMatch(/Exact address location/);
+    expect(clientSource).toMatch(/Approximate location/);
+    expect(clientSource).toMatch(/Exact address location/);
+  });
+
+  it("shares the overview marker icon and color system", () => {
+    expect(clientSource).toMatch(/opportunityMarkerColor/);
+    expect(clientSource).toMatch(/opportunityMarkerKind/);
+    expect(clientSource).toMatch(/markerIconHtml/);
   });
 
   it("provides an Open in Maps action and OpenStreetMap attribution", () => {
-    expect(source).toMatch(/Open in Maps/);
-    expect(source).toMatch(/OpenStreetMap contributors/);
+    expect(clientSource).toMatch(/Open in Maps/);
+    expect(clientSource).toMatch(/OpenStreetMap.*contributors/);
   });
 });
 

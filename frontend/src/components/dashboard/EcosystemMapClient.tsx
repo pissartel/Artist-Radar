@@ -7,6 +7,14 @@ import "leaflet.markercluster";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import type { NormalizedLocation, Opportunity, OpportunityType, SimilarArtist } from "@/types";
 import { hasCoordinates, locationCacheKey, locationQuery, type GeocodedLocation } from "@/lib/mapLocation";
+import {
+  MAP_MARKER_ICONS,
+  OPPORTUNITY_MARKER_COLORS as TYPE_COLORS,
+  SIMILAR_ARTIST_COLOR,
+  markerIconHtml,
+  opportunityMarkerKind,
+  type MapMarkerKind,
+} from "@/lib/mapMarkerStyle";
 import type { EcosystemMapProps } from "./EcosystemMap";
 
 type MapEntity = {
@@ -14,14 +22,7 @@ type MapEntity = {
   detailHref: string; type?: OpportunityType; score?: number; location: GeocodedLocation;
 };
 
-type MarkerKind = "similar_artist" | OpportunityType | "fallback";
-
 const CACHE_KEY = "artist-radar:geocodes:v1";
-const SIMILAR_ARTIST_COLOR = "#c084fc";
-const TYPE_COLORS: Record<OpportunityType, string> = {
-  venue: "#3b82f6", concert: "#f97316", opening_slot: "#f43f5e",
-  festival: "#eab308", organization: "#22c55e", label: "#14b8a6",
-};
 const TYPE_LABELS: Record<OpportunityType, string> = {
   venue: "Venues",
   concert: "Concerts",
@@ -31,24 +32,13 @@ const TYPE_LABELS: Record<OpportunityType, string> = {
   label: "Labels",
 };
 
-const MARKER_ICONS: Record<MarkerKind, string> = {
-  similar_artist: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3"/><path d="M3.5 18c.7-3.2 2.5-5 5.5-5s4.8 1.8 5.5 5"/><path d="M16 5v9.2a2.7 2.7 0 1 1-1.5-2.4V7l6-1.5v6.7a2.7 2.7 0 1 1-1.5-2.4V4.5z"/></svg>',
-  venue: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V7l8-4 8 4v14M8 21v-4h8v4M8 10h2m4 0h2M8 14h2m4 0h2"/></svg>',
-  concert: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v11"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="15" r="3"/></svg>',
-  festival: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18L12 5zM8 20l4-15 4 15M5.5 16h13"/></svg>',
-  opening_slot: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg>',
-  organization: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V4h6v3M3 12h18M10 12v2h4v-2"/></svg>',
-  label: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v3m0 12v3M3 12h3m12 0h3"/></svg>',
-  fallback: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>',
-};
-
-function markerKind(entity: MapEntity): MarkerKind {
+function markerKind(entity: MapEntity): MapMarkerKind {
   if (entity.kind === "artist") return "similar_artist";
-  return entity.type && entity.type in MARKER_ICONS ? entity.type : "fallback";
+  return opportunityMarkerKind(entity.type);
 }
 
-function mapIcon(kind: MarkerKind, className: string): JSX.Element {
-  return <span className={className} dangerouslySetInnerHTML={{ __html: MARKER_ICONS[kind] }} />;
+function mapIcon(kind: MapMarkerKind, className: string): JSX.Element {
+  return <span className={className} dangerouslySetInnerHTML={{ __html: MAP_MARKER_ICONS[kind] }} />;
 }
 
 function readCache(): Record<string, GeocodedLocation> {
@@ -80,7 +70,7 @@ function MapLayers({ entities, center, onNavigate }: { entities: MapEntity[]; ce
       const kind = markerKind(entity);
       const icon = L.divIcon({
         className: "ecosystem-marker-wrap",
-        html: `<span class="ecosystem-marker ${approximate ? "ecosystem-marker-approximate" : ""}" style="--marker-color:${color}" aria-hidden="true">${MARKER_ICONS[kind]}</span>`,
+        html: markerIconHtml(kind, color, approximate),
         iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -14],
       });
       const marker = L.marker([entity.location.latitude, entity.location.longitude], { icon, title: entity.title });

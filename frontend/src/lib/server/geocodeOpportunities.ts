@@ -73,7 +73,11 @@ export async function geocodeOpportunities(
   // are small, so resolving sequentially is predictable and policy-friendly.
   const geocoded: Opportunity[] = [];
   for (const opportunity of opportunities) {
-    geocoded.push(await geocodeOpportunity(opportunity, fetcher));
+    if (opportunity.type === "concert" || opportunity.type === "venue" || opportunity.type === "opening_slot") {
+      geocoded.push(await geocodeOpportunity(opportunity, fetcher));
+    } else {
+      geocoded.push(opportunity);
+    }
   }
   return geocoded;
 }

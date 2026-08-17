@@ -82,7 +82,10 @@ function normalizedLocation(city?: string | null, country?: string | null, addre
 function mapArtistProfile(profile: BackendArtistProfile, request: ArtistRadarRequest, chartmetric?: BackendPipelineResult["chartmetric"]): ArtistProfile {
   const name = profile.artistName ?? request.artistName;
   const city = profile.city ?? request.location;
-  const country = profile.country ?? "";
+  // The country explicitly entered by the artist is the authoritative map
+  // viewport reference. Provider data remains the fallback for older cached
+  // requests that predate `referenceCountry`.
+  const country = request.referenceCountry ?? profile.country ?? "";
   const genres = profile.genres.length > 0 ? profile.genres : [request.genre];
   const spotifyUrl = profile.spotify?.url ?? profile.socialLinks.spotifyUrl;
 

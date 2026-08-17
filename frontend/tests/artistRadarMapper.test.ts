@@ -26,6 +26,28 @@ function buildResult(overrides: Partial<BackendPipelineResult> = {}): BackendPip
 }
 
 describe("mapPipelineResultToArtistRadarResponse", () => {
+  it("uses the user-provided reference country for the artist map viewport", () => {
+    const result = buildResult({
+      artistProfile: {
+        artistName: "Tuesday Fall",
+        city: "Bordeaux",
+        country: null,
+        genres: ["pop punk"],
+        socialLinks: {},
+        platformStats: {},
+      },
+    });
+
+    const response = mapPipelineResultToArtistRadarResponse(result, {
+      ...request,
+      location: "Bordeaux",
+      referenceCountry: "France",
+    });
+
+    expect(response.artist.country).toBe("France");
+    expect(response.artist.normalizedLocation).toEqual({ city: "Bordeaux", country: "France", precision: "city" });
+  });
+
   it("maps artist profile, similar artists, and opportunities from the real pipeline result", () => {
     const result = buildResult({
       similarArtists: {

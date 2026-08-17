@@ -51,6 +51,6 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
     ...(spotifyUrl ? { spotifyUrl } : {}),
     ...(chartmetricArtistEnrichment ? { features: { chartmetricArtistEnrichment: true } } : {}),
     ...(previewData ? { previewData: true } : {}),
-    ...(previewData && referenceCountry ? { referenceCountry } : {}),
+    ...(referenceCountry ? { referenceCountry } : {}),
   };
 }

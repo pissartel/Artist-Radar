@@ -15,6 +15,9 @@ export interface ArtistRadarRequest {
   executionId?: string;
   // Client-only, non-production preview path. Never sent to the API.
   previewData?: boolean;
+  // User-provided artist country. It is preserved through the API response so
+  // the ecosystem map can always start at country level, even when providers
+  // only resolve the artist's city or return no geographic metadata.
   referenceCountry?: string;
   // Explicit, per-request feature toggles (issue #142). Currently only the
   // Chartmetric audience-enrichment preview toggle, only ever shown/settable

@@ -52,6 +52,7 @@ describe("readOnboardingRequest", () => {
     );
     const request = readOnboardingRequest();
     expect(request?.features).toBeUndefined();
+    expect(request?.referenceCountry).toBe("France");
   });
 
   it("omits the Chartmetric feature field when checked but the toggle was never server-verified as visible (defense in depth against stale/forged data)", () => {

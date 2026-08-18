@@ -999,6 +999,21 @@ export const PlaylistOpportunityDetailsSchema = z.object({
   expectedReach: z.string().trim().min(1).nullable().optional()
 });
 
+export const CommunityOrganizationDetailsSchema = z.object({
+  organizationType: z.enum(["association", "collective"]),
+  mission: z.string().trim().min(1).nullable().optional(),
+  services: z.array(z.string().trim().min(1)).default([]),
+  programs: z.array(z.string().trim().min(1)).default([]),
+  similarArtistsInvolved: z.array(z.string().trim().min(1)).default([]),
+  supportedArtistLevel: EstimatedArtistLevelSchema,
+  isCurrentlyActive: z.literal(true),
+  activityEvidence: z.string().trim().min(1),
+  applicationOrMembershipUrl: OptionalUrlSchema,
+  publicContact: z.string().trim().min(1).nullable().optional(),
+  geographicReach: OpportunityGeographicScopeSchema,
+  concreteOpportunity: z.string().trim().min(1)
+});
+
 export const ProducerOrStudioOpportunityDetailsSchema = z.object({
   services: z.array(z.string().trim().min(1)).default([]),
   recordingLocation: z.string().trim().min(1).nullable().optional(),
@@ -1057,6 +1072,7 @@ export const GenericOpportunitySchema = z
     booker: BookerOpportunityDetailsSchema.nullable().optional(),
     manager: ManagerOpportunityDetailsSchema.nullable().optional(),
     playlist: PlaylistOpportunityDetailsSchema.nullable().optional(),
+    communityOrganization: CommunityOrganizationDetailsSchema.nullable().optional(),
     producerOrStudio: ProducerOrStudioOpportunityDetailsSchema.nullable().optional(),
     // Escape hatch for categories without a dedicated group yet (venue,
     // festival, booker, manager, visual/graphic roles, etc.).
@@ -1096,6 +1112,13 @@ export const GenericOpportunitySchema = z
         code: z.ZodIssueCode.custom,
         path: ["playlist"],
         message: "playlist details only apply to playlist or playlist curator opportunities"
+      });
+    }
+    if (value.communityOrganization && value.opportunityType !== "association" && value.opportunityType !== "collective") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["communityOrganization"],
+        message: "community organization details only apply to association or collective opportunities"
       });
     }
     if (
@@ -1174,5 +1197,6 @@ export type LabelExternalIds = z.infer<typeof LabelExternalIdsSchema>;
 export type LabelOpportunityDetails = z.infer<typeof LabelOpportunityDetailsSchema>;
 export type BookerOpportunityDetails = z.infer<typeof BookerOpportunityDetailsSchema>;
 export type PlaylistOpportunityDetails = z.infer<typeof PlaylistOpportunityDetailsSchema>;
+export type CommunityOrganizationDetails = z.infer<typeof CommunityOrganizationDetailsSchema>;
 export type ProducerOrStudioOpportunityDetails = z.infer<typeof ProducerOrStudioOpportunityDetailsSchema>;
 export type GenericOpportunity = z.infer<typeof GenericOpportunitySchema>;

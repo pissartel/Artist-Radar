@@ -281,7 +281,8 @@ export async function runOpportunitySearch(
         target: input.target,
         limit: input.limit,
         artistProfile: profile,
-        similarArtists: similarArtistsForLiveSearch
+        similarArtists: similarArtistsForLiveSearch,
+        mode: "lightweight"
       }, options.bookerDiscoveryOptions);
       const managerOpportunities = await runManagerDiscoverySafely({
         artist: input.artist,

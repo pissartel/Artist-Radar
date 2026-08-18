@@ -14,6 +14,7 @@ interface BookingExplorerProps {
   opportunities: Opportunity[];
   artistCity?: string;
   artistCountry?: string;
+  resultLabel?: string;
 }
 
 type PresenceFilter = "all" | "has" | "missing";
@@ -37,6 +38,7 @@ export default function BookingExplorer({
   opportunities,
   artistCity,
   artistCountry,
+  resultLabel = "opportunities",
 }: BookingExplorerProps) {
   const [category, setCategory] = useState<"all" | OpportunityCategory>("all");
   const [city, setCity] = useState("all");
@@ -162,7 +164,7 @@ export default function BookingExplorer({
       </div>
 
       <p className="text-xs text-foreground-disabled mb-3">
-        {filteredOpportunities.length} of {opportunities.length} booking opportunities
+        {filteredOpportunities.length} of {opportunities.length} {resultLabel}
       </p>
 
       {filteredOpportunities.length > 0 ? (
@@ -173,7 +175,7 @@ export default function BookingExplorer({
         </div>
       ) : (
         <div className="bg-surface rounded-xl border border-border shadow-card-glow p-6 text-sm text-foreground-muted">
-          No booking opportunities match your filters.
+          No {resultLabel} match your filters.
         </div>
       )}
     </div>

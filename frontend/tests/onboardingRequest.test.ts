@@ -27,6 +27,8 @@ function onboardingData(overrides: Partial<OnboardingFormData> = {}): Onboarding
     mainGoal: "booking_opportunities",
     useChartmetricEnrichment: false,
     chartmetricToggleVisible: false,
+    usePreviewData: false,
+    previewDataToggleVisible: false,
     ...overrides,
   };
 }

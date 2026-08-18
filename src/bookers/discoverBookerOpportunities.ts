@@ -24,8 +24,9 @@ import {
   worksWithEmergingActs
 } from "./bookerSignalExtraction.js";
 import { scoreBookerCompatibility } from "./scoreBookerCompatibility.js";
-import type { BookerDiscoveryStrategy, BookerGeographicRelevance, BookerSearchInput, RawBookerCandidate } from "./types.js";
+import type { BookerDiscoveryMode, BookerDiscoveryStrategy, BookerGeographicRelevance, BookerSearchInput, RawBookerCandidate } from "./types.js";
 import { debugLog, warnLog } from "../utils/logger.js";
+import { OpenAIBookerSearchProvider } from "./OpenAIBookerSearchProvider.js";
 
 export interface DiscoverBookerOpportunitiesOptions {
   webSearchProvider: WebSearchProvider | null;
@@ -34,6 +35,8 @@ export interface DiscoverBookerOpportunitiesOptions {
   maxSimilarArtists?: number;
   maxResultsPerQuery?: number;
   maxExtractPages?: number;
+  maxTotalQueries?: number;
+  curatedSearchProvider?: WebSearchProvider | null;
   now?: Date;
 }
 
@@ -42,6 +45,7 @@ export interface BookerDiscoveryResult {
   searchedQueries: string[];
   warnings: string[];
   metadata: {
+    mode: BookerDiscoveryMode;
     rawCandidateCount: number;
     droppedForMissingEvidence: number;
     droppedForInactivity: number;
@@ -54,11 +58,13 @@ export async function discoverBookerOpportunities(
   input: BookerSearchInput,
   options: DiscoverBookerOpportunitiesOptions
 ): Promise<BookerDiscoveryResult> {
+  const mode = input.mode ?? "lightweight";
   const emptyResult: BookerDiscoveryResult = {
     opportunities: [],
     searchedQueries: [],
     warnings: [],
     metadata: {
+      mode,
       rawCandidateCount: 0,
       droppedForMissingEvidence: 0,
       droppedForInactivity: 0,
@@ -73,18 +79,23 @@ export async function discoverBookerOpportunities(
 
   const webSearchProvider = options.webSearchProvider;
   const country = input.artistProfile?.country ?? input.target ?? "";
-  const maxQueriesPerStrategy = options.maxQueriesPerStrategy ?? 6;
-  const similarArtists = (input.similarArtists ?? []).slice(0, options.maxSimilarArtists ?? 4);
+  const maxQueriesPerStrategy = options.maxQueriesPerStrategy ?? (mode === "lightweight" ? 2 : 6);
+  const similarArtists = selectBookerSeedArtists(input, options.maxSimilarArtists ?? (mode === "lightweight" ? 6 : 20));
 
   const queriesByStrategy: Array<{ strategy: BookerDiscoveryStrategy; queries: string[] }> = [
-    { strategy: "genre_specialization", queries: buildGenreBookerQueries(input.genre, country).slice(0, maxQueriesPerStrategy) },
     {
       strategy: "similar_artist_representation",
       queries: similarArtists.flatMap((artist) => buildSimilarArtistBookerQueries(artist.name)).slice(0, maxQueriesPerStrategy)
     },
+    { strategy: "genre_specialization", queries: buildGenreBookerQueries(input.genre, country).slice(0, maxQueriesPerStrategy) },
     { strategy: "geographic", queries: buildGeographicBookerQueries(input.genre, input.city, country).slice(0, maxQueriesPerStrategy) },
     { strategy: "directory", queries: buildBookerDirectoryQueries(input.genre, country).slice(0, maxQueriesPerStrategy) }
   ];
+  const queryBudget = options.maxTotalQueries
+    ?? (options.maxQueriesPerStrategy !== undefined ? Number.MAX_SAFE_INTEGER : mode === "lightweight" ? 4 : 18);
+  const queries = queriesByStrategy
+    .flatMap(({ strategy, queries }) => queries.map((query) => ({ strategy, query })))
+    .slice(0, queryBudget);
 
   const rawCandidates: RawBookerCandidate[] = [];
   const extractionSeeds: RawBookerCandidate[] = [];
@@ -93,13 +104,30 @@ export async function discoverBookerOpportunities(
   const providerWarnings: string[] = [];
   let droppedForMissingEvidence = 0;
 
-  for (const { strategy, queries } of queriesByStrategy) {
-    for (const query of queries) {
+  if (options.curatedSearchProvider) {
+    try {
+      const curatedResults = await options.curatedSearchProvider.search(buildCuratedBookerBrief(input, similarArtists), {
+        limit: mode === "lightweight" ? 4 : Math.min(input.limit, 15)
+      });
+      for (const result of curatedResults) {
+        const candidate = webResultToBookerCandidate(result, "genre_specialization");
+        if (candidate) {
+          rawCandidates.push(candidate);
+          strategyCandidateCounts.genre_specialization += 1;
+        }
+      }
+    } catch (error) {
+      providerWarnings.push(`OpenAI curated booker search failed: ${error instanceof Error ? error.message : String(error)}.`);
+    }
+  }
+
+  const supplementalQueries = rawCandidates.length >= (mode === "lightweight" ? 1 : 6) ? [] : queries;
+  for (const { strategy, query } of supplementalQueries) {
       searchedQueries.push(query);
       let results: WebSearchResult[];
       try {
         results = await webSearchProvider.search(query, {
-          limit: Math.min(options.maxResultsPerQuery ?? 4, input.limit)
+          limit: Math.min(options.maxResultsPerQuery ?? (mode === "lightweight" ? 3 : 8), input.limit)
         });
         debugLog("bookers", "booker search query completed", {
           provider: webSearchProvider.providerName,
@@ -139,7 +167,6 @@ export async function discoverBookerOpportunities(
         rawCandidates.push(candidate);
         strategyCandidateCounts[strategy] += 1;
       }
-    }
   }
 
   if (options.webExtractProvider) {
@@ -156,7 +183,7 @@ export async function discoverBookerOpportunities(
     }
 
     const extractUrls = [...extractionCandidatesByUrl.keys()]
-      .slice(0, options.maxExtractPages ?? 6);
+      .slice(0, options.maxExtractPages ?? (mode === "lightweight" ? 6 : 20));
     for (const url of extractUrls) {
       let extracted;
       try {
@@ -208,16 +235,20 @@ export async function discoverBookerOpportunities(
   const opportunities: GenericOpportunity[] = [];
 
   for (const candidate of deduped) {
+    if (!isProfessionalCandidatePage(candidate)) continue;
     const activity = extractBookerActivityStatus(candidate.text, now);
     if (activity.isActive === false) {
       droppedForInactivity += 1;
       continue;
     }
-    opportunities.push(buildBookerOpportunity(input, candidate, activity));
+    const opportunity = buildBookerOpportunity(input, candidate, activity);
+    if (!isCompatibleWithArtistScaleAndMarket(input, opportunity)) continue;
+    if ((opportunity.compatibilityScore ?? 0) < 55) continue;
+    opportunities.push(opportunity);
   }
 
   opportunities.sort((left, right) => (right.compatibilityScore ?? 0) - (left.compatibilityScore ?? 0));
-  const limited = opportunities.slice(0, input.limit);
+  const limited = opportunities.slice(0, mode === "lightweight" ? Math.min(input.limit, 4) : input.limit);
 
   logBookerDiscoverySummary(strategyCandidateCounts, droppedForMissingEvidence, droppedForInactivity, limited.length);
 
@@ -231,6 +262,7 @@ export async function discoverBookerOpportunities(
     searchedQueries,
     warnings,
     metadata: {
+      mode,
       rawCandidateCount: rawCandidates.length,
       droppedForMissingEvidence,
       droppedForInactivity,
@@ -309,15 +341,15 @@ function buildBookerOpportunity(
     worksWithEmergingActs: emergingActsSignal
   });
 
-  const isLocal = geographicScope === "local" || geographicScope === "national";
-  const city = isLocal ? input.city : null;
-  const country = isLocal
+  const isDomestic = geographicScope === "local" || geographicScope === "national";
+  const city = geographicScope === "local" ? input.city : null;
+  const country = isDomestic
     ? (input.artistProfile?.country ?? input.target ?? null)
     : geographicScope === "international"
       ? findMentionedKnownCountry(candidate.text)
       : null;
   const territory =
-    isLocal ? country
+    isDomestic ? country
     : geographicScope === "remote_compatible" ? "international (remote-compatible)"
     : geographicScope === "international" ? country
     : null;
@@ -362,6 +394,49 @@ function buildBookerOpportunity(
   };
 }
 
+function isCompatibleWithArtistScaleAndMarket(input: BookerSearchInput, opportunity: GenericOpportunity): boolean {
+  const artistLevel = input.artistProfile?.estimatedLevel ?? "unknown";
+  if (artistLevel === "emerging" && opportunity.audienceLevel === "large") return false;
+  if (opportunity.geographicScope === "international") return false;
+  if (
+    artistLevel === "emerging"
+    && opportunity.geographicScope === "unknown"
+    && opportunity.sources.some((source) => source.name === "openai_booker_web_search")
+  ) return false;
+  if (
+    input.mode === "deep"
+    && artistLevel === "emerging"
+    && opportunity.geographicScope === "unknown"
+    && (opportunity.booker?.representedSimilarArtists.length ?? 0) === 0
+  ) return false;
+  return true;
+}
+
+function isProfessionalCandidatePage(candidate: RawBookerCandidate): boolean {
+  if (candidate.strategy === "directory") return false;
+  const title = candidate.name.toLowerCase();
+  return !/(annuaire|directory|guide|how to|state of play|état des lieux|liste des|list of)/i.test(title);
+}
+
+function buildCuratedBookerBrief(input: BookerSearchInput, similarArtists: ReturnType<typeof selectBookerSeedArtists>): string {
+  return [
+    `Artist: ${input.artist}`,
+    `Artist level: ${input.artistProfile?.estimatedLevel ?? "unknown"}`,
+    `Target country: ${input.artistProfile?.country ?? input.target ?? "unknown"}`,
+    `City: ${input.city}`,
+    `Genres: ${[input.genre, ...(input.artistProfile?.genres ?? [])].join(", ")}`,
+    `Comparable artists: ${similarArtists.map((artist) => `${artist.name} (${artist.artistTier})`).join(", ") || "none"}`
+  ].join("\n");
+}
+
+function selectBookerSeedArtists(input: BookerSearchInput, limit: number) {
+  const artistLevel = input.artistProfile?.estimatedLevel ?? "unknown";
+  return (input.similarArtists ?? [])
+    .filter((artist) => artist.bookingCategory !== "reference")
+    .filter((artist) => artistLevel !== "emerging" || artist.artistTier !== "large")
+    .slice(0, limit);
+}
+
 // Only common country names are checked here; anything not on the list is
 // left as "unknown" rather than guessed, per AGENTS.md.
 const KNOWN_COUNTRIES = [
@@ -382,11 +457,11 @@ function classifyGeographicScope(text: string, input: BookerSearchInput): Booker
   if (isInternationallyOpen(text)) {
     return "remote_compatible";
   }
-  if (country && lower.includes(country)) {
-    return "national";
-  }
   if (mentionsDifferentKnownCountry(lower, country)) {
     return "international";
+  }
+  if (country && lower.includes(country)) {
+    return "national";
   }
   return "unknown";
 }
@@ -458,14 +533,21 @@ function logBookerDiscoverySummary(
   ].join("\n"));
 }
 
-export function buildDefaultBookerDiscoveryOptions(env: WebProviderEnv = process.env): DiscoverBookerOpportunitiesOptions {
+export function buildDefaultBookerDiscoveryOptions(
+  env: WebProviderEnv = process.env,
+  curatedModel?: string
+): DiscoverBookerOpportunitiesOptions {
   const webSearchProviders = getEnabledBookingSearchProviders(env);
   return {
     webSearchProvider: webSearchProviders.length > 0 ? new FallbackSearchProvider(webSearchProviders) : null,
     webExtractProvider: buildDefaultWebExtractProvider(env),
-    maxQueriesPerStrategy: 6,
-    maxSimilarArtists: 4,
-    maxResultsPerQuery: 4,
-    maxExtractPages: 12
+    curatedSearchProvider: env.OPENAI_API_KEY && env.ENABLE_OPENAI_BOOKER_DISCOVERY !== "false"
+      ? new OpenAIBookerSearchProvider(env.OPENAI_API_KEY, curatedModel)
+      : null,
+    maxQueriesPerStrategy: undefined,
+    maxSimilarArtists: undefined,
+    maxResultsPerQuery: undefined,
+    maxExtractPages: undefined,
+    maxTotalQueries: undefined
   };
 }

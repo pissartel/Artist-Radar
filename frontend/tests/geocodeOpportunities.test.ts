@@ -24,7 +24,7 @@ function opportunity(overrides: Partial<Opportunity> = {}): Opportunity {
 
 describe("opportunity geocoding", () => {
   it("uses city-level coordinates and marks them approximate when no address is known", async () => {
-    const fetcher = vi.fn(async () => new Response(JSON.stringify([{ lat: "48.8566", lon: "2.3522" }]), { status: 200 }));
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify([{ lat: "48.8566", lon: "2.3522" }]), { status: 200 }));
     const result = await geocodeOpportunity(opportunity(), fetcher as typeof fetch);
 
     expect(result).toMatchObject({ latitude: 48.8566, longitude: 2.3522, locationPrecision: "approximate" });
@@ -33,7 +33,7 @@ describe("opportunity geocoding", () => {
   });
 
   it("uses the structured address and marks the result exact", async () => {
-    const fetcher = vi.fn(async () => new Response(JSON.stringify([{ lat: "48.865", lon: "2.38" }]), { status: 200 }));
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify([{ lat: "48.865", lon: "2.38" }]), { status: 200 }));
     const result = await geocodeOpportunity(opportunity({ address: "1 rue Example" }), fetcher as typeof fetch);
 
     expect(result.locationPrecision).toBe("exact");

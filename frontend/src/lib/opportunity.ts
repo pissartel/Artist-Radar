@@ -22,6 +22,9 @@ export type BookingTabName =
   | "Festivals"
   | "Opening Slots"
   | "Contacts"
+  | "Bookers"
+  | "Managers"
+  | "Labels"
   | "Raw JSON";
 
 export const CATEGORY_LABELS: Record<OpportunityCategory, string> = {
@@ -30,6 +33,8 @@ export const CATEGORY_LABELS: Record<OpportunityCategory, string> = {
   festival: "Festival",
   opening_slot: "Opening Slot",
   organization: "Organization",
+  booker: "Booker / agency / promoter",
+  manager: "Manager / management company",
   label: "Label",
   contact: "Contact",
   unknown: "Unknown",
@@ -42,8 +47,8 @@ export type OpportunityCardFamily = "event" | "venue" | "organization";
 
 export function getCardFamily(opportunity: Opportunity): OpportunityCardFamily {
   if (opportunity.type === "venue") return "venue";
-  if (opportunity.type === "organization") return "organization";
-  return "event";
+  if (["concert", "festival", "opening_slot"].includes(opportunity.type)) return "event";
+  return "organization";
 }
 
 const ORGANIZATION_TYPE_LABELS: Record<string, string> = {
@@ -51,6 +56,10 @@ const ORGANIZATION_TYPE_LABELS: Record<string, string> = {
   collective: "Collective",
   promoter: "Promoter",
   booking_agency: "Booking Agency",
+  booker: "Booker",
+  manager: "Manager",
+  management_company: "Management Company",
+  label: "Label",
   live_producer: "Live Producer",
   springboard: "Springboard Program",
   open_call: "Open Call",
@@ -81,6 +90,12 @@ export function filterBookingOpportunities(
       return opportunities.filter((o) => o.category === "opening_slot");
     case "Contacts":
       return opportunities.filter(hasBookingContact);
+    case "Bookers":
+      return opportunities.filter((o) => o.type === "booker");
+    case "Managers":
+      return opportunities.filter((o) => o.type === "manager");
+    case "Labels":
+      return opportunities.filter((o) => o.type === "label");
     case "All":
     case "Raw JSON":
     default:

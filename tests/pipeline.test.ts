@@ -457,6 +457,8 @@ describe("runOpportunitySearch", () => {
   // pipeline (booking-search normalization -> legacy Opportunity mapping),
   // not just at the frontend mapping boundary.
   it("preserves an event opportunity's imageUrl and readable title through the complete backend pipeline", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-12T00:00:00Z"));
     const provider = {
       providerName: "test_image_title_provider",
       async search() {
@@ -500,6 +502,7 @@ describe("runOpportunitySearch", () => {
     expect(opportunity!.imageUrl).toBe("https://images.example.test/the-slugz-poster.jpg");
     expect(opportunity!.name).toBe("The Slugz at La Maroquinerie");
     expect(opportunity!.name).not.toMatch(/concerts in|music events|gigs.*tickets/i);
+    vi.useRealTimers();
   });
 
   it("exposes a recoverable failed stage when the pipeline throws, without leaving the state stuck mid-run", async () => {

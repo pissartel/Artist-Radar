@@ -16,6 +16,8 @@ import type {
   BackendRunOpportunitySearchOptions,
   BackendManagerSearchInput,
   BackendManagerDiscoveryResult,
+  BackendBookerSearchInput,
+  BackendBookerDiscoveryResult,
 } from "./backendTypes";
 
 // The backend pipeline reads its API keys from the repo root .env, one level
@@ -51,4 +53,18 @@ export async function runDeepManagerSearch(
   const discover = managerRuntime.discoverManagerOpportunities as DiscoverManagerOpportunitiesFn;
   const buildOptions = managerRuntime.buildDefaultManagerDiscoveryOptions as BuildDefaultManagerDiscoveryOptionsFn;
   return discover(input, buildOptions());
+}
+
+type DiscoverBookerOpportunitiesFn = (
+  input: BackendBookerSearchInput,
+  options: unknown,
+) => Promise<BackendBookerDiscoveryResult>;
+
+export async function runDeepBookerSearch(
+  input: BackendBookerSearchInput,
+): Promise<BackendBookerDiscoveryResult> {
+  const runtime = await import("../../../../dist/bookers/discoverBookerOpportunities.js");
+  const discover = runtime.discoverBookerOpportunities as DiscoverBookerOpportunitiesFn;
+  const buildOptions = runtime.buildDefaultBookerDiscoveryOptions as (env?: unknown, curatedModel?: string) => unknown;
+  return discover(input, buildOptions(undefined, process.env.OPENAI_BOOKER_DEEP_MODEL ?? "gpt-5.4"));
 }

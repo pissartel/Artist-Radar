@@ -1,16 +1,20 @@
 import type { ArtistProfile, Opportunity, SimilarArtist } from "@/types";
 
-export interface DeepManagerSearchResponse {
+export interface DeepBookerSearchResponse {
   opportunities: Opportunity[];
   warnings: string[];
-  fromCache: boolean;
 }
 
-export async function fetchDeepManagerSearch(
+function locationCountry(location: string): string | null {
+  const parts = location.split(",").map((part) => part.trim()).filter(Boolean);
+  return parts.length > 1 ? parts[parts.length - 1] ?? null : null;
+}
+
+export async function fetchDeepBookerSearch(
   artist: ArtistProfile,
   similarArtists: SimilarArtist[],
-): Promise<DeepManagerSearchResponse> {
-  const response = await fetch("/api/artist-radar/managers", {
+): Promise<DeepBookerSearchResponse> {
+  const response = await fetch("/api/artist-radar/bookers", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -22,12 +26,13 @@ export async function fetchDeepManagerSearch(
         name: candidate.name,
         genres: candidate.genres,
         city: candidate.location.split(",")[0]?.trim() || null,
-        country: null,
+        country: locationCountry(candidate.location),
         artistTier: candidate.artistTier === "emerging" ? "small" : candidate.artistTier === "rising" ? "medium" : candidate.artistTier ? "large" : "unknown",
+        bookingCategory: candidate.bookingCategory ?? "unknown",
       })),
     }),
   });
-  const payload = await response.json().catch(() => null) as (DeepManagerSearchResponse & { error?: string }) | null;
-  if (!response.ok || !payload) throw new Error(payload?.error ?? "The deeper manager search could not be completed.");
+  const payload = await response.json().catch(() => null) as (DeepBookerSearchResponse & { error?: string }) | null;
+  if (!response.ok || !payload) throw new Error(payload?.error ?? "The deeper booker search could not be completed.");
   return payload;
 }

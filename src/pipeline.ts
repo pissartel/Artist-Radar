@@ -56,6 +56,12 @@ import {
   type DiscoverManagerOpportunitiesOptions
 } from "./managers/discoverManagerOpportunities.js";
 import type { ManagerSearchInput } from "./managers/types.js";
+import {
+  buildDefaultPlaylistDiscoveryOptions,
+  discoverPlaylistOpportunities,
+  type DiscoverPlaylistOpportunitiesOptions
+} from "./playlists/discoverPlaylistOpportunities.js";
+import type { PlaylistSearchInput } from "./playlists/types.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
@@ -76,6 +82,7 @@ export interface RunOpportunitySearchOptions {
   labelDiscoveryOptions?: DiscoverLabelOpportunitiesOptions;
   bookerDiscoveryOptions?: DiscoverBookerOpportunitiesOptions;
   managerDiscoveryOptions?: DiscoverManagerOpportunitiesOptions;
+  playlistDiscoveryOptions?: DiscoverPlaylistOpportunitiesOptions;
   // When provided, pipeline stage progress is recorded in the in-memory
   // execution store (see pipelineExecutionState.ts) so a status endpoint can
   // report it back to the caller while this call is still running.
@@ -122,6 +129,10 @@ export interface OpportunitySearchRunResult {
   // High-confidence manager/company matches from the bounded, lightweight
   // pipeline mode. Deeper searches are explicitly invoked by the Managers page.
   managerOpportunities?: GenericOpportunity[];
+  // Source-grounded playlists and playlist curators, kept separate from
+  // generic promo suggestions so submission platforms cannot be mistaken
+  // for playlists and every submission route retains its evidence URL.
+  playlistOpportunities?: GenericOpportunity[];
   // Chartmetric audience-enrichment result for the main artist (issue
   // #142). Always populated by runOpportunitySearch (with a "skipped"/
   // "error" status rather than an exception on any failure) so callers can
@@ -318,6 +329,15 @@ export async function runOpportunitySearch(
       return bookingResult;
     }
 
+    const playlistOpportunities = await runPlaylistDiscoverySafely({
+      artist: input.artist,
+      city: input.city,
+      genre: input.genre,
+      target: input.target,
+      limit: input.limit,
+      artistProfile: profile,
+      similarArtists: similarArtistsForLiveSearch
+    }, options.playlistDiscoveryOptions);
     const generator = options.generator ?? new OpenAIOpportunityGenerator();
     const prompt = buildOpportunityPrompt(input, profile);
     const result = await generator.generate(prompt);
@@ -347,6 +367,7 @@ export async function runOpportunitySearch(
       venueCandidates,
       eventCandidates,
       opportunities: validated.opportunities.slice(0, input.limit),
+      playlistOpportunities,
       similarArtistConcerts,
       chartmetric,
       artistScale
@@ -361,6 +382,25 @@ export async function runOpportunitySearch(
       failPipelineExecution(executionId, currentStage, error);
     }
     throw error;
+  }
+}
+
+async function runPlaylistDiscoverySafely(
+  input: PlaylistSearchInput,
+  options: DiscoverPlaylistOpportunitiesOptions | undefined
+): Promise<GenericOpportunity[]> {
+  try {
+    const discovery = await discoverPlaylistOpportunities(input, options ?? buildDefaultPlaylistDiscoveryOptions());
+    debugLog("pipeline", "runOpportunitySearch playlist discovery summary", {
+      candidateCount: discovery.metadata.rawCandidateCount,
+      rejectedCount: discovery.metadata.rejectedCount,
+      keptOpportunities: discovery.metadata.keptOpportunities,
+      warningsCount: discovery.warnings.length
+    });
+    return discovery.opportunities;
+  } catch (error) {
+    warnLog("pipeline", `Playlist discovery failed and was skipped: ${error instanceof Error ? error.message : String(error)}`);
+    return [];
   }
 }
 

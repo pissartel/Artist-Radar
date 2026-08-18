@@ -3,7 +3,7 @@ import path from "node:path";
 import { Parser } from "json2csv";
 import slugify from "slugify";
 import type { OpportunitySearchRunResult } from "../pipeline.js";
-import type { ArtistInput, BookingCategory, EventCandidate, Opportunity, SimilarArtist } from "../schemas.js";
+import type { ArtistInput, BookingCategory, EventCandidate, GenericOpportunity, Opportunity, SimilarArtist } from "../schemas.js";
 import { debugLog } from "../utils/logger.js";
 
 export interface ExportPaths {
@@ -12,6 +12,7 @@ export interface ExportPaths {
   opportunitiesCsvPath: string;
   similarArtistsCsvPath: string;
   eventsCsvPath: string;
+  playlistOpportunitiesCsvPath?: string;
   artistJsonPath?: string;
   similarArtistsJsonPath?: string;
   bookingJsonPath?: string;
@@ -155,13 +156,15 @@ export async function exportOpportunities(
   const opportunitiesCsvPath = path.join(outputDir, `${baseName}.csv`);
   const similarArtistsCsvPath = path.join(outputDir, `${baseName}-similar-artists.csv`);
   const eventsCsvPath = path.join(outputDir, `${baseName}-events.csv`);
+  const playlistOpportunitiesCsvPath = path.join(outputDir, `${baseName}-playlists.csv`);
   const normalizedResult = Array.isArray(result)
     ? {
         artistProfile: null,
         similarArtists: emptySimilarArtistsGroup(),
         venueCandidates: [],
         eventCandidates: [],
-        opportunities: result
+        opportunities: result,
+        playlistOpportunities: []
       }
     : result;
 
@@ -206,11 +209,13 @@ export async function exportOpportunities(
   await writeFile(opportunitiesCsvPath, opportunitiesToCsv(normalizedResult.opportunities), "utf8");
   await writeFile(similarArtistsCsvPath, similarArtistsToCsv(flattenSimilarArtists(normalizedResult.similarArtists)), "utf8");
   await writeFile(eventsCsvPath, eventsToCsv(normalizedResult.eventCandidates), "utf8");
+  await writeFile(playlistOpportunitiesCsvPath, playlistOpportunitiesToCsv(normalizedResult.playlistOpportunities ?? []), "utf8");
   debugLog("pipeline", "export paths", {
     jsonPath: finalJsonPath,
     opportunitiesCsvPath,
     similarArtistsCsvPath,
-    eventsCsvPath
+    eventsCsvPath,
+    playlistOpportunitiesCsvPath
   });
 
   return {
@@ -218,8 +223,42 @@ export async function exportOpportunities(
     csvPath: opportunitiesCsvPath,
     opportunitiesCsvPath,
     similarArtistsCsvPath,
-    eventsCsvPath
+    eventsCsvPath,
+    playlistOpportunitiesCsvPath
   };
+}
+
+const playlistCsvFields = [
+  "name", "opportunityType", "platform", "playlistUrl", "curator", "country", "genres",
+  "followersOrAudienceEstimate", "updateFrequency", "similarArtistsFeatured", "submissionMethod",
+  "submissionUrl", "paidOrFree", "submissionPrice", "compatibilityScore", "compatibilityExplanation",
+  "curatorActivity", "growthSignal", "expectedReach", "sourceLinks"
+];
+
+export function playlistOpportunitiesToCsv(opportunities: GenericOpportunity[]): string {
+  const rows = opportunities.map((opportunity) => ({
+    name: opportunity.name,
+    opportunityType: opportunity.opportunityType,
+    platform: opportunity.playlist?.platform ?? null,
+    playlistUrl: opportunity.playlist?.playlistUrl ?? null,
+    curator: opportunity.playlist?.curatorName ?? null,
+    country: opportunity.country ?? null,
+    genres: opportunity.associatedGenres.join(" | "),
+    followersOrAudienceEstimate: opportunity.playlist?.followerCount ?? opportunity.playlist?.audienceEstimate ?? null,
+    updateFrequency: opportunity.playlist?.updateFrequency ?? null,
+    similarArtistsFeatured: opportunity.playlist?.similarArtistsFeatured.join(" | ") ?? "",
+    submissionMethod: opportunity.playlist?.submissionMethod ?? "none_found",
+    submissionUrl: opportunity.playlist?.submissionUrl ?? null,
+    paidOrFree: opportunity.playlist?.submissionType ?? "unknown",
+    submissionPrice: opportunity.playlist?.submissionPrice ?? null,
+    compatibilityScore: opportunity.compatibilityScore ?? null,
+    compatibilityExplanation: opportunity.compatibilityExplanation ?? null,
+    curatorActivity: opportunity.playlist?.curatorActivity ?? "unknown",
+    growthSignal: opportunity.playlist?.growthSignal ?? "unknown",
+    expectedReach: opportunity.playlist?.expectedReach ?? null,
+    sourceLinks: opportunity.sources.map((source) => source.url).filter(Boolean).join(" | ")
+  }));
+  return new Parser({ fields: playlistCsvFields }).parse(rows);
 }
 
 export async function writeBookingRequestOutputs({

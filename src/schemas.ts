@@ -975,10 +975,28 @@ export const PlaylistOpportunityDetailsSchema = z.object({
   playlistUrl: OptionalUrlSchema,
   curatorName: z.string().trim().min(1).nullable().optional(),
   followerCount: z.number().int().nonnegative().nullable().optional(),
-  submissionPlatform: z.string().trim().min(1).nullable().optional(),
+  audienceEstimate: z.number().int().nonnegative().nullable().optional(),
+  updateFrequency: z.string().trim().min(1).nullable().optional(),
+  lastUpdatedAt: z.string().trim().min(1).nullable().optional(),
+  similarArtistsFeatured: z.array(z.string().trim().min(1)).default([]),
+  submissionMethod: z.enum([
+    "direct_submission",
+    "submithub",
+    "groover",
+    "official_platform",
+    "public_contact_only",
+    "none_found"
+  ]).default("none_found"),
+  // A submission platform is not the playlist itself. This is populated
+  // only when a specific public profile/page can be cited.
+  submissionPlatform: z.enum(["SubmitHub", "Groover", "official_platform", "direct", "none"]).default("none"),
   submissionUrl: OptionalUrlSchema,
   submissionType: z.enum(["free", "paid", "unknown"]).default("unknown"),
-  estimatedGenreFit: z.number().min(0).max(1).nullable().optional()
+  submissionPrice: z.string().trim().min(1).nullable().optional(),
+  estimatedGenreFit: z.number().min(0).max(1).nullable().optional(),
+  curatorActivity: z.enum(["active", "inactive", "unknown"]).default("unknown"),
+  growthSignal: z.enum(["organic", "suspicious", "unknown"]).default("unknown"),
+  expectedReach: z.string().trim().min(1).nullable().optional()
 });
 
 export const ProducerOrStudioOpportunityDetailsSchema = z.object({
@@ -1073,11 +1091,11 @@ export const GenericOpportunitySchema = z
         message: "manager details only apply to manager or management_company opportunities"
       });
     }
-    if (value.playlist && value.opportunityType !== "playlist") {
+    if (value.playlist && value.opportunityType !== "playlist" && value.opportunityType !== "playlist_curator") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["playlist"],
-        message: "playlist details only apply to playlist opportunities"
+        message: "playlist details only apply to playlist or playlist curator opportunities"
       });
     }
     if (

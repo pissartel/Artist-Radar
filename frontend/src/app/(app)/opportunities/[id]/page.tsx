@@ -32,8 +32,8 @@ export default function OpportunityDetailPage({ params }: OpportunityDetailPageP
     return <ArtistRadarErrorState message={state.message} onRetry={refetch} />;
   }
 
-  const { bookingOpportunities, similarArtists } = state.data;
-  const opportunity = getOpportunityById(bookingOpportunities, id);
+  const { opportunities, similarArtists } = state.data;
+  const opportunity = getOpportunityById(opportunities, id);
 
   if (!opportunity) {
     return (
@@ -56,7 +56,7 @@ export default function OpportunityDetailPage({ params }: OpportunityDetailPageP
   const relatedArtists = similarArtists.filter((artist) =>
     opportunity.relatedSimilarArtistIds?.includes(artist.id),
   );
-  const venueInfo = opportunity.venueId ? getVenueById(bookingOpportunities, opportunity.venueId) : null;
+  const venueInfo = opportunity.venueId ? getVenueById(opportunities, opportunity.venueId) : null;
 
   return (
     <OpportunityDetail

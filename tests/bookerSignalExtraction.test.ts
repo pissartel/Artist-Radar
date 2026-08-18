@@ -111,6 +111,10 @@ describe("extractBookerAudienceLevel", () => {
     expect(extractBookerAudienceLevel("A boutique agency run by one person.", [])).toBe("small");
   });
 
+  it("treats a long explicit roster as too large even without marketing language", () => {
+    expect(extractBookerAudienceLevel("Roster: Aaa, Bbb, Ccc, Ddd, Eee, Fff, Ggg, Hhh.", [])).toBe("large");
+  });
+
   it("falls back to a matched similar artist's tier when no explicit size language is present", () => {
     const similarArtist = baseSimilarArtist({ artistTier: "medium" });
     expect(extractBookerAudienceLevel("Independent booking agency roster.", [similarArtist])).toBe("medium");
@@ -162,6 +166,11 @@ describe("findMentionedSimilarArtists", () => {
   it("returns no matches when no similar artist is mentioned", () => {
     const similarArtist = baseSimilarArtist({ name: "Thru It All" });
     expect(findMentionedSimilarArtists("Independent booking agency based in Lyon.", [similarArtist])).toHaveLength(0);
+  });
+
+  it("does not confuse an artist with a longer act name sharing the same prefix", () => {
+    const similarArtist = baseSimilarArtist({ name: "Mirabelle" });
+    expect(findMentionedSimilarArtists("Booking Les Mirabelles Kitchen this summer.", [similarArtist])).toHaveLength(0);
   });
 });
 

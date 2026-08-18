@@ -100,12 +100,12 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
 
-    expect(response.managerOpportunities).toHaveLength(1);
-    expect(response.managerOpportunities[0]).toMatchObject({
-      name: "Scene Management",
-      relevantArtists: ["Neon Riot"],
-      relationshipStatus: "current",
-      compatibilityScore: 84,
+    expect(response.opportunities).toHaveLength(1);
+    expect(response.opportunities[0]).toMatchObject({
+      title: "Scene Management",
+      type: "manager",
+      category: "manager",
+      matchScore: 84,
     });
   });
 
@@ -154,9 +154,9 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     expect(response.artist.name).toBe("Tuesday Fall");
     expect(response.similarArtists).toHaveLength(1);
     expect(response.similarArtists[0]?.name).toBe("Neon Riot");
-    expect(response.bookingOpportunities).toHaveLength(1);
-    expect(response.bookingOpportunities[0]?.title).toBe("Le Petit Club");
-    expect(response.bookingOpportunities[0]?.contact).toBe("booking@example.test");
+    expect(response.opportunities).toHaveLength(1);
+    expect(response.opportunities[0]?.title).toBe("Le Petit Club");
+    expect(response.opportunities[0]?.contact).toBe("booking@example.test");
     expect(response.warnings).toEqual(["ConcertsPunk returned HTTP 403; skipping."]);
     expect(response.sources).toEqual([
       { id: "native-fetch-scene-agendas", name: "native_fetch_scene_agendas", type: "native_fetch_scene_agendas", opportunityCount: 1 },
@@ -240,7 +240,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
 
-    expect(response.bookingOpportunities.map((opportunity) => opportunity.title)).toEqual(["L'OLYMPIA", "La Maroquinerie"]);
+    expect(response.opportunities.map((opportunity) => opportunity.title)).toEqual(["L'OLYMPIA", "La Maroquinerie"]);
     expect(response.bookingDiagnostics?.backendOpportunityCount).toBe(2);
     expect(response.bookingDiagnostics?.frontendMappedOpportunityCount).toBe(2);
     expect(response.bookingDiagnostics?.droppedDuringFrontendMapping).toEqual([]);
@@ -445,7 +445,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
 
-    expect(response.bookingOpportunities).toEqual([]);
+    expect(response.opportunities).toEqual([]);
     expect(response.topCities).toEqual([]);
     expect(response.warnings).toEqual([
       "OpenAgenda booking provider is disabled.",
@@ -478,7 +478,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
 
     const response = mapPipelineResultToArtistRadarResponse(result, { ...request, enableBooking: false });
 
-    expect(response.bookingOpportunities).toEqual([]);
+    expect(response.opportunities).toEqual([]);
     expect(response.sources).toEqual([]);
     expect(response.warnings).toEqual([]);
   });
@@ -557,7 +557,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
     const categoryByTitle = Object.fromEntries(
-      response.bookingOpportunities.map((opportunity) => [opportunity.title, opportunity.category]),
+      response.opportunities.map((opportunity) => [opportunity.title, opportunity.category]),
     );
 
     expect(categoryByTitle["Le Petit Club"]).toBe("concert");
@@ -566,7 +566,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     expect(categoryByTitle["Underground Bill"]).toBe("opening_slot");
     expect(categoryByTitle["Local Booker"]).toBe("contact");
     expect(categoryByTitle["Mystery Lead"]).toBe("unknown");
-    expect(response.bookingOpportunities.every((opportunity) => Boolean(opportunity.category))).toBe(true);
+    expect(response.opportunities.every((opportunity) => Boolean(opportunity.category))).toBe(true);
   });
 
   it("maps organization-style booking targets (association, promoter, ...) to the organization type and category", () => {
@@ -598,7 +598,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     });
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
-    const [association, agency] = response.bookingOpportunities;
+    const [association, agency] = response.opportunities;
 
     expect(association?.type).toBe("organization");
     expect(association?.category).toBe("organization");
@@ -635,7 +635,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     });
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
-    const opportunity = response.bookingOpportunities[0];
+    const opportunity = response.opportunities[0];
 
     expect(opportunity?.title).toBe("music.box PACA - Mina Warren");
     expect(opportunity?.date).toBe("2026-09-01");
@@ -667,7 +667,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     });
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
-    const opportunity = response.bookingOpportunities[0];
+    const opportunity = response.opportunities[0];
 
     expect(opportunity?.title).toBe("Le Petit Club");
     expect(opportunity?.genres).toEqual([]);
@@ -698,7 +698,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     });
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
-    const opportunity = response.bookingOpportunities[0];
+    const opportunity = response.opportunities[0];
 
     expect(opportunity?.venue).toBe("Le Point Ephemere");
     expect(opportunity?.venueId).toBeTruthy();
@@ -731,7 +731,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     });
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
-    const opportunity = response.bookingOpportunities[0];
+    const opportunity = response.opportunities[0];
 
     expect(opportunity?.venue).toBe("Glazart");
     expect(opportunity?.venueId).toBe("venue-glazart-paris-france");
@@ -769,7 +769,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     });
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
-    const [first, second] = response.bookingOpportunities;
+    const [first, second] = response.opportunities;
 
     expect(first.venueId).toBe(second.venueId);
   });
@@ -793,7 +793,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     });
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
-    const opportunity = response.bookingOpportunities[0];
+    const opportunity = response.opportunities[0];
 
     expect(opportunity?.venueWebsite).toBe("https://le-petit-club.example/");
   });
@@ -832,7 +832,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     });
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
-    const opportunity = response.bookingOpportunities[0];
+    const opportunity = response.opportunities[0];
 
     expect(opportunity?.venueWebsite).toBeUndefined();
   });
@@ -868,7 +868,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     });
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
-    const opportunity = response.bookingOpportunities[0];
+    const opportunity = response.opportunities[0];
 
     expect(opportunity?.venueWebsite).toBeUndefined();
     expect(opportunity?.venueArtistEvidence).toEqual([
@@ -917,7 +917,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     });
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
-    const opportunity = response.bookingOpportunities[0];
+    const opportunity = response.opportunities[0];
 
     expect(opportunity?.title).toBe("Quai M");
     expect(opportunity?.venueWebsite).toBe("https://quai-m.fr");
@@ -951,7 +951,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     });
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
-    const opportunity = response.bookingOpportunities[0];
+    const opportunity = response.opportunities[0];
 
     expect(opportunity?.venueId).toBeUndefined();
     expect(opportunity?.venue).toBeUndefined();
@@ -977,7 +977,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     });
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
-    const opportunity = response.bookingOpportunities[0];
+    const opportunity = response.opportunities[0];
 
     expect(opportunity?.venueImageUrl).toBeUndefined();
   });
@@ -1104,7 +1104,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
 
-    expect(response.bookingOpportunities[0]?.imageUrl).toBe("https://razibus.net/img/poster-35768.jpg");
+    expect(response.opportunities[0]?.imageUrl).toBe("https://razibus.net/img/poster-35768.jpg");
   });
 
   it("passes the concert lineup and ticket URL through when the backend already found them", () => {
@@ -1128,7 +1128,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     });
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
-    const opportunity = response.bookingOpportunities[0];
+    const opportunity = response.opportunities[0];
 
     expect(opportunity?.lineup).toEqual(["Band A", "Band B"]);
     expect(opportunity?.ticketUrl).toBe("https://razibus.net/tickets/example");
@@ -1152,7 +1152,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     });
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
-    const opportunity = response.bookingOpportunities[0];
+    const opportunity = response.opportunities[0];
 
     expect(opportunity?.lineup).toEqual([]);
     expect(opportunity?.ticketUrl).toBeNull();
@@ -1177,7 +1177,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
 
-    expect(response.bookingOpportunities[0]?.imageUrl).toBeUndefined();
+    expect(response.opportunities[0]?.imageUrl).toBeUndefined();
   });
 
   it("passes the structured matchBreakdown through instead of only the reason string", () => {
@@ -1204,7 +1204,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     });
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
-    const opportunity = response.bookingOpportunities[0];
+    const opportunity = response.opportunities[0];
 
     expect(opportunity?.matchBreakdown?.positiveFactors).toEqual([
       { code: "genre_match", label: "Genre matches the artist", impact: "positive" },
@@ -1233,7 +1233,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
 
     const response = mapPipelineResultToArtistRadarResponse(result, request);
 
-    expect(response.bookingOpportunities[0]?.location).toBe("France");
+    expect(response.opportunities[0]?.location).toBe("France");
   });
 
   it("maps event venues to a canonical venue page and preserves the source provider label", () => {

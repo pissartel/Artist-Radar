@@ -10,7 +10,12 @@ export function buildGenreBookerQueries(genre: string, country: string): string[
   const primary = relatedGenres[0] ?? genre;
   const secondary = relatedGenres[1] ?? genre;
   const queries = [
-    `${primary} booking agency`,
+    `${genre} booking agency ${country} roster artistes`,
+    `tourneur ${genre} punk rock ${country} booking`,
+    `agence booking punk hardcore ${country} roster artistes`,
+    `tourneur punk ${country} catalogue artistes`,
+    `agence booking rock alternatif ${country} artistes émergents`,
+    `${primary} booking agency ${country} roster emerging artists`,
     `${primary} artist booking agency roster`,
     `agence de booking ${primary}`,
     `${secondary} talent agency touring artists`,
@@ -24,7 +29,7 @@ export function buildGenreBookerQueries(genre: string, country: string): string[
 
 export function buildSimilarArtistBookerQueries(similarArtistName: string): string[] {
   return [
-    `"${similarArtistName}" booking agency`,
+    `"${similarArtistName}" booking agency France tourneur`,
     `"${similarArtistName}" represented by`,
     `"${similarArtistName}" booked by`,
     `"${similarArtistName}" tour booking contact`

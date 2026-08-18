@@ -18,7 +18,7 @@ export function extractPublicContactSignals(text: string, links: string[] = []):
 
   for (const link of links) {
     const normalized = link.trim();
-    if (!normalized) {
+    if (!normalized || !isUsableContactUrl(normalized)) {
       continue;
     }
     if (/contact|booking|programmation|book/i.test(normalized)) {
@@ -29,6 +29,19 @@ export function extractPublicContactSignals(text: string, links: string[] = []):
   }
 
   return dedupeContacts(contacts);
+}
+
+function isUsableContactUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (!/^https?:$/.test(url.protocol)) return false;
+    const path = url.pathname.toLowerCase();
+    if (/\.(?:css|js|map|json|xml|png|jpe?g|gif|svg|webp|woff2?|ttf|eot)$/i.test(path)) return false;
+    if (/\/(?:wp-content|wp-includes|plugins|themes|assets|static)\//i.test(path)) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function pickBestContact(contacts: ContactCandidate[]): ContactCandidate | null {

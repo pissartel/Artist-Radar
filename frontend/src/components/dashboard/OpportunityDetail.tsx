@@ -201,6 +201,7 @@ const SIGNAL_TONE_CLASSES: Record<OpportunitySignalKind, string> = {
 // Makes the kind of opportunity legible at a glance (issue #132 review
 // feedback), instead of making the artist infer it from scattered fields.
 function OpportunitySignalBanner({ opportunity }: { opportunity: Opportunity }) {
+  if (getCardFamily(opportunity) === "organization") return null;
   const signal = getOpportunitySignal(opportunity);
   if (signal.kind === "venue_contact") return null;
 

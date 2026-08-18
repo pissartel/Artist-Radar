@@ -130,11 +130,11 @@ export function extractBookerRoster(text: string): string[] {
     .slice(0, 10);
 }
 
-const LARGE_AGENCY_PATTERN = /\b(major agency|multinational|global roster|worldwide roster|large agency)\b/i;
+const LARGE_AGENCY_PATTERN = /\b(major agency|multinational|global roster|worldwide roster|large agency|large-scale|larger-scale)\b/i;
 const SMALL_AGENCY_PATTERN = /\b(boutique agency|small agency|grassroots|diy promoter|one-person|independent booker)\b/i;
 
 export function extractBookerAudienceLevel(text: string, matchedSimilarArtists: SimilarArtist[]): "small" | "medium" | "large" | "unknown" {
-  if (LARGE_AGENCY_PATTERN.test(text)) {
+  if (LARGE_AGENCY_PATTERN.test(text) || extractBookerRoster(text).length >= 8) {
     return "large";
   }
   if (SMALL_AGENCY_PATTERN.test(text)) {
@@ -165,6 +165,10 @@ export function worksWithEmergingActs(text: string): boolean {
 }
 
 export function findMentionedSimilarArtists(text: string, similarArtists: SimilarArtist[]): SimilarArtist[] {
-  const lower = text.toLowerCase();
-  return similarArtists.filter((artist) => artist.name.trim().length > 2 && lower.includes(artist.name.trim().toLowerCase()));
+  return similarArtists.filter((artist) => {
+    const name = artist.name.trim();
+    if (name.length <= 2) return false;
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "iu").test(text);
+  });
 }

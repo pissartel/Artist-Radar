@@ -13,6 +13,7 @@ export interface ExportPaths {
   similarArtistsCsvPath: string;
   eventsCsvPath: string;
   playlistOpportunitiesCsvPath?: string;
+  communityOpportunitiesCsvPath?: string;
   artistJsonPath?: string;
   similarArtistsJsonPath?: string;
   bookingJsonPath?: string;
@@ -157,6 +158,7 @@ export async function exportOpportunities(
   const similarArtistsCsvPath = path.join(outputDir, `${baseName}-similar-artists.csv`);
   const eventsCsvPath = path.join(outputDir, `${baseName}-events.csv`);
   const playlistOpportunitiesCsvPath = path.join(outputDir, `${baseName}-playlists.csv`);
+  const communityOpportunitiesCsvPath = path.join(outputDir, `${baseName}-community-organizations.csv`);
   const normalizedResult = Array.isArray(result)
     ? {
         artistProfile: null,
@@ -164,7 +166,8 @@ export async function exportOpportunities(
         venueCandidates: [],
         eventCandidates: [],
         opportunities: result,
-        playlistOpportunities: []
+        playlistOpportunities: [],
+        communityOpportunities: []
       }
     : result;
 
@@ -210,12 +213,14 @@ export async function exportOpportunities(
   await writeFile(similarArtistsCsvPath, similarArtistsToCsv(flattenSimilarArtists(normalizedResult.similarArtists)), "utf8");
   await writeFile(eventsCsvPath, eventsToCsv(normalizedResult.eventCandidates), "utf8");
   await writeFile(playlistOpportunitiesCsvPath, playlistOpportunitiesToCsv(normalizedResult.playlistOpportunities ?? []), "utf8");
+  await writeFile(communityOpportunitiesCsvPath, communityOpportunitiesToCsv(normalizedResult.communityOpportunities ?? []), "utf8");
   debugLog("pipeline", "export paths", {
     jsonPath: finalJsonPath,
     opportunitiesCsvPath,
     similarArtistsCsvPath,
     eventsCsvPath,
-    playlistOpportunitiesCsvPath
+    playlistOpportunitiesCsvPath,
+    communityOpportunitiesCsvPath
   });
 
   return {
@@ -224,8 +229,38 @@ export async function exportOpportunities(
     opportunitiesCsvPath,
     similarArtistsCsvPath,
     eventsCsvPath,
-    playlistOpportunitiesCsvPath
+    playlistOpportunitiesCsvPath,
+    communityOpportunitiesCsvPath
   };
+}
+
+const communityCsvFields = [
+  "name", "organizationType", "city", "country", "website", "mission", "services", "programs",
+  "similarArtistsInvolved", "supportedArtistLevel", "publicContact", "applicationOrMembershipUrl", "currentActivityEvidence",
+  "concreteOpportunity", "compatibilityScore", "compatibilityExplanation", "sourceLinks"
+];
+
+export function communityOpportunitiesToCsv(opportunities: GenericOpportunity[]): string {
+  const rows = opportunities.map((opportunity) => ({
+    name: opportunity.name,
+    organizationType: opportunity.communityOrganization?.organizationType ?? opportunity.opportunityType,
+    city: opportunity.city ?? null,
+    country: opportunity.country ?? null,
+    website: opportunity.websiteUrl ?? null,
+    mission: opportunity.communityOrganization?.mission ?? null,
+    services: opportunity.communityOrganization?.services.join(" | ") ?? "",
+    programs: opportunity.communityOrganization?.programs.join(" | ") ?? "",
+    similarArtistsInvolved: opportunity.communityOrganization?.similarArtistsInvolved.join(" | ") ?? "",
+    supportedArtistLevel: opportunity.communityOrganization?.supportedArtistLevel ?? "unknown",
+    publicContact: opportunity.communityOrganization?.publicContact ?? null,
+    applicationOrMembershipUrl: opportunity.communityOrganization?.applicationOrMembershipUrl ?? null,
+    currentActivityEvidence: opportunity.communityOrganization?.activityEvidence ?? null,
+    concreteOpportunity: opportunity.communityOrganization?.concreteOpportunity ?? null,
+    compatibilityScore: opportunity.compatibilityScore ?? null,
+    compatibilityExplanation: opportunity.compatibilityExplanation ?? null,
+    sourceLinks: opportunity.sources.map((source) => source.url).filter(Boolean).join(" | ")
+  }));
+  return new Parser({ fields: communityCsvFields }).parse(rows);
 }
 
 const playlistCsvFields = [

@@ -143,6 +143,18 @@ export {
   buildSubmissionPlatformQueries
 } from "./playlists/playlistDiscoveryQueries.js";
 export type { PlaylistDiscoveryStrategy, PlaylistSearchInput } from "./playlists/types.js";
+export {
+  buildDefaultCommunityDiscoveryOptions,
+  discoverCommunityOpportunities
+} from "./community/discoverCommunityOpportunities.js";
+export {
+  buildEventOrganizerQueries,
+  buildGenreCollectiveQueries,
+  buildLocalResourceQueries,
+  buildSimilarArtistOrganizationQueries,
+  buildSupportProgramQueries
+} from "./community/communityDiscoveryQueries.js";
+export type { CommunityDiscoveryStrategy, CommunitySearchInput } from "./community/types.js";
 export type {
   WebLocalSceneArtistDiscovery,
   WebLocalSceneProvider,
@@ -270,6 +282,7 @@ export {
   VenueCandidateSchema
 } from "./schemas.js";
 export {
+  communityOpportunitiesToCsv,
   eventsToCsv,
   exportOpportunities,
   opportunitiesToCsv,

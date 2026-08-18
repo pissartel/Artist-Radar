@@ -76,6 +76,24 @@ export { normalizeBookingSource } from "./booking/normalizeBookingTarget.js";
 export { recommendBookingAction, scoreBookingCompatibility } from "./booking/scoring.js";
 export { searchBookingOpportunities } from "./booking/searchBookingOpportunities.js";
 export {
+  buildDefaultManagerDiscoveryOptions,
+  clearManagerDiscoveryCacheForTests,
+  discoverManagerOpportunities,
+  mergeAndDeduplicate
+} from "./managers/discoverManagerOpportunities.js";
+export type {
+  DiscoverManagerOpportunitiesOptions,
+  ManagerDiscoveryResult
+} from "./managers/discoverManagerOpportunities.js";
+export type {
+  ManagementRelationshipStatus,
+  ManagerDiscoveryMode,
+  ManagerDiscoveryStrategy,
+  ManagerEntityType,
+  ManagerSearchInput,
+  RawManagerCandidate
+} from "./managers/types.js";
+export {
   BookingOutputWriteError,
   formatBookingOutputLog,
   writeBookingRequestOutputs

@@ -58,6 +58,10 @@ export function useArtistRadarData(): UseArtistRadarDataResult {
     queryKey: buildQueryKey(request ?? null),
     queryFn: () => fetchArtistRadarData(request as ArtistRadarRequest),
     enabled: Boolean(request),
+    staleTime: 30 * 60 * 1_000,
+    gcTime: 24 * 60 * 60 * 1_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const executionId = request?.executionId ?? null;

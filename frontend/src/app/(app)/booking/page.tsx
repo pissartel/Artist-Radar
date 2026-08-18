@@ -24,23 +24,26 @@ export default function BookingPage() {
     return <ArtistRadarErrorState message={state.message} onRetry={refetch} />;
   }
 
-  const { artist, bookingOpportunities, warnings } = state.data;
+  const { artist, opportunities, warnings } = state.data;
+  const bookingOpportunities = opportunities.filter((opportunity) =>
+    ["concert", "opening_slot", "festival", "booker"].includes(opportunity.type),
+  );
 
   return (
     <>
       <WarningsBanner warnings={warnings} />
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground">Live &amp; Booking Opportunities</h1>
+        <h1 className="text-xl font-bold text-foreground">Booking</h1>
         <p className="text-sm text-foreground-secondary mt-1.5">
-          Explore every venue, concert, opening slot, and festival opportunity found for your
-          profile to decide which ones to pursue. This is the first opportunity category
-          available — more are coming.
+          Explore concerts, opening slots, festivals, and booking professionals. Use the type
+          filter to keep events and bookers clearly separated.
         </p>
       </div>
       <BookingExplorer
         opportunities={bookingOpportunities}
         artistCity={artist.city}
         artistCountry={artist.country}
+        resultLabel="booking opportunities"
       />
     </>
   );

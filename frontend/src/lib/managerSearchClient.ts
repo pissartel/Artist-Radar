@@ -1,7 +1,7 @@
-import type { ArtistProfile, ManagerOpportunity, SimilarArtist } from "@/types";
+import type { ArtistProfile, Opportunity, SimilarArtist } from "@/types";
 
 export interface DeepManagerSearchResponse {
-  managers: ManagerOpportunity[];
+  opportunities: Opportunity[];
   warnings: string[];
   fromCache: boolean;
 }

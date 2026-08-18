@@ -34,6 +34,44 @@ export class NoopSearchProvider implements WebSearchProvider {
   }
 }
 
+export class FallbackSearchProvider implements WebSearchProvider {
+  providerName: string;
+
+  constructor(private readonly providers: WebSearchProvider[]) {
+    this.providerName = `fallback(${providers.map((provider) => provider.providerName).join(",")})`;
+  }
+
+  async search(query: string, options: WebSearchOptions = {}): Promise<WebSearchResult[]> {
+    const results: WebSearchResult[] = [];
+    const seen = new Set<string>();
+
+    for (const provider of this.providers) {
+      let providerResults: WebSearchResult[];
+      try {
+        providerResults = await provider.search(query, options);
+      } catch (error) {
+        debugLog("web-search", "fallback search provider failed", {
+          provider: provider.providerName,
+          query,
+          message: error instanceof Error ? error.message : String(error)
+        });
+        continue;
+      }
+
+      for (const result of providerResults) {
+        const key = result.url ?? `${result.title ?? ""}:${result.snippet ?? ""}`;
+        if (!key || seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        results.push(result);
+      }
+    }
+
+    return results.slice(0, options.limit ?? results.length);
+  }
+}
+
 export class TavilySearchProvider implements WebSearchProvider {
   providerName = "tavily";
 
@@ -387,7 +425,7 @@ export class FirecrawlExtractProvider implements WebExtractProvider {
 
 export function buildDefaultWebSearchProvider(env: WebProviderEnv = process.env, fetchImpl: FetchLike = fetch): WebSearchProvider {
   const providers = getEnabledSearchProviders(env, fetchImpl);
-  const provider = providers[0] ?? new NoopSearchProvider();
+  const provider = providers.length > 0 ? new FallbackSearchProvider(providers) : new NoopSearchProvider();
   debugLog("web-search", "web search provider selected", {
     providersEnabled: providers.map((entry) => entry.providerName),
     selectedProvider: provider.providerName,

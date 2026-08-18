@@ -943,6 +943,23 @@ export const LabelOpportunityDetailsSchema = z.object({
   evidence: z.array(LabelEvidenceSchema).default([])
 });
 
+export const BookerOpportunityDetailsSchema = z.object({
+  // Represented artists that overlap with the seed artist's own similar-artist
+  // list — the strongest concrete evidence this booker/agency/promoter is
+  // reachable (issue #170: similar artists are a major discovery signal).
+  representedSimilarArtists: z.array(z.string().trim().min(1)).default([]),
+  // Broader roster extracted from the source's own "roster/artists/clients"
+  // listing, when present; never invented beyond what the source states.
+  roster: z.array(z.string().trim().min(1)).default([]),
+  bookerGenres: z.array(z.string().trim().min(1)).default([]),
+  territory: z.string().trim().min(1).nullable().optional(),
+  acceptsSubmissions: z.boolean().nullable().optional(),
+  submissionUrl: OptionalUrlSchema,
+  // Whether the source shows evidence of current activity. null means
+  // uncertain, per AGENTS.md — never defaulted without textual evidence.
+  isActive: z.boolean().nullable().optional()
+});
+
 export const PlaylistOpportunityDetailsSchema = z.object({
   platform: z.string().trim().min(1).nullable().optional(),
   playlistUrl: OptionalUrlSchema,
@@ -972,6 +989,8 @@ const PRODUCER_OR_STUDIO_OPPORTUNITY_TYPES = [
   "mixing_engineer",
   "mastering_engineer"
 ] as const;
+
+const BOOKER_OPPORTUNITY_TYPES = ["booker", "booking_agency", "promoter"] as const;
 
 export const GenericOpportunitySchema = z
   .object({
@@ -1006,6 +1025,7 @@ export const GenericOpportunitySchema = z
     // never affects another opportunity type's fields.
     concert: ConcertOpportunityDetailsSchema.nullable().optional(),
     label: LabelOpportunityDetailsSchema.nullable().optional(),
+    booker: BookerOpportunityDetailsSchema.nullable().optional(),
     playlist: PlaylistOpportunityDetailsSchema.nullable().optional(),
     producerOrStudio: ProducerOrStudioOpportunityDetailsSchema.nullable().optional(),
     // Escape hatch for categories without a dedicated group yet (venue,
@@ -1025,6 +1045,13 @@ export const GenericOpportunitySchema = z
         code: z.ZodIssueCode.custom,
         path: ["label"],
         message: "label details only apply to label opportunities"
+      });
+    }
+    if (value.booker && !(BOOKER_OPPORTUNITY_TYPES as readonly string[]).includes(value.opportunityType)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["booker"],
+        message: "booker details only apply to booker, booking_agency or promoter opportunities"
       });
     }
     if (value.playlist && value.opportunityType !== "playlist") {
@@ -1108,6 +1135,7 @@ export type ConcertOpportunityDetails = z.infer<typeof ConcertOpportunityDetails
 export type LabelEvidence = z.infer<typeof LabelEvidenceSchema>;
 export type LabelExternalIds = z.infer<typeof LabelExternalIdsSchema>;
 export type LabelOpportunityDetails = z.infer<typeof LabelOpportunityDetailsSchema>;
+export type BookerOpportunityDetails = z.infer<typeof BookerOpportunityDetailsSchema>;
 export type PlaylistOpportunityDetails = z.infer<typeof PlaylistOpportunityDetailsSchema>;
 export type ProducerOrStudioOpportunityDetails = z.infer<typeof ProducerOrStudioOpportunityDetailsSchema>;
 export type GenericOpportunity = z.infer<typeof GenericOpportunitySchema>;

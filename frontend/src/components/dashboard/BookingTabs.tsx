@@ -13,6 +13,9 @@ const BASE_TABS: BookingTabName[] = [
   "Festivals",
   "Opening Slots",
   "Contacts",
+  "Bookers",
+  "Managers",
+  "Labels",
 ];
 
 const EMPTY_STATE_MESSAGE: Record<BookingTabName, string> = {
@@ -22,6 +25,9 @@ const EMPTY_STATE_MESSAGE: Record<BookingTabName, string> = {
   Festivals: "No festival opportunities found in this analysis",
   "Opening Slots": "No opening slot opportunities found in this analysis",
   Contacts: "No booking contacts found in this analysis",
+  Bookers: "No booker, booking agency, or promoter found in this analysis",
+  Managers: "No manager or management company found in this analysis",
+  Labels: "No label opportunity found in this analysis",
   "Raw JSON": "No booking opportunities found in this analysis",
 };
 

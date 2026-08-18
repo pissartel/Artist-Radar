@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { ArtistMetrics, Opportunity, CityOpportunityStat } from "@/types";
 import BookingTabs from "./BookingTabs";
 import BookingInsightsPanel from "./BookingInsightsPanel";
@@ -29,12 +28,6 @@ export default function BookingSection({
             {opportunities.length}
           </Badge>
         </div>
-        <Link
-          href="/booking"
-          className="text-xs text-accent-text hover:text-foreground transition-colors"
-        >
-          View all
-        </Link>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] gap-5">
         <div className="min-w-0">

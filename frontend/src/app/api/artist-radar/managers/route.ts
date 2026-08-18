@@ -81,7 +81,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const result = await runDeepManagerSearch(input);
     return Response.json({
-      managers: result.opportunities.flatMap((opportunity) => {
+      opportunities: result.opportunities.flatMap((opportunity) => {
         const mapped = mapManagerOpportunity(opportunity);
         return mapped ? [mapped] : [];
       }),

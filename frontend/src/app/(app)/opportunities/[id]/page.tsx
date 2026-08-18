@@ -31,8 +31,8 @@ export default function OpportunityDetailPage({ params }: OpportunityDetailPageP
     return <ArtistRadarErrorState message={state.message} onRetry={refetch} />;
   }
 
-  const { bookingOpportunities, similarArtists } = state.data;
-  const opportunity = getOpportunityById(bookingOpportunities, id);
+  const { opportunities, similarArtists } = state.data;
+  const opportunity = getOpportunityById(opportunities, id);
 
   if (!opportunity) {
     return (

@@ -10,7 +10,6 @@ import type {
   OpportunityType,
   ArtistTier,
   SimilarArtist,
-  ManagerOpportunity,
 } from "@/types";
 import type { ArtistRadarRequest, ArtistRadarResponse } from "@/types/artistRadar";
 import type {
@@ -21,6 +20,8 @@ import type {
   BackendPipelineResult,
   BackendSimilarArtist,
   BackendManagerOpportunity,
+  BackendLabelOpportunity,
+  BackendBookerOpportunity,
 } from "./backendTypes";
 
 // "unknown" is intentionally absent: an unresolved tier must never be
@@ -197,7 +198,7 @@ function mapArtistScale(artistScale?: BackendArtistScale): ArtistScale | undefin
   };
 }
 
-export function mapManagerOpportunity(opportunity: BackendManagerOpportunity): ManagerOpportunity | null {
+export function mapManagerOpportunity(opportunity: BackendManagerOpportunity): Opportunity | null {
   const details = opportunity.manager;
   if (!details || !opportunity.sourceUrl || details.evidence.length === 0) return null;
 
@@ -212,32 +213,89 @@ export function mapManagerOpportunity(opportunity: BackendManagerOpportunity): M
 
   return {
     id: opportunity.id,
-    name: opportunity.name,
-    entityType: opportunity.opportunityType,
-    city: opportunity.city ?? null,
-    country: opportunity.country ?? null,
-    websiteUrl: opportunity.websiteUrl ?? null,
-    sourceUrl: opportunity.sourceUrl,
-    contactPageUrl: opportunity.contactPageUrl ?? null,
-    publicEmail: opportunity.publicEmail ?? null,
+    type: "manager",
+    category: "manager",
+    title: opportunity.name,
+    organizationType: opportunity.opportunityType,
+    location: joinLocation(opportunity.city, opportunity.country) || "Location unknown",
+    city: opportunity.city ?? undefined,
+    country: opportunity.country ?? undefined,
+    description: opportunity.shortDescription ?? opportunity.compatibilityExplanation ?? "Management opportunity",
+    tags: details.services,
+    matchScore: opportunity.compatibilityScore ?? 0,
+    matchReasons: [opportunity.compatibilityExplanation ?? "Compatibility is based on sourced management activity."],
+    sourceUrls: sourceLinks,
+    contact: opportunity.publicEmail ?? opportunity.contactPageUrl ?? null,
     roster: details.roster,
-    relevantArtists: details.relevantArtists,
     genres: details.managerGenres.length > 0 ? details.managerGenres : opportunity.associatedGenres,
-    typicalAudienceLevel: details.typicalAudienceLevel,
-    services: details.services,
-    acceptsSubmissions: details.acceptsSubmissions ?? null,
-    contactPolicy: details.contactPolicy ?? null,
-    relationshipStatus: details.relationshipStatus,
-    isActive: details.isActive ?? null,
-    compatibilityScore: opportunity.compatibilityScore ?? 0,
-    compatibilityExplanation: opportunity.compatibilityExplanation ?? "Compatibility is based on sourced management activity.",
-    evidence: details.evidence.map((evidence) => ({
-      sourceUrl: evidence.sourceUrl,
-      similarArtistName: evidence.similarArtistName ?? null,
-      relationshipStatus: evidence.relationshipStatus,
-      confidence: evidence.confidence,
-    })),
-    sourceLinks,
+    recentEvents: [],
+    lineup: [],
+    metadata: [
+      { label: "Audience level", value: details.typicalAudienceLevel },
+      ...(details.services.length ? [{ label: "Services", value: details.services.join(", ") }] : []),
+    ],
+  };
+}
+
+function mapLabelOpportunity(opportunity: BackendLabelOpportunity): Opportunity {
+  const details = opportunity.label;
+  const sources = Array.from(new Set([
+    opportunity.sourceUrl,
+    opportunity.websiteUrl,
+    opportunity.contactPageUrl,
+    opportunity.applicationUrl,
+    details?.demoSubmissionUrl,
+    ...(opportunity.sources.map((source) => source.url)),
+  ].filter((url): url is string => Boolean(url))));
+  return {
+    id: opportunity.id,
+    type: "label",
+    category: "label",
+    title: opportunity.name,
+    organizationType: "label",
+    location: joinLocation(opportunity.city, opportunity.country) || opportunity.geographicScope,
+    city: opportunity.city ?? undefined,
+    country: opportunity.country ?? undefined,
+    description: opportunity.shortDescription ?? opportunity.compatibilityExplanation ?? "Label opportunity",
+    tags: [],
+    matchScore: opportunity.compatibilityScore ?? 0,
+    matchReasons: [opportunity.compatibilityExplanation ?? "Compatibility is based on sourced label activity."],
+    sourceUrls: sources,
+    contact: opportunity.publicEmail ?? details?.demoSubmissionUrl ?? opportunity.contactPageUrl ?? null,
+    roster: details?.signedArtists ?? opportunity.associatedArtists,
+    genres: details?.labelGenres ?? opportunity.associatedGenres,
+    recentEvents: [],
+    lineup: [],
+  };
+}
+
+function mapBookerOpportunity(opportunity: BackendBookerOpportunity): Opportunity {
+  const sources = Array.from(new Set([
+    opportunity.sourceUrl,
+    opportunity.websiteUrl,
+    opportunity.contactPageUrl,
+    opportunity.applicationUrl,
+    ...opportunity.sources.map((source) => source.url),
+  ].filter((url): url is string => Boolean(url))));
+  return {
+    id: opportunity.id,
+    type: "booker",
+    category: "booker",
+    title: opportunity.name,
+    organizationType: opportunity.opportunityType,
+    location: joinLocation(opportunity.city, opportunity.country) || opportunity.geographicScope,
+    city: opportunity.city ?? undefined,
+    country: opportunity.country ?? undefined,
+    description: opportunity.shortDescription ?? opportunity.compatibilityExplanation ?? "Booking opportunity",
+    tags: [],
+    matchScore: opportunity.compatibilityScore ?? 0,
+    matchReasons: [opportunity.compatibilityExplanation ?? "Relevant booking contact."],
+    sourceUrls: sources,
+    contact: opportunity.publicEmail ?? opportunity.contactPageUrl ?? null,
+    roster: opportunity.associatedArtists,
+    genres: opportunity.associatedGenres,
+    recentEvents: [],
+    lineup: [],
   };
 }
 
@@ -500,17 +558,22 @@ export function mapPipelineResultToArtistRadarResponse(
       return [];
     }
   });
+  const professionalOpportunities = [
+    ...(result.bookerOpportunities ?? []).map(mapBookerOpportunity),
+    ...(result.managerOpportunities ?? []).flatMap((opportunity) => {
+      const mapped = mapManagerOpportunity(opportunity);
+      return mapped ? [mapped] : [];
+    }),
+    ...(result.labelOpportunities ?? []).map(mapLabelOpportunity),
+  ];
+  const opportunities = [...bookingOpportunities, ...professionalOpportunities];
   const warnings = includeBooking ? (result.bookingSearch?.warnings ?? []) : [];
 
   return {
     artist: mapArtistProfile(result.artistProfile, request, result.chartmetric),
     kpis: buildKpis(similarArtists, bookingOpportunities),
     similarArtists,
-    bookingOpportunities,
-    managerOpportunities: (result.managerOpportunities ?? []).flatMap((opportunity) => {
-      const mapped = mapManagerOpportunity(opportunity);
-      return mapped ? [mapped] : [];
-    }),
+    opportunities,
     topCities: includeBooking ? buildTopCities(bookingOpportunities) : [],
     sources: includeBooking ? buildSources(result) : [],
     bookingDiagnostics: includeBooking

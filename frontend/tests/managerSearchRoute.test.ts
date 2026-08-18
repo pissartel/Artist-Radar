@@ -61,6 +61,6 @@ describe("POST /api/artist-radar/managers", () => {
 
     expect(response.status).toBe(200);
     expect(runDeepManagerSearch).toHaveBeenCalledWith(expect.objectContaining({ mode: "deep", limit: 24 }));
-    expect(payload).toMatchObject({ fromCache: true, managers: [{ name: "Scene Management", relevantArtists: ["Neon Riot"] }] });
+    expect(payload).toMatchObject({ fromCache: true, opportunities: [{ title: "Scene Management", type: "manager" }] });
   });
 });

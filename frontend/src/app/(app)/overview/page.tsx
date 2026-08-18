@@ -4,7 +4,6 @@ import ArtistHeader from "@/components/dashboard/ArtistHeader";
 import KpiGrid from "@/components/dashboard/KpiGrid";
 import SimilarArtistsSection from "@/components/dashboard/SimilarArtistsSection";
 import BookingSection from "@/components/dashboard/BookingSection";
-import ManagerOpportunitiesSection from "@/components/dashboard/ManagerOpportunitiesSection";
 import WarningsBanner from "@/components/dashboard/WarningsBanner";
 import {
   ArtistRadarEmptyOnboardingState,
@@ -12,6 +11,19 @@ import {
   ArtistRadarLoadingState,
 } from "@/components/dashboard/ArtistRadarStates";
 import { useArtistRadarData } from "@/lib/useArtistRadarData";
+import type { Opportunity } from "@/types";
+
+function buildOpportunityPreview(opportunities: Opportunity[], limit = 8): Opportunity[] {
+  const ranked = [...opportunities].sort((a, b) => b.matchScore - a.matchScore);
+  const representativeByType = Array.from(
+    new Map(ranked.map((opportunity) => [opportunity.type, opportunity])).values(),
+  );
+  const selected = new Set(representativeByType.slice(0, limit).map((item) => item.id));
+  return [
+    ...representativeByType.slice(0, limit),
+    ...ranked.filter((item) => !selected.has(item.id)),
+  ].slice(0, limit);
+}
 
 export default function OverviewPage() {
   const { state, refetch } = useArtistRadarData();
@@ -28,7 +40,7 @@ export default function OverviewPage() {
     return <ArtistRadarErrorState message={state.message} onRetry={refetch} />;
   }
 
-  const { artist, kpis, similarArtists, bookingOpportunities, managerOpportunities, topCities, warnings } = state.data;
+  const { artist, kpis, similarArtists, opportunities, topCities, warnings } = state.data;
 
   return (
     <>
@@ -38,12 +50,11 @@ export default function OverviewPage() {
       <SimilarArtistsSection artists={similarArtists} />
 
       <BookingSection
-        opportunities={bookingOpportunities}
+        opportunities={buildOpportunityPreview(opportunities)}
         topCities={topCities}
         metrics={artist.metrics}
         similarArtistCount={similarArtists.length}
       />
-      <ManagerOpportunitiesSection managers={managerOpportunities} />
     </>
   );
 }

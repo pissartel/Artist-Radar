@@ -22,6 +22,9 @@ export const TYPE_LABELS: Record<string, string> = {
   concert: "Concert",
   opening_slot: "Opening Slot",
   organization: "Organization",
+  booker: "Booker / Agency",
+  manager: "Manager",
+  label: "Label",
 };
 
 // venue -> info, concert/festival -> warning ("event" category per
@@ -33,6 +36,9 @@ const TYPE_COLORS: Record<string, string> = {
   concert: "text-warning-text bg-warning-tint border-warning-tint",
   opening_slot: "text-success-text bg-success-tint border-success-tint",
   organization: "text-accent-text bg-accent-tint border-accent-tint",
+  booker: "text-accent-text bg-accent-tint border-accent-tint",
+  manager: "text-info-text bg-info-tint border-info-tint",
+  label: "text-success-text bg-success-tint border-success-tint",
 };
 
 function FactPill({ children }: { children: ReactNode }) {

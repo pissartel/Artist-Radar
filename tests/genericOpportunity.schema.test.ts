@@ -71,14 +71,43 @@ describe("GenericOpportunitySchema", () => {
         playlistUrl: "https://open.spotify.com/playlist/example",
         curatorName: "Indie Curator",
         followerCount: 12000,
+        audienceEstimate: 12000,
+        updateFrequency: "weekly",
+        lastUpdatedAt: "2026-06-30",
+        similarArtistsFeatured: ["Fake Band"],
+        submissionMethod: "submithub",
         submissionPlatform: "SubmitHub",
         submissionUrl: "https://example.com/submit",
         submissionType: "free",
-        estimatedGenreFit: 0.65
+        submissionPrice: null,
+        estimatedGenreFit: 0.65,
+        curatorActivity: "active",
+        growthSignal: "organic",
+        expectedReach: "Up to 12,000 followers; streams are not guaranteed."
       }
     });
 
     expect(playlist.playlist?.followerCount).toBe(12000);
+    expect(playlist.playlist?.submissionMethod).toBe("submithub");
+  });
+
+  it("allows playlist details on a playlist curator without classifying the platform as a playlist", () => {
+    const curator = baseFor("playlist_curator", {
+      playlist: {
+        platform: null,
+        playlistUrl: null,
+        curatorName: "Independent Curator",
+        followerCount: null,
+        submissionPlatform: "Groover",
+        submissionMethod: "groover",
+        submissionUrl: "https://groover.co/en/influencer/profile/curator",
+        submissionType: "paid",
+        estimatedGenreFit: null
+      }
+    });
+
+    expect(curator.opportunityType).toBe("playlist_curator");
+    expect(curator.playlist?.playlistUrl).toBeNull();
   });
 
   it("stores producer/studio details for every eligible category", () => {

@@ -132,6 +132,17 @@ export {
   type ArtistScaleComparisonThresholds
 } from "./scoring/artistScaleComparison.js";
 export type { OpportunitySearchRunResult } from "./pipeline.js";
+export {
+  buildDefaultPlaylistDiscoveryOptions,
+  discoverPlaylistOpportunities
+} from "./playlists/discoverPlaylistOpportunities.js";
+export {
+  buildGenrePlaylistQueries,
+  buildRegionalPlaylistQueries,
+  buildSimilarArtistPlaylistQueries,
+  buildSubmissionPlatformQueries
+} from "./playlists/playlistDiscoveryQueries.js";
+export type { PlaylistDiscoveryStrategy, PlaylistSearchInput } from "./playlists/types.js";
 export type {
   WebLocalSceneArtistDiscovery,
   WebLocalSceneProvider,
@@ -262,5 +273,6 @@ export {
   eventsToCsv,
   exportOpportunities,
   opportunitiesToCsv,
+  playlistOpportunitiesToCsv,
   similarArtistsToCsv
 } from "./services/exportService.js";

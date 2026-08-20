@@ -39,6 +39,8 @@ import {
   enrichSimilarArtistsWithChartmetric,
   type SimilarArtistCandidateEnrichmentProvider
 } from "./modules/similarArtistCommercialEnrichment.js";
+import { findSupportSlotOpportunities, type FindSupportSlotOpportunitiesResult } from "./modules/supportSlotOpportunities.js";
+import { scoreArtistScale } from "./scoring/artistScaleScore.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
@@ -87,6 +89,7 @@ export interface OpportunitySearchRunResult {
   // artists (Bandsintown/Songkick/setlist.fm). Optional: omitted rather than
   // failing the whole analysis when the enrichment step itself errors.
   similarArtistConcerts?: SimilarArtistConcertsResult[];
+  supportSlotOpportunities?: FindSupportSlotOpportunitiesResult;
   bookingSearch?: BookingSearchResult;
   // Ticketmaster-derived venue/scene evidence and diagnostics (issue #189),
   // undefined when Ticketmaster is disabled/not configured or booking mode
@@ -183,6 +186,42 @@ export async function runOpportunitySearch(
       similarArtistsForLiveSearch,
       options.artistConcertProviders
     );
+    const enrichedSimilarArtists = flattenSimilarArtists(groupedSimilarArtists);
+    const artistScaleByName = Object.fromEntries(enrichedSimilarArtists.flatMap((artist) => {
+      const metrics = artist.chartmetric?.metrics;
+      if (!metrics) return [];
+      return [[artist.name, scoreArtistScale({
+        chartmetricArtistScore: metrics.chartmetricArtistScore,
+        spotifyMonthlyListeners: metrics.spotifyMonthlyListeners,
+        spotifyFollowers: metrics.spotifyFollowers,
+        instagramFollowers: metrics.socialAudience?.instagramFollowers,
+        tiktokFollowers: metrics.socialAudience?.tiktokFollowers,
+        youtubeSubscribers: metrics.socialAudience?.youtubeSubscribers,
+        playlistReachScore: metrics.playlistReachScore,
+        totalCurrentPlaylists: metrics.totalCurrentPlaylists,
+        listenerGrowthPercent: metrics.listenerGrowthPercent,
+        followerGrowthPercent: metrics.followerGrowthPercent,
+        measuredAt: metrics.measuredAt,
+        matchConfidence: metrics.matchConfidence
+      }).artistScaleScore] as const];
+    }));
+    const targetArtistScale = scoreArtistScale({
+      spotifyMonthlyListeners: chartmetric.metrics?.spotifyMonthlyListeners,
+      spotifyFollowers: chartmetric.metrics?.spotifyFollowers ?? profile.spotify?.followers ?? undefined,
+      measuredAt: chartmetric.metrics?.measuredAt,
+      matchConfidence: chartmetric.metrics?.matchConfidence
+    });
+    const supportSlotOpportunities = findSupportSlotOpportunities({
+      targetArtist: {
+        name: input.artist,
+        genres: [input.genre, ...profile.genres],
+        country: profile.country,
+        artistScaleScore: targetArtistScale.coverage > 0 ? targetArtistScale.artistScaleScore : null
+      },
+      referenceCountry: input.referenceCountry,
+      concertHistory: similarArtistConcerts,
+      artistScaleByName
+    });
     track("SEARCHING_OPPORTUNITIES");
     const { venueCandidates, eventCandidates } = await findVenueEventCandidates({
       profile,
@@ -240,6 +279,7 @@ export async function runOpportunitySearch(
         opportunities: bookingSearch.opportunities.map(mapBookingOpportunityToLegacyOpportunity),
         bookingSearch,
         similarArtistConcerts,
+        supportSlotOpportunities,
         ticketmaster: buildTicketmasterEvidenceSafely(bookingSearch),
         labelOpportunities,
         chartmetric
@@ -281,6 +321,7 @@ export async function runOpportunitySearch(
       eventCandidates,
       opportunities: validated.opportunities.slice(0, input.limit),
       similarArtistConcerts,
+      supportSlotOpportunities,
       chartmetric
     };
     track("COMPLETED");

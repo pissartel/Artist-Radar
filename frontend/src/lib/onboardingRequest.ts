@@ -24,7 +24,8 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
 
   const artistName = onboarding.artistName?.trim();
   const genre = onboarding.mainGenre?.trim();
-  const location = onboarding.city?.trim() || onboarding.countryOfOrigin?.trim();
+  const referenceCountry = onboarding.countryOfOrigin?.trim();
+  const location = onboarding.city?.trim() || referenceCountry;
 
   if (!artistName || !genre || !location) {
     return null;
@@ -44,6 +45,7 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
     artistName,
     genre,
     location,
+    ...(referenceCountry ? { referenceCountry } : {}),
     enableBooking: onboarding.mainGoal !== "similar_artists",
     ...(spotifyUrl ? { spotifyUrl } : {}),
     ...(chartmetricArtistEnrichment ? { features: { chartmetricArtistEnrichment: true } } : {}),

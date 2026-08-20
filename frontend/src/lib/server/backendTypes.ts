@@ -27,6 +27,7 @@ export interface BackendArtistInput {
   artist: string;
   city: string;
   genre: string;
+  referenceCountry?: string | null;
 }
 
 export interface BackendRunOpportunitySearchOptions {

@@ -204,6 +204,7 @@ export const ArtistInputSchema = z.object({
   city: z.string().trim().min(1, "city is required"),
   genre: z.string().trim().min(1, "genre is required"),
   target: z.string().trim().min(1).nullable().default(null),
+  referenceCountry: z.string().trim().min(1).nullable().optional(),
   links: z.array(z.string().trim().url()).default([]),
   limit: z.coerce.number().int().min(1).max(50).default(25),
   spotifyUrl: OptionalUrlSchema,

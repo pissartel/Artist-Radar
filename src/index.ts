@@ -91,6 +91,17 @@ export {
 export type { SpotifyCapabilities } from "./services/spotifyService.js";
 export { extractYouTubeChannelIdentifier, getYouTubeChannelStats, parseYouTubeChannelInput } from "./services/youtubeService.js";
 export { findVenueEventCandidates } from "./modules/venueEventFinder.js";
+export {
+  findSupportSlotOpportunities,
+  resolveSupportReferenceCountry,
+  DEFAULT_SUPPORT_SLOT_THRESHOLDS
+} from "./modules/supportSlotOpportunities.js";
+export type {
+  FindSupportSlotOpportunitiesInput,
+  FindSupportSlotOpportunitiesResult,
+  SupportSlotOpportunity,
+  SupportSlotThresholds
+} from "./modules/supportSlotOpportunities.js";
 export type { OpportunitySearchRunResult } from "./pipeline.js";
 export type {
   WebLocalSceneArtistDiscovery,

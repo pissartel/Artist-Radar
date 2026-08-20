@@ -6,6 +6,7 @@ interface RawRequestBody {
   artistName?: unknown;
   genre?: unknown;
   location?: unknown;
+  referenceCountry?: unknown;
   enableBooking?: unknown;
   spotifyUrl?: unknown;
   executionId?: unknown;
@@ -29,7 +30,7 @@ function errorResponse(status: number, code: ErrorCode, message: string): Respon
 }
 
 function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | null {
-  const { artistName, genre, location, enableBooking, spotifyUrl, executionId, features } = body;
+  const { artistName, genre, location, referenceCountry, enableBooking, spotifyUrl, executionId, features } = body;
 
   if (
     typeof artistName !== "string" || !artistName.trim() ||
@@ -44,6 +45,10 @@ function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | nul
   }
 
   if (spotifyUrl !== undefined && typeof spotifyUrl !== "string") {
+    return null;
+  }
+
+  if (referenceCountry !== undefined && (typeof referenceCountry !== "string" || !referenceCountry.trim())) {
     return null;
   }
 
@@ -63,6 +68,7 @@ function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | nul
     artistName: artistName.trim(),
     genre: genre.trim(),
     location: location.trim(),
+    ...(typeof referenceCountry === "string" ? { referenceCountry: referenceCountry.trim() } : {}),
     enableBooking,
     ...(spotifyUrl?.trim() ? { spotifyUrl: spotifyUrl.trim() } : {}),
     ...(executionId?.trim() ? { executionId: executionId.trim() } : {}),
@@ -165,6 +171,7 @@ export async function POST(request: Request): Promise<Response> {
       artist: artistRadarRequest.artistName,
       city: artistRadarRequest.location,
       genre: artistRadarRequest.genre,
+      referenceCountry: artistRadarRequest.referenceCountry,
       spotifyUrl: isValidHttpUrl(artistRadarRequest.spotifyUrl) ? artistRadarRequest.spotifyUrl : undefined,
     });
 

@@ -135,7 +135,7 @@ describe("discoverBookerOpportunities", () => {
     expect(promoter?.opportunityType).toBe("promoter");
   });
 
-  it("includes audience compatibility in the ranking via the agency's roster tier", async () => {
+  it("excludes a major agency for an emerging artist", async () => {
     const provider = mockSearchProvider((query) => {
       if (query.includes("pop punk booking agency")) {
         return [{
@@ -151,8 +151,40 @@ describe("discoverBookerOpportunities", () => {
     });
 
     const result = await discoverBookerOpportunities(baseInput, { webSearchProvider: provider, maxQueriesPerStrategy: 3, now });
-    const opportunity = result.opportunities.find((o) => o.sourceUrl === "https://example.test/major-agency");
-    expect(opportunity?.audienceLevel).toBe("large");
+    expect(result.opportunities.some((o) => o.sourceUrl === "https://example.test/major-agency")).toBe(false);
+  });
+
+  it("excludes a foreign agency that does not explicitly accept international artists", async () => {
+    const provider = mockSearchProvider((query) => query.includes("pop punk booking agency") ? [{
+      title: "US Agency",
+      url: "https://example.test/us-agency",
+      snippet: "Independent booking agency based in the United States representing a roster of pop punk artists, active in 2025.",
+      sourceProvider: "test-booker-search",
+      confidence: 0.7,
+      links: []
+    }] : []);
+
+    const result = await discoverBookerOpportunities(baseInput, { webSearchProvider: provider, maxQueriesPerStrategy: 3, now });
+    expect(result.opportunities.some((o) => o.sourceUrl === "https://example.test/us-agency")).toBe(false);
+  });
+
+  it("does not use large reference artists as representation-search seeds for an emerging artist", async () => {
+    const searched: string[] = [];
+    const provider = mockSearchProvider((query) => {
+      searched.push(query);
+      return [];
+    });
+
+    await discoverBookerOpportunities({
+      ...baseInput,
+      similarArtists: [
+        baseSimilarArtist({ name: "Huge Reference", artistTier: "large", bookingCategory: "reference" }),
+        baseSimilarArtist({ name: "Relevant Peer" })
+      ]
+    }, { webSearchProvider: provider, maxQueriesPerStrategy: 10, now });
+
+    expect(searched.some((query) => query.includes("Huge Reference"))).toBe(false);
+    expect(searched.some((query) => query.includes("Relevant Peer"))).toBe(true);
   });
 
   it("distinguishes local, national and international/remote-compatible bookers", async () => {
@@ -169,9 +201,9 @@ describe("discoverBookerOpportunities", () => {
       }
       if (query.includes("international pop punk booking agency accepting artists from abroad")) {
         return [{
-          title: "Worldwide Agency",
+          title: "Cross-border Agency",
           url: "https://example.test/worldwide-agency",
-          snippet: "Independent pop punk booking agency with a worldwide roster, accepts international artists, active in 2025.",
+          snippet: "Independent pop punk booking agency representing a roster of touring artists and accepting international artists, active in 2025.",
           sourceProvider: "test-booker-search",
           confidence: 0.7,
           links: []

@@ -74,7 +74,7 @@ export async function discoverBookerOpportunities(
   const webSearchProvider = options.webSearchProvider;
   const country = input.artistProfile?.country ?? input.target ?? "";
   const maxQueriesPerStrategy = options.maxQueriesPerStrategy ?? 6;
-  const similarArtists = (input.similarArtists ?? []).slice(0, options.maxSimilarArtists ?? 4);
+  const similarArtists = selectBookerSeedArtists(input, options.maxSimilarArtists ?? 4);
 
   const queriesByStrategy: Array<{ strategy: BookerDiscoveryStrategy; queries: string[] }> = [
     { strategy: "genre_specialization", queries: buildGenreBookerQueries(input.genre, country).slice(0, maxQueriesPerStrategy) },
@@ -213,7 +213,9 @@ export async function discoverBookerOpportunities(
       droppedForInactivity += 1;
       continue;
     }
-    opportunities.push(buildBookerOpportunity(input, candidate, activity));
+    const opportunity = buildBookerOpportunity(input, candidate, activity);
+    if (!isCompatibleWithArtistScaleAndMarket(input, opportunity)) continue;
+    opportunities.push(opportunity);
   }
 
   opportunities.sort((left, right) => (right.compatibilityScore ?? 0) - (left.compatibilityScore ?? 0));
@@ -309,15 +311,15 @@ function buildBookerOpportunity(
     worksWithEmergingActs: emergingActsSignal
   });
 
-  const isLocal = geographicScope === "local" || geographicScope === "national";
-  const city = isLocal ? input.city : null;
-  const country = isLocal
+  const isDomestic = geographicScope === "local" || geographicScope === "national";
+  const city = geographicScope === "local" ? input.city : null;
+  const country = isDomestic
     ? (input.artistProfile?.country ?? input.target ?? null)
     : geographicScope === "international"
       ? findMentionedKnownCountry(candidate.text)
       : null;
   const territory =
-    isLocal ? country
+    isDomestic ? country
     : geographicScope === "remote_compatible" ? "international (remote-compatible)"
     : geographicScope === "international" ? country
     : null;
@@ -362,6 +364,21 @@ function buildBookerOpportunity(
   };
 }
 
+function isCompatibleWithArtistScaleAndMarket(input: BookerSearchInput, opportunity: GenericOpportunity): boolean {
+  const artistLevel = input.artistProfile?.estimatedLevel ?? "unknown";
+  if (artistLevel === "emerging" && opportunity.audienceLevel === "large") return false;
+  if (opportunity.geographicScope === "international") return false;
+  return true;
+}
+
+function selectBookerSeedArtists(input: BookerSearchInput, limit: number) {
+  const artistLevel = input.artistProfile?.estimatedLevel ?? "unknown";
+  return (input.similarArtists ?? [])
+    .filter((artist) => artist.bookingCategory !== "reference")
+    .filter((artist) => artistLevel !== "emerging" || artist.artistTier !== "large")
+    .slice(0, limit);
+}
+
 // Only common country names are checked here; anything not on the list is
 // left as "unknown" rather than guessed, per AGENTS.md.
 const KNOWN_COUNTRIES = [
@@ -382,11 +399,11 @@ function classifyGeographicScope(text: string, input: BookerSearchInput): Booker
   if (isInternationallyOpen(text)) {
     return "remote_compatible";
   }
-  if (country && lower.includes(country)) {
-    return "national";
-  }
   if (mentionsDifferentKnownCountry(lower, country)) {
     return "international";
+  }
+  if (country && lower.includes(country)) {
+    return "national";
   }
   return "unknown";
 }

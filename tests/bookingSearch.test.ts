@@ -92,6 +92,16 @@ describe("Booking Search core", () => {
     expect(contacts.some((contact) => contact.type === "contact_form")).toBe(true);
   });
 
+  it("rejects static assets whose path happens to contain the word contact", () => {
+    const contacts = extractPublicContactSignals("", [
+      "https://www.aaemusic.com/wp-content/plugins/contact-form-7/includes/css/styles.css?ver=5.5.4",
+      "https://example.test/contact"
+    ]);
+
+    expect(contacts.some((contact) => contact.value.includes("styles.css"))).toBe(false);
+    expect(contacts.some((contact) => contact.value === "https://example.test/contact")).toBe(true);
+  });
+
   it("raises support slot likelihood for support TBA and premiere partie wording", () => {
     const baseline = scoreBookingCompatibility(input, baseTarget({ description: "Regular pop punk club night." }));
     const supportTba = scoreBookingCompatibility(input, baseTarget({ description: "Pop punk night with support TBA." }));

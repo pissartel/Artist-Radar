@@ -8,7 +8,10 @@ export interface BookerSearchInput {
   limit: number;
   artistProfile?: ArtistProfile | null;
   similarArtists?: SimilarArtist[];
+  mode?: BookerDiscoveryMode;
 }
+
+export type BookerDiscoveryMode = "lightweight" | "deep";
 
 // Mirrors GenericOpportunitySchema's geographicScope, minus values a booker
 // recommendation never needs ("regional") and using the issue's own

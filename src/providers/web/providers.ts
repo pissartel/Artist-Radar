@@ -10,6 +10,8 @@ import type { WebSearchOptions, WebSearchProvider, WebSearchResult } from "./Web
 type FetchLike = typeof fetch;
 
 export interface WebProviderEnv {
+  OPENAI_API_KEY?: string;
+  ENABLE_OPENAI_BOOKER_DISCOVERY?: string;
   TAVILY_API_KEY?: string;
   EXA_API_KEY?: string;
   JINA_API_KEY?: string;

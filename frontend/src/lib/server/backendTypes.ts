@@ -409,6 +409,23 @@ export interface BackendBookerOpportunity extends Omit<BackendLabelOpportunity, 
   opportunityType: "booker" | "booking_agency" | "promoter";
 }
 
+export interface BackendBookerSearchInput {
+  artist: string;
+  city: string;
+  genre: string;
+  target?: string | null;
+  limit: number;
+  mode: "deep";
+  artistProfile?: BackendManagerSearchInput["artistProfile"];
+  similarArtists: BackendManagerSearchInput["similarArtists"];
+}
+
+export interface BackendBookerDiscoveryResult {
+  opportunities: BackendBookerOpportunity[];
+  warnings: string[];
+  metadata: { mode: "lightweight" | "deep"; keptOpportunities: number };
+}
+
 export type BackendManagerRelationshipStatus = "current" | "former" | "unknown";
 
 export interface BackendManagerEvidence {

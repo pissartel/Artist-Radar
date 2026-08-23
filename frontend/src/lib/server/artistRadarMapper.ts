@@ -286,7 +286,7 @@ function mapLabelOpportunity(opportunity: BackendLabelOpportunity): Opportunity 
   };
 }
 
-function mapBookerOpportunity(opportunity: BackendBookerOpportunity): Opportunity {
+export function mapBookerOpportunity(opportunity: BackendBookerOpportunity): Opportunity {
   const sources = Array.from(new Set([
     opportunity.sourceUrl,
     opportunity.websiteUrl,

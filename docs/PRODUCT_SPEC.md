@@ -87,3 +87,12 @@ And it creates:
 - No autonomous browser agent
 - No email sending
 - No CRM
+
+## Product onboarding beyond V0
+
+The product UI follows a value-first onboarding model: a new user can run one limited artist
+analysis and view a limited overview before registration is requested. Account creation is
+required only when the user asks to persist, extend, or act on those results.
+
+See [Anonymous-to-account onboarding](./anonymous-to-account-onboarding.md) for the flow,
+capability boundaries, prompt triggers, and acceptance criteria.

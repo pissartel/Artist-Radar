@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { buttonClassName } from "@/components/ui/Button";
-import { MVP_ENTRY_ROUTE } from "@/lib/navigation";
+import AuthLinks from "@/components/auth/AuthLinks";
 
 export default function MarketingNav() {
   return (
@@ -29,12 +28,8 @@ export default function MarketingNav() {
         >
           How it works
         </a>
-        <Link
-          href={MVP_ENTRY_ROUTE}
-          className={buttonClassName("gradient", "px-5 py-2.5 text-sm")}
-        >
-          Try It
-        </Link>
+        <div className="hidden sm:block"><AuthLinks /></div>
+        <div className="sm:hidden"><AuthLinks mobile /></div>
       </nav>
     </header>
   );

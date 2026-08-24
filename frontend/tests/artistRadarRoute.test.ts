@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // network calls, or a prior `npm run build` at the repo root.
 const runOpportunitySearch = vi.fn();
 const warnLog = vi.fn();
+const readPersistedAnalysis = vi.fn();
+const persistAnalysis = vi.fn();
 
 vi.mock("@/lib/server/backendPipeline", () => ({
   runOpportunitySearch: (...args: unknown[]) => runOpportunitySearch(...args),
@@ -14,6 +16,11 @@ vi.mock("@/lib/server/backendPipeline", () => ({
   ArtistInputSchema: {
     parse: (raw: unknown) => raw,
   },
+}));
+
+vi.mock("@/lib/server/analysisPersistence", () => ({
+  readPersistedAnalysis: (...args: unknown[]) => readPersistedAnalysis(...args),
+  persistAnalysis: (...args: unknown[]) => persistAnalysis(...args),
 }));
 
 function jsonRequest(body: unknown): Request {
@@ -39,6 +46,8 @@ describe("POST /api/artist-radar", () => {
     vi.resetModules();
     runOpportunitySearch.mockReset();
     warnLog.mockReset();
+    readPersistedAnalysis.mockReset().mockResolvedValue(null);
+    persistAnalysis.mockReset().mockResolvedValue(undefined);
     process.env.OPENAI_API_KEY = "test-key";
   });
 
@@ -141,6 +150,20 @@ describe("POST /api/artist-radar", () => {
     expect(response.status).toBe(200);
     expect(payload.artist.name).toBe("Tuesday Fall");
     expect(runOpportunitySearch).toHaveBeenCalledOnce();
+    expect(persistAnalysis).toHaveBeenCalledWith(VALID_BODY, payload);
+  });
+
+  it("returns a matching persisted analysis without rerunning the pipeline", async () => {
+    const persisted = { artist: { name: "Tuesday Fall" }, bookingOpportunities: [] };
+    readPersistedAnalysis.mockResolvedValueOnce(persisted);
+    const { POST } = await import("@/app/api/artist-radar/route");
+
+    const response = await POST(jsonRequest(VALID_BODY));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(persisted);
+    expect(runOpportunitySearch).not.toHaveBeenCalled();
+    expect(persistAnalysis).not.toHaveBeenCalled();
   });
 
   it("passes a provided executionId through to the pipeline so its status can be polled", async () => {

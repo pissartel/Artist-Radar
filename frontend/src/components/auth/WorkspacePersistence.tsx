@@ -15,6 +15,9 @@ export default function WorkspacePersistence() {
 
     async function synchronizeWorkspace() {
       const client = createClient();
+      // The server validates the HTTP-only anonymous claim token and moves the
+      // analysis atomically. The browser never receives the token itself.
+      await fetch("/api/anonymous-analysis/claim", { method: "POST" }).catch(() => undefined);
       let localWorkspace: unknown = null;
       try {
         const stored = window.localStorage.getItem(STORAGE_KEY);

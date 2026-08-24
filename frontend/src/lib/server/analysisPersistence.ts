@@ -59,13 +59,10 @@ export async function readPersistedAnalysis(
   const { data: authData } = await client.auth.getUser();
 
   if (authData.user) {
-    const { data } = await client
-      .from("artist_workspaces")
-      .select("analysis_result, analysis_fingerprint")
-      .eq("user_id", authData.user.id)
-      .eq("analysis_fingerprint", fingerprint)
-      .maybeSingle();
-    return (data?.analysis_result as ArtistRadarResponse | null) ?? null;
+    const { data } = await client.rpc("read_latest_user_analysis", {
+      requested_fingerprint: fingerprint,
+    });
+    return (data as ArtistRadarResponse | null) ?? null;
   }
 
   const session = await getAnonymousSession(false);
@@ -88,13 +85,12 @@ export async function persistAnalysis(
   const { data: authData } = await client.auth.getUser();
 
   if (authData.user) {
-    await client.from("artist_workspaces").upsert({
-      user_id: authData.user.id,
-      onboarding_data: request,
-      analysis_result: analysis,
-      analysis_fingerprint: fingerprint,
-      updated_at: new Date().toISOString(),
+    const { error } = await client.rpc("persist_user_analysis", {
+      requested_fingerprint: fingerprint,
+      requested_request_data: request,
+      requested_result_data: analysis,
     });
+    if (error) throw error;
     return;
   }
 

@@ -3,6 +3,8 @@ import { Manrope, JetBrains_Mono } from "next/font/google";
 import QueryProvider from "@/components/providers/QueryProvider";
 import ProductFeaturesProvider from "@/components/providers/ProductFeaturesProvider";
 import { isDebugUIVisible } from "@/lib/server/debugUI";
+import { AuthProvider } from "@/components/auth/AuthProvider";
+import WorkspacePersistence from "@/components/auth/WorkspacePersistence";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -36,7 +38,10 @@ export default function RootLayout({
     <html lang="en" className={`${manrope.variable} ${jetbrainsMono.variable}`}>
       <body>
         <ProductFeaturesProvider debugUIVisible={isDebugUIVisible()}>
-          <QueryProvider>{children}</QueryProvider>
+          <AuthProvider>
+            <WorkspacePersistence />
+            <QueryProvider>{children}</QueryProvider>
+          </AuthProvider>
         </ProductFeaturesProvider>
       </body>
     </html>

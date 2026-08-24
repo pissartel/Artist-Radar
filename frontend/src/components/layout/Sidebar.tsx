@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LANDING_ROUTE, NAV_ITEMS } from "@/lib/navigation";
+import AuthLinks from "@/components/auth/AuthLinks";
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -51,6 +52,7 @@ export default function Sidebar() {
         })}
       </nav>
       <div className="mt-auto pt-6 border-t border-border px-2 flex flex-col gap-3">
+        <AuthLinks mobile />
         <Link
           href={LANDING_ROUTE}
           className="text-xs font-semibold text-foreground-muted hover:text-foreground transition-colors"

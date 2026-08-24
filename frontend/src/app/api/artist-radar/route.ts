@@ -2,6 +2,7 @@ import { mapPipelineResultToArtistRadarResponse } from "@/lib/server/artistRadar
 import { ArtistInputSchema, runOpportunitySearch, warnLog } from "@/lib/server/backendPipeline";
 import type { ArtistRadarRequest } from "@/types/artistRadar";
 import { geocodeOpportunities } from "@/lib/server/geocodeOpportunities";
+import { persistAnalysis, readPersistedAnalysis } from "@/lib/server/analysisPersistence";
 
 interface RawRequestBody {
   artistName?: unknown;
@@ -152,6 +153,14 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
+  const persistedAnalysis = await readPersistedAnalysis(artistRadarRequest).catch((error) => {
+    warnLog("analysis-persistence", "Failed to read a persisted analysis", { error });
+    return null;
+  });
+  if (persistedAnalysis) {
+    return Response.json(persistedAnalysis, { status: 200 });
+  }
+
   const missingEnvVars = getMissingRequiredEnvVars();
   if (missingEnvVars.length > 0) {
     warnLog("artist-radar-api", "Missing required server configuration", {
@@ -185,6 +194,10 @@ export async function POST(request: Request): Promise<Response> {
     );
     const response = mapPipelineResultToArtistRadarResponse(result, artistRadarRequest);
     response.bookingOpportunities = await geocodeOpportunities(response.bookingOpportunities);
+
+    await persistAnalysis(artistRadarRequest, response).catch((error) => {
+      warnLog("analysis-persistence", "Failed to persist an analysis", { error });
+    });
 
     return Response.json(response, { status: 200 });
   } catch (error) {

@@ -40,6 +40,11 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
       setMessage("Check your email to confirm your account, then return to your workspace.");
       return;
     }
+    if (mode === "register") {
+      // WorkspacePersistence retries after navigation if this best-effort
+      // handoff is interrupted by a transient network failure.
+      await fetch("/api/anonymous-analysis/claim", { method: "POST" }).catch(() => undefined);
+    }
     router.replace(next);
     router.refresh();
   }

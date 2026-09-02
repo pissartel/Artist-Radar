@@ -8,7 +8,7 @@ export function safeRedirectPath(value: string | null | undefined): string {
   return value;
 }
 
-export function authHref(path: "/login" | "/register", next?: string): string {
+export function authHref(path: "/login" | "/register" | "/signup", next?: string): string {
   const params = new URLSearchParams();
   if (next) params.set("next", safeRedirectPath(next));
   const query = params.toString();

@@ -16,7 +16,7 @@ function ResetPasswordForm() {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const { error: updateError } = await createClient().auth.updateUser({ password });
-    if (updateError) return setError(updateError.message);
+    if (updateError) return setError("This reset link may have expired. Request a fresh link and try again.");
     router.replace(safeRedirectPath(params.get("next")));
   }
   return <form onSubmit={submit} className="flex flex-col gap-4"><label className="flex flex-col gap-2 text-sm font-semibold">New password<Input type="password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} /></label>{error && <p role="alert" className="text-sm text-error">{error}</p>}<Button type="submit" variant="gradient">Update password</Button></form>;

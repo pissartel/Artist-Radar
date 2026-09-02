@@ -20,12 +20,12 @@ function ForgotPasswordForm() {
     const { error } = await createClient().auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(`/reset-password?next=${encodeURIComponent(next)}`)}`,
     });
-    setStatus(error?.message ?? "Check your email for a password reset link.");
+    setStatus(error ? "We could not send the link right now. Check your connection and try again." : "If an account exists for that address, a reset link is on its way. It expires in one hour.");
   }
-  if (!configured) return <p role="alert">Authentication is unavailable.</p>;
+  if (!configured) return <p role="alert" className="text-sm text-warning-text">Authentication is unavailable right now.</p>;
   return <form onSubmit={submit} className="flex flex-col gap-4"><label className="flex flex-col gap-2 text-sm font-semibold">Email<Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>{status && <p role="status" className="text-sm text-foreground-secondary">{status}</p>}<Button type="submit" variant="gradient">Send reset link</Button></form>;
 }
 
 export default function ForgotPasswordPage() {
-  return <AuthPage title="Reset your password" description="We’ll send a secure reset link to your email."><Suspense><ForgotPasswordForm /></Suspense></AuthPage>;
+  return <AuthPage title="Reset your password" description="We will send a secure reset link to your email."><Suspense><ForgotPasswordForm /></Suspense></AuthPage>;
 }

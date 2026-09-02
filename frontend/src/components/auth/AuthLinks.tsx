@@ -29,7 +29,7 @@ export default function AuthLinks({ mobile = false }: { mobile?: boolean }) {
   return (
     <div className={mobile ? "flex flex-col gap-2" : "flex items-center gap-3"}>
       <Link href={authHref("/login", next)} className={buttonClassName("ghost", "px-4 py-2 text-sm")}>Log in</Link>
-      <Link href={authHref("/register", next)} className={buttonClassName("gradient", "px-4 py-2 text-sm")}>
+      <Link href={authHref("/signup", next)} className={buttonClassName("gradient", "px-4 py-2 text-sm")}>
         {mobile ? "Create account" : "Get started"}
       </Link>
     </div>

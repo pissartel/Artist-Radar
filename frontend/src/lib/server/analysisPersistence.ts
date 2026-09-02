@@ -5,7 +5,7 @@ import { createClient } from "@/lib/auth/server";
 import type { ArtistRadarRequest, ArtistRadarResponse } from "@/types/artistRadar";
 
 const ANONYMOUS_SESSION_COOKIE = "artist_radar_anonymous_analysis";
-const RETENTION_SECONDS = 7 * 24 * 60 * 60;
+const RETENTION_SECONDS = 30 * 24 * 60 * 60;
 
 interface AnonymousSession {
   id: string;

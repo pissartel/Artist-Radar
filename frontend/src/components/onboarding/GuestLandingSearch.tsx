@@ -66,7 +66,7 @@ export default function GuestLandingSearch() {
       {!returningGuest && (
         <form onSubmit={submit} className="flex flex-col gap-2.5 sm:flex-row">
           <Input aria-label="Artist name" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Your artist name" className="min-h-14 flex-1 rounded-xl px-[18px] text-base" />
-          <Button variant="gradient" className="min-h-14 whitespace-nowrap px-7 text-base">Try NextStage</Button>
+          <Button type="submit" variant="gradient" className="min-h-14 whitespace-nowrap px-7 text-base">Try NextStage</Button>
         </form>
       )}
       <p className="text-[13px] font-semibold text-muted">Free. No card, no signup. Your results are saved on this device for 30 days.</p>

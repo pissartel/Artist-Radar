@@ -27,6 +27,7 @@ export default function ArtistConfirm() {
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
   const [target, setTarget] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -42,7 +43,16 @@ export default function ArtistConfirm() {
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (!artist || !genre.trim() || !(city.trim() || country.trim())) return;
+    if (!artist) return;
+    if (!genre.trim()) {
+      setError("Add a main genre before continuing.");
+      return;
+    }
+    if (!(city.trim() || country.trim())) {
+      setError("Add your city or country before continuing.");
+      return;
+    }
+    setError(null);
     window.localStorage.setItem(
       "artistRadarOnboardingData",
       JSON.stringify({
@@ -101,11 +111,11 @@ export default function ArtistConfirm() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <label className="rounded-[10px] border border-border bg-background p-3">
             <span className="font-mono text-[10px] uppercase tracking-[.08em] text-muted">Base</span>
-            <Input value={city} onChange={(event) => setCity(event.target.value)} placeholder="City" className="mt-1 border-0 bg-transparent p-0 text-[15px] font-bold focus:shadow-none" />
+            <Input value={city} onChange={(event) => { setCity(event.target.value); setError(null); }} placeholder="City" className="mt-1 border-0 bg-transparent p-0 text-[15px] font-bold focus:shadow-none" />
           </label>
           <label className="rounded-[10px] border border-border bg-background p-3">
             <span className="font-mono text-[10px] uppercase tracking-[.08em] text-muted">Country</span>
-            <Input value={country} onChange={(event) => setCountry(event.target.value)} placeholder="Country" className="mt-1 border-0 bg-transparent p-0 text-[15px] font-bold focus:shadow-none" />
+            <Input value={country} onChange={(event) => { setCountry(event.target.value); setError(null); }} placeholder="Country" className="mt-1 border-0 bg-transparent p-0 text-[15px] font-bold focus:shadow-none" />
           </label>
           <div className="rounded-[10px] border border-border bg-background p-3">
             <span className="font-mono text-[10px] uppercase tracking-[.08em] text-muted">Followers</span>
@@ -118,13 +128,14 @@ export default function ArtistConfirm() {
         </div>
         <label className="text-[13px] font-semibold text-foreground-secondary">
           Main genre
-          <Input required value={genre} onChange={(event) => setGenre(event.target.value)} placeholder="e.g. Indie pop" className="mt-2" />
+          <Input required value={genre} onChange={(event) => { setGenre(event.target.value); setError(null); }} placeholder="e.g. Indie pop" className="mt-2" />
         </label>
         <label className="text-[13px] font-semibold text-foreground-secondary">
           Where do you want to play? <span className="text-muted">Optional</span>
           <Input value={target} onChange={(event) => setTarget(event.target.value)} placeholder="e.g. France, Belgium, Germany" className="mt-2" />
         </label>
-        <Button variant="gradient" className="w-full py-[15px] text-base">Analyze my artist</Button>
+        {error && <p role="alert" className="text-[13px] font-semibold text-warning-text">{error}</p>}
+        <Button type="submit" variant="gradient" className="w-full py-[15px] text-base">Analyze my profile</Button>
       </form>
       <p className="text-center text-[13px] font-semibold text-muted">Takes about two minutes. You can close this tab and come back.</p>
     </main>

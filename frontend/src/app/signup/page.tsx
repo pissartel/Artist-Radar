@@ -39,7 +39,7 @@ function SignupContent() {
           <Logo size={30} />
           <section>
             <h1 className="text-[26px] font-extrabold tracking-[-.02em]">Create your account</h1>
-            <p className="mb-6 mt-1.5 text-[15px] text-foreground-muted">Two fields now. We find your artist next.</p>
+            <p className="mb-6 mt-1.5 text-[15px] text-foreground-muted">Create your secure login. We find your artist next.</p>
             <AuthForm mode="register" />
           </section>
         </div>

@@ -8,7 +8,7 @@ export default function MarketingNav() {
       <Link href="/" aria-label="NextStage home"><Logo size={30} /></Link>
       <nav className="flex items-center gap-3 sm:gap-[22px]" aria-label="Account">
         <Link href="/login" className="text-sm font-semibold text-foreground-secondary hover:text-foreground">Log in</Link>
-        <Link href="/signup?next=%2Fstart" className={buttonClassName("secondary", "px-4 py-2.5")}>Create account</Link>
+        <Link href="/signup?next=%2Fstart" className={buttonClassName("secondary", "px-4 py-2.5")}>Sign up</Link>
       </nav>
     </header>
   );

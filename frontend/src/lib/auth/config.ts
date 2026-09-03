@@ -17,3 +17,13 @@ export function getAuthConfig() {
 
   return { url, anonKey };
 }
+
+export type OAuthProvider = "google" | "apple";
+
+/** OAuth buttons are opt-in so an unconfigured Supabase provider can never be a dead end. */
+export function enabledOAuthProviders(): OAuthProvider[] {
+  const providers: OAuthProvider[] = [];
+  if (process.env.NEXT_PUBLIC_AUTH_GOOGLE_ENABLED === "true") providers.push("google");
+  if (process.env.NEXT_PUBLIC_AUTH_APPLE_ENABLED === "true") providers.push("apple");
+  return providers;
+}

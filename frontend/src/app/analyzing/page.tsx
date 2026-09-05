@@ -100,7 +100,7 @@ export default function AnalyzingPage() {
           const finding = findings.get(index);
           return (
             <li key={stage} className={`ns-stage-row flex items-start gap-3.5 rounded-xl px-4 py-3.5 transition-[background] duration-200 ${isActive ? "bg-primary/[.07]" : ""}`}>
-              <span className={`mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${isComplete ? "bg-success-tint text-success-text" : isActive ? "ns-stage-dot--active animate-ns-pulse" : "border border-white/10 text-muted"}`} aria-hidden="true">
+              <span className={`mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors duration-200 ${isComplete ? "bg-success-tint text-success-text" : isActive ? "border-2 border-loader-track border-t-accent-text animate-ns-spin" : "border border-white/10 text-muted"}`} aria-hidden="true">
                 {isComplete ? "✓" : isActive ? "" : index + 1}
               </span>
               <span>

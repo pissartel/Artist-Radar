@@ -1,35 +1,14 @@
-import Image from "next/image";
 import Link from "next/link";
-import AuthLinks from "@/components/auth/AuthLinks";
+import Logo from "@/components/brand/Logo";
+import { buttonClassName } from "@/components/ui/Button";
 
 export default function MarketingNav() {
   return (
-    <header className="flex items-center justify-between px-6 sm:px-14 py-6 border-b border-border">
-      <Link href="/" className="flex items-center gap-3">
-        <Image
-          src="/brand/logo-next-stage-dark.png"
-          alt="NextStage"
-          width={136}
-          height={32}
-          priority
-          className="h-7 w-auto sm:h-8"
-        />
-      </Link>
-      <nav className="flex items-center gap-4 sm:gap-9">
-        <a
-          href="#features"
-          className="hidden sm:inline text-sm font-semibold text-foreground-secondary hover:text-foreground transition-colors"
-        >
-          Features
-        </a>
-        <a
-          href="#how-it-works"
-          className="hidden sm:inline text-sm font-semibold text-foreground-secondary hover:text-foreground transition-colors"
-        >
-          How it works
-        </a>
-        <div className="hidden sm:block"><AuthLinks /></div>
-        <div className="sm:hidden"><AuthLinks mobile /></div>
+    <header className="flex items-center justify-between border-b border-border px-5 py-5 sm:px-14">
+      <Link href="/" aria-label="NextStage home"><Logo size={30} /></Link>
+      <nav className="flex items-center gap-3 sm:gap-[22px]" aria-label="Account">
+        <Link href="/login" className="text-sm font-semibold text-foreground-secondary hover:text-foreground">Log in</Link>
+        <Link href="/signup?next=%2Fstart" className={buttonClassName("secondary", "px-4 py-2.5")}>Sign up</Link>
       </nav>
     </header>
   );

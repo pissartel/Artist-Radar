@@ -85,3 +85,9 @@ textarea:-webkit-autofill:focus {
 .ecosystem-popup small { color: #6e6c7a; }
 .ecosystem-popup button { padding: 0; border: 0; background: transparent; color: #6b21a8; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
 .marker-cluster div { background: var(--primary); color: white; font-weight: 700; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  .ns-stage-row, .ns-input, .ns-btn, .ns-card { transition-duration: 150ms !important; }
+  .ns-stage-dot--active { opacity: 1 !important; border: 2px solid rgba(192,132,252,.55) !important; }
+}

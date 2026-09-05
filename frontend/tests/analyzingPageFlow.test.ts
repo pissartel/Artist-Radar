@@ -26,4 +26,9 @@ describe("analyzing page: loading state exit paths", () => {
     expect(source).toMatch(/state\.status !== "success"/);
     expect(source).toMatch(/router\.replace\("\/overview"\)/);
   });
+
+  it("shows a spinning progress indicator for whichever pipeline stage is active", () => {
+    expect(source).toMatch(/isActive \? "border-2 border-loader-track border-t-accent-text animate-ns-spin"/);
+    expect(source).toMatch(/isComplete \? "bg-success-tint text-success-text"/);
+  });
 });

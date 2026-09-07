@@ -63,3 +63,18 @@ list:
 Use the actual production domain and Vercel team/account slug. Keep a provider's
 feature flag `false` until its credentials and all relevant callbacks have been
 verified. Login and signup share this configuration and callback route.
+
+## Supabase signup email
+
+Email/password signup and confirmation resend both send users through
+`/auth/callback?next=...`. In **Supabase Authentication → URL Configuration**,
+the Site URL and redirect allow list must therefore include the same production,
+preview, and local callback URLs listed above.
+
+In **Authentication → Providers → Email**, enable the Email provider and the
+Confirm email option. Supabase's built-in mail service is intended for limited
+testing and may be rate-limited; configure project SMTP settings for reliable
+production delivery. If signup succeeds without a session but no message arrives,
+check the project's Auth logs, email template, SMTP credentials/sender, rate
+limits, and the recipient's spam folder. These dashboard settings cannot be
+validated from the application repository.

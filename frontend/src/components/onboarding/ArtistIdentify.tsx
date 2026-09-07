@@ -107,30 +107,21 @@ export default function ArtistIdentify() {
       <section>
         <h1 className="text-[30px] font-extrabold tracking-[-.02em]">Which one is you?</h1>
         <p className="mt-2 text-[15px] text-foreground-secondary">
-          {items ? <>We found {items.length} artists matching <strong className="text-foreground">{query}</strong>. Pick yours and we pull the rest from the streaming platforms.</> : <>Searching Spotify, Deezer and MusicBrainz for <strong className="text-foreground">{query}</strong>…</>}
+          {items ? <>We found {items.length} artists matching <strong className="text-foreground">{query}</strong>. Pick yours and we pull the rest from the streaming platforms.</> : <>Checking artist profiles across music platforms. This may take a few seconds.</>}
         </p>
       </section>
 
       {!items && !error && (
-        <div className="flex flex-col gap-4" role="status" aria-live="polite">
-          <div className="flex items-center gap-3 rounded-xl border border-primary/30 bg-accent-tint px-4 py-3.5 text-left">
-            <span className="h-5 w-5 shrink-0 animate-ns-spin rounded-full border-2 border-primary/25 border-t-accent-text" aria-hidden="true" />
-            <span>
-              <strong className="block text-sm text-foreground">Searching for your artist</strong>
-              <span className="mt-0.5 block text-[13px] text-foreground-secondary">Checking artist profiles across music platforms. This may take a few seconds.</span>
-            </span>
-          </div>
-          <div className="flex flex-col gap-2.5" aria-hidden="true">
+        <div className="flex flex-col gap-2.5" role="status" aria-live="polite" aria-label="Searching for artist profiles">
           {[1, 2, 3].map((number) => (
-            <div key={number} className="flex gap-3.5 rounded-xl border border-border bg-surface p-4">
-              <span className="h-[52px] w-[52px] shrink-0 rounded-full bg-surface-elevated animate-ns-sheen" />
+            <div key={number} className="flex animate-ns-sheen gap-3.5 rounded-xl border border-border bg-[linear-gradient(110deg,var(--color-surface)_35%,var(--color-surface-elevated)_50%,var(--color-surface)_65%)] bg-[length:200%_100%] p-4" aria-hidden="true">
+              <span className="h-[52px] w-[52px] shrink-0 rounded-full bg-surface-elevated" />
               <span className="flex flex-1 flex-col justify-center gap-2">
-                <i className="h-3 w-[44%] rounded-md bg-surface-elevated animate-ns-sheen" />
-                <i className="h-2.5 w-[66%] rounded-md bg-surface-elevated animate-ns-sheen" />
+                <i className="h-3 w-[44%] rounded-md bg-surface-elevated" />
+                <i className="h-2.5 w-[66%] rounded-md bg-surface-elevated" />
               </span>
             </div>
           ))}
-          </div>
         </div>
       )}
       {error && <SearchState title="We could not search right now" body="Check your connection and try the artist search again." action={() => window.location.reload()} />}

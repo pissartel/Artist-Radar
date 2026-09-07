@@ -30,11 +30,14 @@ describe("issue #255 guest onboarding and conversion", () => {
     expect(confirmation).toContain('router.push("/analyzing")');
   });
 
-  it("shows an explicit artist-search loading status", () => {
+  it("shows a concise artist-search loading state with shimmer placeholders", () => {
     const identify = source("components/onboarding/ArtistIdentify.tsx");
     expect(identify).toContain('role="status"');
-    expect(identify).toContain("Searching for your artist");
-    expect(identify).toContain("animate-ns-spin");
+    expect(identify).toContain("Checking artist profiles across music platforms. This may take a few seconds.");
+    expect(identify).not.toContain("Searching Spotify, Deezer and MusicBrainz");
+    expect(identify).not.toContain("Searching for your artist</strong>");
+    expect(identify).toContain("animate-ns-sheen");
+    expect(identify).toContain("bg-[length:200%_100%]");
   });
 
   it("validates signup password confirmation and gates OAuth providers", () => {

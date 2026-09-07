@@ -22,6 +22,14 @@ describe("issue #255 guest onboarding and conversion", () => {
     expect(confirmation).toContain('role="alert"');
   });
 
+  it("does not block artist confirmation when enrichment has no genre or location", () => {
+    const confirmation = source("components/onboarding/ArtistConfirm.tsx");
+    expect(confirmation).not.toContain("Add a main genre before continuing.");
+    expect(confirmation).not.toContain("Add your city or country before continuing.");
+    expect(confirmation).not.toMatch(/<Input required value=\{genre\}/);
+    expect(confirmation).toContain('router.push("/analyzing")');
+  });
+
   it("shows an explicit artist-search loading status", () => {
     const identify = source("components/onboarding/ArtistIdentify.tsx");
     expect(identify).toContain('role="status"');

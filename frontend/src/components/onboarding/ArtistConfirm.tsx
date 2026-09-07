@@ -44,36 +44,33 @@ export default function ArtistConfirm() {
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!artist) return;
-    if (!genre.trim()) {
-      setError("Add a main genre before continuing.");
-      return;
-    }
-    if (!(city.trim() || country.trim())) {
-      setError("Add your city or country before continuing.");
-      return;
-    }
     setError(null);
-    window.localStorage.setItem(
-      "artistRadarOnboardingData",
-      JSON.stringify({
-        artistName: artist.name,
-        spotifyUrl: artist.spotifyUrl ?? "",
-        youtubeUrl: "",
-        instagramUrl: "",
-        websiteUrl: "",
-        countryOfOrigin: country.trim() || target.trim() || city.trim(),
-        city: city.trim() || country.trim(),
-        mainGenre: genre.trim(),
-        secondaryGenres: artist.genres.slice(1).join(", "),
-        targetLocation: target.trim(),
-        mainGoal: "booking_opportunities",
-        useChartmetricEnrichment: false,
-        chartmetricToggleVisible: false,
-        usePreviewData: false,
-        previewDataToggleVisible: false,
-        guestCreatedAt: new Date().toISOString(),
-      })
-    );
+    try {
+      window.localStorage.setItem(
+        "artistRadarOnboardingData",
+        JSON.stringify({
+          artistName: artist.name,
+          spotifyUrl: artist.spotifyUrl ?? "",
+          youtubeUrl: "",
+          instagramUrl: "",
+          websiteUrl: "",
+          countryOfOrigin: country.trim(),
+          city: city.trim(),
+          mainGenre: genre.trim(),
+          secondaryGenres: artist.genres.slice(1).join(", "),
+          targetLocation: target.trim(),
+          mainGoal: "booking_opportunities",
+          useChartmetricEnrichment: false,
+          chartmetricToggleVisible: false,
+          usePreviewData: false,
+          previewDataToggleVisible: false,
+          guestCreatedAt: new Date().toISOString(),
+        })
+      );
+    } catch {
+      setError("We couldn't save these details. Check that browser storage is enabled, then try again.");
+      return;
+    }
     clearArtistRadarResponse();
     router.push("/analyzing");
   }
@@ -128,7 +125,7 @@ export default function ArtistConfirm() {
         </div>
         <label className="text-[13px] font-semibold text-foreground-secondary">
           Main genre
-          <Input required value={genre} onChange={(event) => { setGenre(event.target.value); setError(null); }} placeholder="e.g. Indie pop" className="mt-2" />
+          <Input value={genre} onChange={(event) => { setGenre(event.target.value); setError(null); }} placeholder="e.g. Indie pop (optional)" className="mt-2" />
         </label>
         <label className="text-[13px] font-semibold text-foreground-secondary">
           Where do you want to play? <span className="text-muted">Optional</span>

@@ -77,6 +77,17 @@ describe("issue #255 guest onboarding and conversion", () => {
     expect(auth).not.toContain("setError(providerError.message)");
   });
 
+  it("resends signup confirmation with the original callback and a cooldown", () => {
+    const verify = source("app/signup/verify/page.tsx");
+    expect(verify).toContain('type: "signup"');
+    expect(verify).toContain("options: { emailRedirectTo }");
+    expect(verify).toContain("/auth/callback?next=");
+    expect(verify).toContain("Confirmation email sent again.");
+    expect(verify).toContain("RESEND_COOLDOWN_SECONDS");
+    expect(verify).toContain("if (!email || resending || cooldown > 0) return");
+    expect(verify).toContain("Return to sign up");
+  });
+
   it("implements the approved four-animation system and reduced motion fallback", () => {
     const config = source("../tailwind.config.ts");
     const globals = source("app/globals.css");

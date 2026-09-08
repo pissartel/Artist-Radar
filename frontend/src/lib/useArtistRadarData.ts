@@ -10,6 +10,10 @@ import {
 import { readOnboardingRequest } from "@/lib/onboardingRequest";
 import type { ArtistRadarRequest, ArtistRadarResponse } from "@/types/artistRadar";
 import { createPreviewArtistRadarResponse } from "@/lib/previewData";
+import {
+  buildArtistRadarQueryKey,
+  selectRestoredArtistRadarRequest,
+} from "@/lib/artistRadarRequestIdentity";
 
 export type ArtistRadarDataState =
   | { status: "checking-onboarding" }
@@ -25,17 +29,6 @@ export interface UseArtistRadarDataResult {
   // GET /api/artist-radar/status/[executionId] for real pipeline stage
   // progress (issue #135). Null until the onboarding request has been read.
   executionId: string | null;
-}
-
-function buildQueryKey(request: ArtistRadarRequest | null) {
-  return [
-    "artistRadar",
-    request?.artistName ?? null,
-    request?.genre ?? null,
-    request?.location ?? null,
-    request?.enableBooking ?? null,
-    request?.previewData ?? null,
-  ] as const;
 }
 
 function toErrorMessage(error: unknown): string {
@@ -58,7 +51,13 @@ export function useArtistRadarData(): UseArtistRadarDataResult {
       const onboardingRequest = readOnboardingRequest();
       // Attach a fresh executionId so a real analysis run can be polled for
       // progress; harmless for pages that don't poll it (see backendTypes.ts).
-      setRequest(onboardingRequest ? { ...onboardingRequest, executionId: crypto.randomUUID() } : onboardingRequest);
+      setRequest((currentRequest) =>
+        selectRestoredArtistRadarRequest(
+          currentRequest,
+          onboardingRequest,
+          () => crypto.randomUUID()
+        )
+      );
     }
     loadRequest();
     window.addEventListener("artist-radar-workspace-restored", loadRequest);
@@ -66,7 +65,7 @@ export function useArtistRadarData(): UseArtistRadarDataResult {
   }, []);
 
   const query: UseQueryResult<ArtistRadarResponse> = useQuery({
-    queryKey: buildQueryKey(request ?? null),
+    queryKey: buildArtistRadarQueryKey(request ?? null),
     queryFn: async () => {
       const activeRequest = request as ArtistRadarRequest;
       const data = activeRequest.previewData

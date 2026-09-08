@@ -1,21 +1,11 @@
 import type { ArtistRadarRequest, ArtistRadarResponse } from "@/types/artistRadar";
+import { buildArtistRadarRequestKey } from "@/lib/artistRadarRequestIdentity";
 
 const STORAGE_KEY = "artistRadarResponse:v1";
 
 interface CachedArtistRadarResponse {
   requestKey: string;
   data: ArtistRadarResponse;
-}
-
-function buildRequestKey(request: ArtistRadarRequest): string {
-  return JSON.stringify({
-    artistName: request.artistName,
-    genre: request.genre,
-    location: request.location,
-    enableBooking: request.enableBooking,
-    spotifyUrl: request.spotifyUrl,
-    features: request.features,
-  });
 }
 
 function isCachedResponse(value: unknown): value is CachedArtistRadarResponse {
@@ -40,7 +30,7 @@ export function readArtistRadarResponse(
     if (!raw) return undefined;
 
     const cached: unknown = JSON.parse(raw);
-    if (!isCachedResponse(cached) || cached.requestKey !== buildRequestKey(request)) {
+    if (!isCachedResponse(cached) || cached.requestKey !== buildArtistRadarRequestKey(request)) {
       return undefined;
     }
 
@@ -56,7 +46,7 @@ export function writeArtistRadarResponse(
 ): void {
   try {
     const cached: CachedArtistRadarResponse = {
-      requestKey: buildRequestKey(request),
+      requestKey: buildArtistRadarRequestKey(request),
       data,
     };
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(cached));

@@ -48,6 +48,26 @@ describe("Artist Radar response cache", () => {
     expect(readArtistRadarResponse({ ...REQUEST, artistName: "Another Artist" })).toBeUndefined();
   });
 
+  it("does not reuse a response for a different reference country", () => {
+    writeArtistRadarResponse({ ...REQUEST, referenceCountry: "France" }, RESPONSE);
+
+    expect(
+      readArtistRadarResponse({ ...REQUEST, referenceCountry: "Belgium" })
+    ).toBeUndefined();
+  });
+
+  it("does not reuse a response for different preview or feature inputs", () => {
+    writeArtistRadarResponse(REQUEST, RESPONSE);
+
+    expect(readArtistRadarResponse({ ...REQUEST, previewData: true })).toBeUndefined();
+    expect(
+      readArtistRadarResponse({
+        ...REQUEST,
+        features: { chartmetricArtistEnrichment: true },
+      })
+    ).toBeUndefined();
+  });
+
   it("ignores malformed stored data", () => {
     window.sessionStorage.setItem("artistRadarResponse:v1", "{not-json");
 

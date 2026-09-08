@@ -114,7 +114,7 @@ export default function ArtistIdentify() {
       {!items && !error && (
         <div className="flex flex-col gap-2.5" role="status" aria-live="polite" aria-label="Searching for artist profiles">
           {[1, 2, 3].map((number) => (
-            <div key={number} className="flex animate-ns-sheen gap-3.5 rounded-xl border border-border bg-[linear-gradient(110deg,var(--color-surface)_35%,var(--color-surface-elevated)_50%,var(--color-surface)_65%)] bg-[length:200%_100%] p-4" aria-hidden="true">
+            <div key={number} className="artist-search-skeleton flex gap-3.5 overflow-hidden rounded-xl border border-border bg-surface p-4" aria-hidden="true">
               <span className="h-[52px] w-[52px] shrink-0 rounded-full bg-surface-elevated" />
               <span className="flex flex-1 flex-col justify-center gap-2">
                 <i className="h-3 w-[44%] rounded-md bg-surface-elevated" />

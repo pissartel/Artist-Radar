@@ -7,17 +7,8 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { createClient } from "@/lib/auth/client";
 import { enabledOAuthProviders, isAuthConfigured, type OAuthProvider } from "@/lib/auth/config";
+import { PASSWORD_MIN_LENGTH, passwordValidation } from "@/lib/auth/password";
 import { safeRedirectPath } from "@/lib/auth/redirect";
-
-const PASSWORD_MIN_LENGTH = 8;
-
-function passwordValidation(password: string): string | null {
-  if (password.length < PASSWORD_MIN_LENGTH) return `Use at least ${PASSWORD_MIN_LENGTH} characters.`;
-  if (!/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
-    return "Include an uppercase letter, a lowercase letter, and a number.";
-  }
-  return null;
-}
 
 function friendlyError(message: string): string {
   const value = message.toLowerCase();
@@ -123,7 +114,7 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
         <Input placeholder="you@band.com" error={Boolean(error)} type="email" autoComplete="email" required disabled={loading} value={email} onChange={(event) => { setEmail(event.target.value); setError(null); }} />
       </label>
       <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-foreground-secondary">
-        <span className="flex justify-between">Password{mode === "login" && <Link href={`/forgot-password?next=${encodeURIComponent(next)}`} className="text-accent-text">Forgot?</Link>}</span>
+        <span className="flex justify-between">Password{mode === "login" && <Link href={`/forgot-password?next=${encodeURIComponent(next)}`} className="text-accent-text">Forgot password?</Link>}</span>
         <span className="relative">
           <Input placeholder={mode === "login" ? "Your password" : "At least 8 characters"} error={Boolean(error || passwordError)} type={showPassword ? "text" : "password"} minLength={mode === "register" ? PASSWORD_MIN_LENGTH : undefined} autoComplete={mode === "login" ? "current-password" : "new-password"} required disabled={loading} value={password} onBlur={() => setPasswordTouched(true)} onChange={(event) => { setPassword(event.target.value); setError(null); }} className="pr-16" />
           <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute inset-y-0 right-3 text-xs font-bold text-accent-text" aria-label={`${showPassword ? "Hide" : "Show"} password`}>{showPassword ? "Hide" : "Show"}</button>

@@ -14,3 +14,8 @@ export function authHref(path: "/login" | "/register" | "/signup", next?: string
   const query = params.toString();
   return query ? `${path}?${query}` : path;
 }
+
+export function recoveryCallbackUrl(origin: string, next?: string | null): string {
+  const resetPath = `/reset-password?next=${encodeURIComponent(safeRedirectPath(next))}`;
+  return `${origin}/auth/callback?next=${encodeURIComponent(resetPath)}`;
+}

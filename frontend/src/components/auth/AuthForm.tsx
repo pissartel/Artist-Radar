@@ -7,7 +7,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { createClient } from "@/lib/auth/client";
 import { enabledOAuthProviders, isAuthConfigured, type OAuthProvider } from "@/lib/auth/config";
-import { safeRedirectPath } from "@/lib/auth/redirect";
+import { authCallbackUrl, safeRedirectPath } from "@/lib/auth/redirect";
 
 const PASSWORD_MIN_LENGTH = 8;
 
@@ -57,7 +57,7 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
     setLoadingMethod("password");
     try {
       const client = createClient();
-      const callback = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+      const callback = authCallbackUrl(window.location.origin, next);
       const result = mode === "login"
         ? await client.auth.signInWithPassword({ email, password })
         : await client.auth.signUp({ email, password, options: { emailRedirectTo: callback } });

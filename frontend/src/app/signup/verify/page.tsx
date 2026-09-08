@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import Logo from "@/components/brand/Logo";
 import Button, { buttonClassName } from "@/components/ui/Button";
 import { createClient } from "@/lib/auth/client";
-import { safeRedirectPath } from "@/lib/auth/redirect";
+import { authCallbackUrl, safeRedirectPath } from "@/lib/auth/redirect";
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
@@ -29,7 +29,7 @@ function SignupVerifyContent() {
     setResending(true);
     setStatus(null);
     try {
-      const emailRedirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+      const emailRedirectTo = authCallbackUrl(window.location.origin, next);
       const { error } = await createClient().auth.resend({
         type: "signup",
         email,

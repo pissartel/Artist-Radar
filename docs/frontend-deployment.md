@@ -56,9 +56,8 @@ the Site URL and add the callback for every environment to the redirect allow
 list:
 
 - `http://localhost:3000/auth/callback`
-- `https://<production-nextstage-domain>/auth/callback`
-- the Vercel preview callback pattern for this project, for example
-  `https://*-<vercel-team-or-account>.vercel.app/auth/callback`
+- `https://next-stage.io/auth/callback`
+- the Vercel preview pattern `https://*-<vercel-team-or-account>.vercel.app/**`
 
 Use the actual production domain and Vercel team/account slug. Keep a provider's
 feature flag `false` until its credentials and all relevant callbacks have been
@@ -70,6 +69,14 @@ Email/password signup and confirmation resend both send users through
 `/auth/callback?next=...`. In **Supabase Authentication → URL Configuration**,
 the Site URL and redirect allow list must therefore include the same production,
 preview, and local callback URLs listed above.
+
+In **Authentication → Email Templates → Confirm signup**, the confirmation link
+must use `<a href="{{ .ConfirmationURL }}">...</a>`. `ConfirmationURL` carries
+the `emailRedirectTo` value supplied by the app. Do not build the link from
+`{{ .SiteURL }}`: that discards the callback and reproduces the broken
+`https://next-stage.io/?code=...` redirect. After changing the dashboard, send a
+fresh confirmation message (old messages retain their original URL) and verify
+that its final URL begins with the environment's `/auth/callback?code=` route.
 
 In **Authentication → Providers → Email**, enable the Email provider and the
 Confirm email option. Supabase's built-in mail service is intended for limited

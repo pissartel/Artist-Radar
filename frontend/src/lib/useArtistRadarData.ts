@@ -54,10 +54,15 @@ export function useArtistRadarData(): UseArtistRadarDataResult {
   const [request, setRequest] = useState<ArtistRadarRequest | null | undefined>(undefined);
 
   useEffect(() => {
-    const onboardingRequest = readOnboardingRequest();
-    // Attach a fresh executionId so a real analysis run can be polled for
-    // progress; harmless for pages that don't poll it (see backendTypes.ts).
-    setRequest(onboardingRequest ? { ...onboardingRequest, executionId: crypto.randomUUID() } : onboardingRequest);
+    function loadRequest() {
+      const onboardingRequest = readOnboardingRequest();
+      // Attach a fresh executionId so a real analysis run can be polled for
+      // progress; harmless for pages that don't poll it (see backendTypes.ts).
+      setRequest(onboardingRequest ? { ...onboardingRequest, executionId: crypto.randomUUID() } : onboardingRequest);
+    }
+    loadRequest();
+    window.addEventListener("artist-radar-workspace-restored", loadRequest);
+    return () => window.removeEventListener("artist-radar-workspace-restored", loadRequest);
   }, []);
 
   const query: UseQueryResult<ArtistRadarResponse> = useQuery({

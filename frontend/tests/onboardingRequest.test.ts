@@ -41,6 +41,39 @@ describe("readOnboardingRequest", () => {
     expect(readOnboardingRequest()).toBeNull();
   });
 
+  it("uses broad fallbacks when artist enrichment has no genre or location", () => {
+    stubLocalStorage(
+      JSON.stringify(
+        onboardingData({
+          countryOfOrigin: "",
+          city: "",
+          mainGenre: "",
+          targetLocation: "",
+        })
+      )
+    );
+
+    expect(readOnboardingRequest()).toMatchObject({
+      artistName: "Tuesday Fall",
+      genre: "music",
+      location: "Worldwide",
+    });
+  });
+
+  it("uses the optional target location before the worldwide fallback", () => {
+    stubLocalStorage(
+      JSON.stringify(
+        onboardingData({
+          countryOfOrigin: "",
+          city: "",
+          targetLocation: "Berlin",
+        })
+      )
+    );
+
+    expect(readOnboardingRequest()?.location).toBe("Berlin");
+  });
+
   it("omits the Chartmetric feature field for a standard production-shaped request (toggle never rendered)", () => {
     stubLocalStorage(
       JSON.stringify(

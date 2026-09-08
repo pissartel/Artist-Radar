@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { authCallbackUrl } from "@/lib/auth/redirect";
+import {
+  AUTH_REDIRECT_COOKIE,
+  authCallbackUrl,
+  persistAuthRedirectIntent,
+} from "@/lib/auth/redirect";
 
 const { exchangeCodeForSession, claimAnonymousAnalysis } = vi.hoisted(() => ({
   exchangeCodeForSession: vi.fn(),
@@ -25,25 +29,33 @@ describe("signup email confirmation", () => {
   it.each([
     "https://next-stage.io",
     "https://artist-radar-git-bigfeature-auth-example.vercel.app",
-  ])("builds an origin-specific callback for %s", (origin) => {
-    expect(authCallbackUrl(origin, "/opportunities?tab=booking")).toBe(
-      `${origin}/auth/callback?next=%2Fopportunities%3Ftab%3Dbooking`,
-    );
+  ])("builds an exact, allow-listed callback for %s", (origin) => {
+    expect(authCallbackUrl(origin)).toBe(`${origin}/auth/callback`);
   });
 
-  it("falls back to a safe internal next route", () => {
-    expect(authCallbackUrl("https://next-stage.io", "https://attacker.example")).toBe(
-      "https://next-stage.io/auth/callback?next=%2Foverview",
+  it("generates the exact signup/resend redirect and persists next separately", () => {
+    vi.stubGlobal("document", { cookie: "" });
+
+    expect(persistAuthRedirectIntent(
+      "https://next-stage.io",
+      "/opportunities?tab=booking",
+    )).toBe("https://next-stage.io/auth/callback");
+    expect(document.cookie).toContain(
+      `${AUTH_REDIRECT_COOKIE}=%2Fopportunities%3Ftab%3Dbooking`,
     );
+
+    vi.unstubAllGlobals();
   });
 
-  it("exchanges the PKCE code and redirects to the intended route", async () => {
+  it("exchanges the PKCE code and redirects to the separately persisted intent", async () => {
     const response = await GET(new Request(
-      "https://next-stage.io/auth/callback?code=fresh-confirmation-code&next=%2Fopportunities",
+      "https://next-stage.io/auth/callback?code=fresh-confirmation-code",
+      { headers: { cookie: `${AUTH_REDIRECT_COOKIE}=%2Fopportunities%3Ftab%3Dbooking` } },
     ));
 
     expect(exchangeCodeForSession).toHaveBeenCalledWith("fresh-confirmation-code");
     expect(claimAnonymousAnalysis).toHaveBeenCalledOnce();
-    expect(response.headers.get("location")).toBe("https://next-stage.io/opportunities");
+    expect(response.headers.get("location")).toBe("https://next-stage.io/opportunities?tab=booking");
+    expect(response.headers.get("set-cookie")).toContain(`${AUTH_REDIRECT_COOKIE}=;`);
   });
 });

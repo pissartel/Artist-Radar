@@ -65,10 +65,12 @@ verified. Login and signup share this configuration and callback route.
 
 ## Supabase signup email
 
-Email/password signup and confirmation resend both send users through
-`/auth/callback?next=...`. In **Supabase Authentication → URL Configuration**,
-the Site URL and redirect allow list must therefore include the same production,
-preview, and local callback URLs listed above.
+Email/password signup and confirmation resend both use the exact
+`/auth/callback` URL. The app stores the intended post-confirmation path in a
+short-lived same-site cookie, so email confirmation does not depend on Supabase
+redirect wildcard matching. In **Supabase Authentication → URL Configuration**,
+the redirect allow list must include the same production, preview, and local
+callback URLs listed above.
 
 In **Authentication → Email Templates → Confirm signup**, the confirmation link
 must use `<a href="{{ .ConfirmationURL }}">...</a>`. `ConfirmationURL` carries

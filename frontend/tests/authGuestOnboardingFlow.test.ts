@@ -84,7 +84,7 @@ describe("issue #255 guest onboarding and conversion", () => {
     const verify = source("app/signup/verify/page.tsx");
     expect(verify).toContain('type: "signup"');
     expect(verify).toContain("options: { emailRedirectTo }");
-    expect(verify).toContain("authCallbackUrl(window.location.origin, next)");
+    expect(verify).toContain("persistAuthRedirectIntent(window.location.origin, next)");
     expect(verify).toContain("Confirmation email sent again.");
     expect(verify).toContain("RESEND_COOLDOWN_SECONDS");
     expect(verify).toContain("if (!email || resending || cooldown > 0) return");

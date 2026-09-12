@@ -31,7 +31,7 @@ const COUNTRY_PLACES: Record<string, PreviewPlace[]> = {
 };
 
 const DEFAULT_PLACES = COUNTRY_PLACES.france;
-const TYPE_TITLES: Record<OpportunityType, string> = {
+  const TYPE_TITLES: Record<OpportunityType, string> = {
   venue: "The Foundry Live Room",
   concert: "Northern Lights Indie Night",
   festival: "Riverside Sounds Festival",

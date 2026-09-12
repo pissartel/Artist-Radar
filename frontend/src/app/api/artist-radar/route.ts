@@ -3,6 +3,7 @@ import { ArtistInputSchema, runOpportunitySearch, warnLog } from "@/lib/server/b
 import type { ArtistRadarRequest } from "@/types/artistRadar";
 import { geocodeOpportunities } from "@/lib/server/geocodeOpportunities";
 import { persistAnalysis, readPersistedAnalysis } from "@/lib/server/analysisPersistence";
+import { createIndustryKnowledgeRepository } from "@/lib/server/industryKnowledgeRepository";
 
 interface RawRequestBody {
   artistName?: unknown;
@@ -184,16 +185,23 @@ export async function POST(request: Request): Promise<Response> {
       spotifyUrl: isValidHttpUrl(artistRadarRequest.spotifyUrl) ? artistRadarRequest.spotifyUrl : undefined,
     });
 
+    const industryKnowledgeRepository = await createIndustryKnowledgeRepository();
     const searchOptions = {
       ...(artistRadarRequest.executionId ? { executionId: artistRadarRequest.executionId } : {}),
       ...(artistRadarRequest.features ? { features: artistRadarRequest.features } : {}),
+      ...(industryKnowledgeRepository ? { industryKnowledgeRepository } : {}),
     };
     const result = await runOpportunitySearch(
       input,
       Object.keys(searchOptions).length > 0 ? searchOptions : undefined
     );
     const response = mapPipelineResultToArtistRadarResponse(result, artistRadarRequest);
-    response.bookingOpportunities = await geocodeOpportunities(response.bookingOpportunities);
+    response.bookingOpportunities = await geocodeOpportunities(response.bookingOpportunities ?? []);
+    const professionalIds = new Set(response.opportunities.slice(response.bookingOpportunities.length).map((item) => item.id));
+    response.opportunities = [
+      ...response.bookingOpportunities,
+      ...response.opportunities.filter((item) => professionalIds.has(item.id)),
+    ];
 
     await persistAnalysis(artistRadarRequest, response).catch((error) => {
       warnLog("analysis-persistence", "Failed to persist an analysis", { error });

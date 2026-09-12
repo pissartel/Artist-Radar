@@ -604,6 +604,8 @@ export interface DashboardData {
   // Canonical cross-type collection used by Overview, dedicated pages and
   // opportunity details. Pages derive their own type-specific subsets.
   opportunities: Opportunity[];
+  /** @deprecated Use opportunities. Kept for cached/API client compatibility. */
+  bookingOpportunities: Opportunity[];
   topCities: CityOpportunityStat[];
   sources: BookingSource[];
   bookingDiagnostics?: {

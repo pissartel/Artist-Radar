@@ -31,12 +31,14 @@ const COUNTRY_PLACES: Record<string, PreviewPlace[]> = {
 };
 
 const DEFAULT_PLACES = COUNTRY_PLACES.france;
-const TYPE_TITLES: Record<OpportunityType, string> = {
+  const TYPE_TITLES: Record<OpportunityType, string> = {
   venue: "The Foundry Live Room",
   concert: "Northern Lights Indie Night",
   festival: "Riverside Sounds Festival",
   opening_slot: "Support slot for The Midnight Lines",
   organization: "Atlas Live Booking & Promotion",
+  booker: "Atlas Live Booking",
+  manager: "North Star Management",
   label: "Harbour Street Records",
 };
 
@@ -133,6 +135,7 @@ export function createPreviewArtistRadarResponse(request: ArtistRadarRequest): A
       { id: "cities", label: "Cities", value: places.length },
     ],
     similarArtists,
+    opportunities: bookingOpportunities,
     bookingOpportunities,
     topCities: places.slice(0, 5).map((place) => ({ city: place.city, country, opportunityCount: 1, topVenueCount: 1 })),
     sources: [{ id: "preview-fixture", name: "Preview fixture", type: "manual", opportunityCount: bookingOpportunities.length }],

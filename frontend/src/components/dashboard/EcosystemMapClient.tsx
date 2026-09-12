@@ -29,6 +29,8 @@ const TYPE_LABELS: Record<OpportunityType, string> = {
   festival: "Festivals",
   opening_slot: "Opening Slots",
   organization: "Bookers / agencies / promoters",
+  booker: "Bookers / agencies / promoters",
+  manager: "Managers",
   label: "Labels",
 };
 

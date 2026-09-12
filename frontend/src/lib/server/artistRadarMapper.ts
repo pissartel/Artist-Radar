@@ -626,6 +626,7 @@ export function mapPipelineResultToArtistRadarResponse(
     kpis: buildKpis(similarArtists, bookingOpportunities),
     similarArtists,
     opportunities,
+    bookingOpportunities,
     topCities: includeBooking ? buildTopCities(bookingOpportunities) : [],
     sources: includeBooking ? buildSources(result) : [],
     bookingDiagnostics: includeBooking

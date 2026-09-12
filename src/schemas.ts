@@ -749,6 +749,7 @@ export const UnifiedOpportunitySchema = z
   .object({
     // Shared fields, common to every opportunity type.
     id: z.string().trim().min(1),
+    organizationId: z.string().trim().min(1).nullable().optional(),
     type: OpportunityEntityTypeSchema,
     name: z.string().trim().min(1),
     description: z.string().trim().min(1).nullable().optional(),
@@ -1018,6 +1019,7 @@ const MANAGER_OPPORTUNITY_TYPES = ["manager", "management_company"] as const;
 export const GenericOpportunitySchema = z
   .object({
     id: z.string().trim().min(1),
+    organizationId: z.string().trim().min(1).nullable().optional(),
     name: z.string().trim().min(1),
     opportunityType: OpportunityCategorySchema,
     shortDescription: z.string().trim().min(1).nullable().optional(),
@@ -1031,6 +1033,11 @@ export const GenericOpportunitySchema = z
     publicEmail: z.string().trim().email().nullable().optional(),
     socialLinks: OpportunitySocialLinksSchema.default({}),
     associatedArtists: z.array(z.string().trim().min(1)).default([]),
+    matchingArtists: z.array(z.object({
+      artistId: z.string().trim().min(1).nullable().optional(),
+      name: z.string().trim().min(1),
+      similarityScore: z.number().min(0).max(1).nullable().optional()
+    })).optional(),
     associatedGenres: z.array(z.string().trim().min(1)).default([]),
     // Reuses ArtistTierSchema: audience size buckets are the same concept
     // whether they describe an artist or an opportunity's typical audience.

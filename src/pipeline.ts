@@ -56,6 +56,9 @@ import {
   type DiscoverManagerOpportunitiesOptions
 } from "./managers/discoverManagerOpportunities.js";
 import type { ManagerSearchInput } from "./managers/types.js";
+import { discoverIndustryOpportunities } from "./industry/discoverIndustryOpportunities.js";
+import type { IndustryKnowledgeRepository, IndustrySearchContext } from "./industry/types.js";
+import { normalizeIndustryName } from "./industry/normalization.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
@@ -76,6 +79,9 @@ export interface RunOpportunitySearchOptions {
   labelDiscoveryOptions?: DiscoverLabelOpportunitiesOptions;
   bookerDiscoveryOptions?: DiscoverBookerOpportunitiesOptions;
   managerDiscoveryOptions?: DiscoverManagerOpportunitiesOptions;
+  // Shared, reusable industry knowledge. The CLI can omit this; the SaaS API
+  // injects its Supabase-backed implementation.
+  industryKnowledgeRepository?: IndustryKnowledgeRepository;
   // When provided, pipeline stage progress is recorded in the in-memory
   // execution store (see pipelineExecutionState.ts) so a status endpoint can
   // report it back to the caller while this call is still running.
@@ -265,35 +271,28 @@ export async function runOpportunitySearch(
         warningsCount: bookingSearch.warnings.length
       });
 
-      const labelOpportunities = await runLabelDiscoverySafely({
-        artist: input.artist,
-        city: input.city,
-        genre: input.genre,
-        target: input.target,
-        limit: input.limit,
-        artistProfile: profile,
+      const industryContext: IndustrySearchContext = {
+        artistName: profile.artistName ?? input.artist,
+        country: profile.country ?? null,
+        city: profile.city ?? input.city ?? null,
+        genres: profile.genres,
+        normalizedGenres: [...new Set(profile.genres.map(normalizeIndustryName).filter(Boolean))],
+        careerStage: profile.estimatedLevel ?? null,
+        popularity: profile.spotify?.popularity ?? null,
         similarArtists: similarArtistsForLiveSearch
-      }, options.labelDiscoveryOptions);
-      const bookerOpportunities = await runBookerDiscoverySafely({
-        artist: input.artist,
-        city: input.city,
-        genre: input.genre,
-        target: input.target,
+      };
+      const industryDiscovery = await discoverIndustryOpportunities(industryContext, {
+        repository: options.industryKnowledgeRepository,
         limit: input.limit,
-        artistProfile: profile,
-        similarArtists: similarArtistsForLiveSearch,
-        mode: "lightweight"
-      }, options.bookerDiscoveryOptions);
-      const managerOpportunities = await runManagerDiscoverySafely({
-        artist: input.artist,
-        city: input.city,
-        genre: input.genre,
-        target: input.target,
-        limit: Math.min(input.limit, 3),
-        artistProfile: profile,
-        similarArtists: similarArtistsForLiveSearch,
-        mode: "lightweight"
-      }, options.managerDiscoveryOptions);
+        discover: async () => Promise.all([
+          runLabelDiscoverySafely({ artist: input.artist, city: input.city, genre: input.genre, target: input.target, limit: input.limit, artistProfile: profile, similarArtists: similarArtistsForLiveSearch }, options.labelDiscoveryOptions),
+          runBookerDiscoverySafely({ artist: input.artist, city: input.city, genre: input.genre, target: input.target, limit: input.limit, artistProfile: profile, similarArtists: similarArtistsForLiveSearch, mode: "lightweight" }, options.bookerDiscoveryOptions),
+          runManagerDiscoverySafely({ artist: input.artist, city: input.city, genre: input.genre, target: input.target, limit: Math.min(input.limit, 3), artistProfile: profile, similarArtists: similarArtistsForLiveSearch, mode: "lightweight" }, options.managerDiscoveryOptions)
+        ])
+      });
+      const labelOpportunities = industryDiscovery.opportunities.filter((item) => item.opportunityType === "label");
+      const bookerOpportunities = industryDiscovery.opportunities.filter((item) => ["booker", "booking_agency", "promoter"].includes(item.opportunityType));
+      const managerOpportunities = industryDiscovery.opportunities.filter((item) => ["manager", "management_company"].includes(item.opportunityType));
       track("SCORING_RESULTS");
       track("PREPARING_OVERVIEW");
 

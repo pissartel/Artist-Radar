@@ -10,6 +10,8 @@ export const OPPORTUNITY_MARKER_COLORS: Record<OpportunityType, string> = {
   opening_slot: "#f43f5e",
   festival: "#eab308",
   organization: "#22c55e",
+  booker: "#22c55e",
+  manager: "#a855f7",
   label: "#14b8a6",
 };
 
@@ -20,6 +22,8 @@ export const MAP_MARKER_ICONS: Record<MapMarkerKind, string> = {
   festival: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18L12 5zM8 20l4-15 4 15M5.5 16h13"/></svg>',
   opening_slot: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg>',
   organization: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V4h6v3M3 12h18M10 12v2h4v-2"/></svg>',
+  booker: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V4h6v3M3 12h18M10 12v2h4v-2"/></svg>',
+  manager: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3"/><path d="M3.5 18c.7-3.2 2.5-5 5.5-5s4.8 1.8 5.5 5M17 8v8m-3-4h6"/></svg>',
   label: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v3m0 12v3M3 12h3m12 0h3"/></svg>',
   fallback: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>',
 };

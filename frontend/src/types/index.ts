@@ -264,7 +264,15 @@ export interface SimilarArtist {
 // | "creative_provider"
 // | "mixing_engineer"
 // | "video_director"
-export type OpportunityType = "venue" | "concert" | "opening_slot" | "festival" | "organization" | "label";
+export type OpportunityType =
+  | "venue"
+  | "concert"
+  | "opening_slot"
+  | "festival"
+  | "booker"
+  | "manager"
+  | "label"
+  | "organization";
 
 // Reliable booking category inferred by the backend mapper from opportunity
 // type, source metadata, and title. Used by frontend filters (booking tabs,
@@ -275,6 +283,8 @@ export type OpportunityCategory =
   | "festival"
   | "opening_slot"
   | "organization"
+  | "booker"
+  | "manager"
   | "label"
   | "contact"
   | "unknown";
@@ -591,6 +601,10 @@ export interface DashboardData {
   artist: ArtistProfile;
   kpis: KpiMetric[];
   similarArtists: SimilarArtist[];
+  // Canonical cross-type collection used by Overview, dedicated pages and
+  // opportunity details. Pages derive their own type-specific subsets.
+  opportunities: Opportunity[];
+  /** @deprecated Use opportunities. Kept for cached/API client compatibility. */
   bookingOpportunities: Opportunity[];
   topCities: CityOpportunityStat[];
   sources: BookingSource[];

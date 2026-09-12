@@ -20,6 +20,19 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { buttonClassName } from "@/components/ui/Button";
+import type { Opportunity } from "@/types";
+
+function buildOpportunityPreview(opportunities: Opportunity[], limit = 8): Opportunity[] {
+  const ranked = [...opportunities].sort((a, b) => b.matchScore - a.matchScore);
+  const representativeByType = Array.from(
+    new Map(ranked.map((opportunity) => [opportunity.type, opportunity])).values(),
+  );
+  const selected = new Set(representativeByType.slice(0, limit).map((item) => item.id));
+  return [
+    ...representativeByType.slice(0, limit),
+    ...ranked.filter((item) => !selected.has(item.id)),
+  ].slice(0, limit);
+}
 
 export default function OverviewPage() {
   const { state, refetch } = useArtistRadarData();
@@ -49,7 +62,7 @@ export default function OverviewPage() {
     return <ArtistRadarErrorState message={state.message} onRetry={refetch} />;
   }
 
-  const { artist, kpis, similarArtists, bookingOpportunities, topCities, warnings } = state.data;
+  const { artist, kpis, similarArtists, opportunities, topCities, warnings } = state.data;
 
   return (
     <>
@@ -75,11 +88,11 @@ export default function OverviewPage() {
       <EcosystemMap
         artist={artist}
         similarArtists={selectOverviewSimilarArtists(similarArtists)}
-        opportunities={selectOverviewMapOpportunities(bookingOpportunities)}
+        opportunities={selectOverviewMapOpportunities(opportunities)}
       />
 
       <BookingSection
-        opportunities={bookingOpportunities}
+        opportunities={buildOpportunityPreview(opportunities)}
         topCities={topCities}
         metrics={artist.metrics}
         similarArtistCount={similarArtists.length}

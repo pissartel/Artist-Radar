@@ -31,8 +31,8 @@ export default function VenueDetailPage({ params }: VenueDetailPageProps) {
     return <ArtistRadarErrorState message={state.message} onRetry={refetch} />;
   }
 
-  const { bookingOpportunities } = state.data;
-  const venue = getVenueById(bookingOpportunities, id);
+  const { opportunities } = state.data;
+  const venue = getVenueById(opportunities, id);
 
   if (!venue) {
     return (
@@ -49,7 +49,7 @@ export default function VenueDetailPage({ params }: VenueDetailPageProps) {
     );
   }
 
-  const events = getOpportunitiesForVenue(bookingOpportunities, id);
+  const events = getOpportunitiesForVenue(opportunities, id);
 
   return <VenueDetail venue={venue} events={events} />;
 }

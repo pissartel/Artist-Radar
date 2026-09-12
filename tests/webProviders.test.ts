@@ -4,6 +4,7 @@ import {
   buildDefaultWebExtractProvider,
   buildDefaultWebSearchProvider,
   FallbackExtractProvider,
+  FallbackSearchProvider,
   FirecrawlExtractProvider
 } from "../src/providers/web/providers.js";
 import type { WebExtractProvider } from "../src/providers/web/WebExtractProvider.js";
@@ -25,7 +26,7 @@ const profile: ArtistProfile = {
 };
 
 describe("web providers", () => {
-  it("chooses Tavily before Firecrawl for search", () => {
+  it("uses search providers through a fallback wrapper in provider order", () => {
     const provider = buildDefaultWebSearchProvider({
       ENABLE_TAVILY_SEARCH: "true",
       TAVILY_API_KEY: "tavily-key",
@@ -33,7 +34,42 @@ describe("web providers", () => {
       FIRECRAWL_API_KEY: "firecrawl-key"
     });
 
-    expect(provider.providerName).toBe("tavily");
+    expect(provider.providerName).toBe("fallback(tavily,firecrawl)");
+  });
+
+  it("fallback search returns deduped results from later providers when the first provider is empty", async () => {
+    const provider = new FallbackSearchProvider([
+      {
+        providerName: "empty-search",
+        async search() {
+          return [];
+        }
+      },
+      {
+        providerName: "useful-search",
+        async search() {
+          return [
+            {
+              title: "Useful agency",
+              url: "https://example.test/useful-agency",
+              snippet: "Useful booking agency roster",
+              sourceProvider: "useful-search",
+              confidence: 0.8
+            }
+          ];
+        }
+      }
+    ]);
+
+    await expect(provider.search("pop punk booking agency", { limit: 5 })).resolves.toEqual([
+      {
+        title: "Useful agency",
+        url: "https://example.test/useful-agency",
+        snippet: "Useful booking agency roster",
+        sourceProvider: "useful-search",
+        confidence: 0.8
+      }
+    ]);
   });
 
   it("returns Noop when no search provider is enabled", async () => {

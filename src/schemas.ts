@@ -749,6 +749,7 @@ export const UnifiedOpportunitySchema = z
   .object({
     // Shared fields, common to every opportunity type.
     id: z.string().trim().min(1),
+    organizationId: z.string().trim().min(1).nullable().optional(),
     type: OpportunityEntityTypeSchema,
     name: z.string().trim().min(1),
     description: z.string().trim().min(1).nullable().optional(),
@@ -943,6 +944,45 @@ export const LabelOpportunityDetailsSchema = z.object({
   evidence: z.array(LabelEvidenceSchema).default([])
 });
 
+export const BookerOpportunityDetailsSchema = z.object({
+  // Represented artists that overlap with the seed artist's own similar-artist
+  // list — the strongest concrete evidence this booker/agency/promoter is
+  // reachable (issue #170: similar artists are a major discovery signal).
+  representedSimilarArtists: z.array(z.string().trim().min(1)).default([]),
+  // Broader roster extracted from the source's own "roster/artists/clients"
+  // listing, when present; never invented beyond what the source states.
+  roster: z.array(z.string().trim().min(1)).default([]),
+  bookerGenres: z.array(z.string().trim().min(1)).default([]),
+  territory: z.string().trim().min(1).nullable().optional(),
+  acceptsSubmissions: z.boolean().nullable().optional(),
+  submissionUrl: OptionalUrlSchema,
+  // Whether the source shows evidence of current activity. null means
+  // uncertain, per AGENTS.md — never defaulted without textual evidence.
+  isActive: z.boolean().nullable().optional()
+});
+
+export const ManagementRelationshipStatusSchema = z.enum(["current", "former", "unknown"]);
+
+export const ManagerEvidenceSchema = z.object({
+  sourceUrl: z.string().trim().url().nullable(),
+  similarArtistName: z.string().trim().min(1).nullable().optional(),
+  relationshipStatus: ManagementRelationshipStatusSchema,
+  confidence: ConfidenceScoreSchema
+});
+
+export const ManagerOpportunityDetailsSchema = z.object({
+  roster: z.array(z.string().trim().min(1)).default([]),
+  relevantArtists: z.array(z.string().trim().min(1)).default([]),
+  managerGenres: z.array(z.string().trim().min(1)).default([]),
+  typicalAudienceLevel: ArtistTierSchema.default("unknown"),
+  services: z.array(z.string().trim().min(1)).default([]),
+  acceptsSubmissions: z.boolean().nullable().optional(),
+  contactPolicy: z.string().trim().min(1).nullable().optional(),
+  relationshipStatus: ManagementRelationshipStatusSchema.default("unknown"),
+  isActive: z.boolean().nullable().optional(),
+  evidence: z.array(ManagerEvidenceSchema).min(1)
+});
+
 export const PlaylistOpportunityDetailsSchema = z.object({
   platform: z.string().trim().min(1).nullable().optional(),
   playlistUrl: OptionalUrlSchema,
@@ -973,9 +1013,13 @@ const PRODUCER_OR_STUDIO_OPPORTUNITY_TYPES = [
   "mastering_engineer"
 ] as const;
 
+const BOOKER_OPPORTUNITY_TYPES = ["booker", "booking_agency", "promoter"] as const;
+const MANAGER_OPPORTUNITY_TYPES = ["manager", "management_company"] as const;
+
 export const GenericOpportunitySchema = z
   .object({
     id: z.string().trim().min(1),
+    organizationId: z.string().trim().min(1).nullable().optional(),
     name: z.string().trim().min(1),
     opportunityType: OpportunityCategorySchema,
     shortDescription: z.string().trim().min(1).nullable().optional(),
@@ -989,6 +1033,11 @@ export const GenericOpportunitySchema = z
     publicEmail: z.string().trim().email().nullable().optional(),
     socialLinks: OpportunitySocialLinksSchema.default({}),
     associatedArtists: z.array(z.string().trim().min(1)).default([]),
+    matchingArtists: z.array(z.object({
+      artistId: z.string().trim().min(1).nullable().optional(),
+      name: z.string().trim().min(1),
+      similarityScore: z.number().min(0).max(1).nullable().optional()
+    })).optional(),
     associatedGenres: z.array(z.string().trim().min(1)).default([]),
     // Reuses ArtistTierSchema: audience size buckets are the same concept
     // whether they describe an artist or an opportunity's typical audience.
@@ -1006,6 +1055,8 @@ export const GenericOpportunitySchema = z
     // never affects another opportunity type's fields.
     concert: ConcertOpportunityDetailsSchema.nullable().optional(),
     label: LabelOpportunityDetailsSchema.nullable().optional(),
+    booker: BookerOpportunityDetailsSchema.nullable().optional(),
+    manager: ManagerOpportunityDetailsSchema.nullable().optional(),
     playlist: PlaylistOpportunityDetailsSchema.nullable().optional(),
     producerOrStudio: ProducerOrStudioOpportunityDetailsSchema.nullable().optional(),
     // Escape hatch for categories without a dedicated group yet (venue,
@@ -1025,6 +1076,20 @@ export const GenericOpportunitySchema = z
         code: z.ZodIssueCode.custom,
         path: ["label"],
         message: "label details only apply to label opportunities"
+      });
+    }
+    if (value.booker && !(BOOKER_OPPORTUNITY_TYPES as readonly string[]).includes(value.opportunityType)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["booker"],
+        message: "booker details only apply to booker, booking_agency or promoter opportunities"
+      });
+    }
+    if (value.manager && !(MANAGER_OPPORTUNITY_TYPES as readonly string[]).includes(value.opportunityType)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["manager"],
+        message: "manager details only apply to manager or management_company opportunities"
       });
     }
     if (value.playlist && value.opportunityType !== "playlist") {
@@ -1108,6 +1173,7 @@ export type ConcertOpportunityDetails = z.infer<typeof ConcertOpportunityDetails
 export type LabelEvidence = z.infer<typeof LabelEvidenceSchema>;
 export type LabelExternalIds = z.infer<typeof LabelExternalIdsSchema>;
 export type LabelOpportunityDetails = z.infer<typeof LabelOpportunityDetailsSchema>;
+export type BookerOpportunityDetails = z.infer<typeof BookerOpportunityDetailsSchema>;
 export type PlaylistOpportunityDetails = z.infer<typeof PlaylistOpportunityDetailsSchema>;
 export type ProducerOrStudioOpportunityDetails = z.infer<typeof ProducerOrStudioOpportunityDetailsSchema>;
 export type GenericOpportunity = z.infer<typeof GenericOpportunitySchema>;

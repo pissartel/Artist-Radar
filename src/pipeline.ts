@@ -44,6 +44,21 @@ import {
   type ComputeArtistScaleForAnalysisResult
 } from "./modules/artistScaleEnrichment.js";
 import type { ArtistScale } from "./schemas.js";
+import {
+  buildDefaultBookerDiscoveryOptions,
+  discoverBookerOpportunities,
+  type DiscoverBookerOpportunitiesOptions
+} from "./bookers/discoverBookerOpportunities.js";
+import type { BookerSearchInput } from "./bookers/types.js";
+import {
+  buildDefaultManagerDiscoveryOptions,
+  discoverManagerOpportunities,
+  type DiscoverManagerOpportunitiesOptions
+} from "./managers/discoverManagerOpportunities.js";
+import type { ManagerSearchInput } from "./managers/types.js";
+import { discoverIndustryOpportunities } from "./industry/discoverIndustryOpportunities.js";
+import type { IndustryKnowledgeRepository, IndustrySearchContext } from "./industry/types.js";
+import { normalizeIndustryName } from "./industry/normalization.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
@@ -62,6 +77,11 @@ export interface RunOpportunitySearchOptions {
   // (empty array).
   artistConcertProviders?: ArtistConcertProvider[];
   labelDiscoveryOptions?: DiscoverLabelOpportunitiesOptions;
+  bookerDiscoveryOptions?: DiscoverBookerOpportunitiesOptions;
+  managerDiscoveryOptions?: DiscoverManagerOpportunitiesOptions;
+  // Shared, reusable industry knowledge. The CLI can omit this; the SaaS API
+  // injects its Supabase-backed implementation.
+  industryKnowledgeRepository?: IndustryKnowledgeRepository;
   // When provided, pipeline stage progress is recorded in the in-memory
   // execution store (see pipelineExecutionState.ts) so a status endpoint can
   // report it back to the caller while this call is still running.
@@ -101,6 +121,13 @@ export interface OpportunitySearchRunResult {
   // Label opportunities (issue #169), discovered and ranked independently of
   // the concert-oriented booking pipeline since labels aren't event-based.
   labelOpportunities?: GenericOpportunity[];
+  // Booker/booking-agency/promoter opportunities (issue #170), discovered and
+  // ranked independently of the concert-oriented booking pipeline for the
+  // same reason labels are: they aren't event-based.
+  bookerOpportunities?: GenericOpportunity[];
+  // High-confidence manager/company matches from the bounded, lightweight
+  // pipeline mode. Deeper searches are explicitly invoked by the Managers page.
+  managerOpportunities?: GenericOpportunity[];
   // Chartmetric audience-enrichment result for the main artist (issue
   // #142). Always populated by runOpportunitySearch (with a "skipped"/
   // "error" status rather than an exception on any failure) so callers can
@@ -173,7 +200,7 @@ export async function runOpportunitySearch(
     });
     // Chartmetric enrichment (issue #201) must never change which similar
     // artists the live-search pipeline (concert history, booking search,
-    // label discovery) uses — this exact array, in this exact order, is the
+    // label discovery, booker discovery) uses — this exact array, in this exact order, is the
     // one and only copy those consumers see from here on. `groupedSimilarArtists`
     // below is a *separate*, additively-enriched-and-regrouped copy used only
     // for the result exposed to the frontend/commercial scoring; it must never
@@ -244,15 +271,28 @@ export async function runOpportunitySearch(
         warningsCount: bookingSearch.warnings.length
       });
 
-      const labelOpportunities = await runLabelDiscoverySafely({
-        artist: input.artist,
-        city: input.city,
-        genre: input.genre,
-        target: input.target,
-        limit: input.limit,
-        artistProfile: profile,
+      const industryContext: IndustrySearchContext = {
+        artistName: profile.artistName ?? input.artist,
+        country: profile.country ?? null,
+        city: profile.city ?? input.city ?? null,
+        genres: profile.genres,
+        normalizedGenres: [...new Set(profile.genres.map(normalizeIndustryName).filter(Boolean))],
+        careerStage: profile.estimatedLevel ?? null,
+        popularity: profile.spotify?.popularity ?? null,
         similarArtists: similarArtistsForLiveSearch
-      }, options.labelDiscoveryOptions);
+      };
+      const industryDiscovery = await discoverIndustryOpportunities(industryContext, {
+        repository: options.industryKnowledgeRepository,
+        limit: input.limit,
+        discover: async () => Promise.all([
+          runLabelDiscoverySafely({ artist: input.artist, city: input.city, genre: input.genre, target: input.target, limit: input.limit, artistProfile: profile, similarArtists: similarArtistsForLiveSearch }, options.labelDiscoveryOptions),
+          runBookerDiscoverySafely({ artist: input.artist, city: input.city, genre: input.genre, target: input.target, limit: input.limit, artistProfile: profile, similarArtists: similarArtistsForLiveSearch, mode: "lightweight" }, options.bookerDiscoveryOptions),
+          runManagerDiscoverySafely({ artist: input.artist, city: input.city, genre: input.genre, target: input.target, limit: Math.min(input.limit, 3), artistProfile: profile, similarArtists: similarArtistsForLiveSearch, mode: "lightweight" }, options.managerDiscoveryOptions)
+        ])
+      });
+      const labelOpportunities = industryDiscovery.opportunities.filter((item) => item.opportunityType === "label");
+      const bookerOpportunities = industryDiscovery.opportunities.filter((item) => ["booker", "booking_agency", "promoter"].includes(item.opportunityType));
+      const managerOpportunities = industryDiscovery.opportunities.filter((item) => ["manager", "management_company"].includes(item.opportunityType));
       track("SCORING_RESULTS");
       track("PREPARING_OVERVIEW");
 
@@ -266,6 +306,8 @@ export async function runOpportunitySearch(
         similarArtistConcerts,
         ticketmaster: buildTicketmasterEvidenceSafely(bookingSearch),
         labelOpportunities,
+        bookerOpportunities,
+        managerOpportunities,
         chartmetric,
         artistScale
       };
@@ -439,6 +481,49 @@ function computeArtistScaleSafely(
       },
       similarArtists: groupedSimilarArtists
     };
+  }
+}
+
+// Booker discovery (issue #170) is an additive enrichment of the booking
+// pipeline; a failure here must never take down the core booking search.
+async function runBookerDiscoverySafely(
+  input: BookerSearchInput,
+  options: DiscoverBookerOpportunitiesOptions | undefined
+): Promise<GenericOpportunity[]> {
+  try {
+    const bookerDiscovery = await discoverBookerOpportunities(input, options ?? buildDefaultBookerDiscoveryOptions());
+    debugLog("pipeline", "runOpportunitySearch booker discovery summary", {
+      candidateCount: bookerDiscovery.metadata.rawCandidateCount,
+      keptOpportunities: bookerDiscovery.metadata.keptOpportunities,
+      warningsCount: bookerDiscovery.warnings.length
+    });
+    return bookerDiscovery.opportunities;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    debugLog("pipeline", "runOpportunitySearch booker discovery failed and was skipped", { message });
+    return [];
+  }
+}
+
+async function runManagerDiscoverySafely(
+  input: ManagerSearchInput,
+  options: DiscoverManagerOpportunitiesOptions | undefined
+): Promise<GenericOpportunity[]> {
+  try {
+    const discovery = await discoverManagerOpportunities(input, options ?? buildDefaultManagerDiscoveryOptions());
+    debugLog("pipeline", "runOpportunitySearch manager discovery summary", {
+      mode: discovery.metadata.mode,
+      candidateCount: discovery.metadata.rawCandidateCount,
+      keptOpportunities: discovery.metadata.keptOpportunities,
+      fromCache: discovery.fromCache,
+      warningsCount: discovery.warnings.length
+    });
+    return discovery.opportunities;
+  } catch (error) {
+    debugLog("pipeline", "runOpportunitySearch manager discovery failed and was skipped", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+    return [];
   }
 }
 

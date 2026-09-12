@@ -92,6 +92,16 @@ describe("Booking Search core", () => {
     expect(contacts.some((contact) => contact.type === "contact_form")).toBe(true);
   });
 
+  it("rejects static assets whose path happens to contain the word contact", () => {
+    const contacts = extractPublicContactSignals("", [
+      "https://www.aaemusic.com/wp-content/plugins/contact-form-7/includes/css/styles.css?ver=5.5.4",
+      "https://example.test/contact"
+    ]);
+
+    expect(contacts.some((contact) => contact.value.includes("styles.css"))).toBe(false);
+    expect(contacts.some((contact) => contact.value === "https://example.test/contact")).toBe(true);
+  });
+
   it("raises support slot likelihood for support TBA and premiere partie wording", () => {
     const baseline = scoreBookingCompatibility(input, baseTarget({ description: "Regular pop punk club night." }));
     const supportTba = scoreBookingCompatibility(input, baseTarget({ description: "Pop punk night with support TBA." }));
@@ -1252,6 +1262,8 @@ describe("Similar artist live-history query improvements", () => {
 
 describe("Firecrawl-free fallback (native fetch scene agendas)", () => {
   it("booking works when Firecrawl is disabled and no other web search provider is configured", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-12T00:00:00Z"));
     const provider = buildNativeFetchSceneAgendaProvider({
       env: { ENABLE_SCENE_AGENDAS: "true", ENABLE_CONCERTS_PUNK: "true", CONCERTS_PUNK_URL: "https://example.test/feed" },
       fetchImpl: vi.fn(async () => new Response(
@@ -1275,6 +1287,7 @@ describe("Firecrawl-free fallback (native fetch scene agendas)", () => {
 
     expect(result.opportunities.length).toBeGreaterThan(0);
     expect(result.opportunities[0]?.sourceType).toBe("specialized_scene_agenda");
+    vi.useRealTimers();
   });
 
   it("native fetch scene agenda provider parses RSS entries and returns normalized targets", async () => {

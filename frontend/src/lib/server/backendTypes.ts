@@ -39,6 +39,10 @@ export interface BackendRunOpportunitySearchOptions {
   features?: {
     chartmetricArtistEnrichment?: boolean;
   };
+  // Runtime implementation of the backend IndustryKnowledgeRepository.
+  // Kept unknown here because this file intentionally does not import the
+  // backend TypeScript graph (see header comment).
+  industryKnowledgeRepository?: unknown;
 }
 
 // Mirrors src/schemas.ts PipelineStageSchema.

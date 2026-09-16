@@ -162,6 +162,33 @@ describe("OpenAgendaArtistEventHistoryProvider", () => {
     expect(events[0]).toMatchObject({ venueName: "Le Sample" });
   });
 
+  it("rejects lectures, screenings and other non-live-music events even when they mention the artist phrase", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(responseWithJson({ events: [
+      { uid: 20, title: { fr: "Paris Peer One : conférence de philosophie" }, canonicalUrl: "https://openagenda.com/test/20", location: { name: "Université Exemple" } },
+      { uid: 21, title: { fr: "Projection du film Paris Peer One" }, canonicalUrl: "https://openagenda.com/test/21", location: { name: "Cinéma Exemple" } },
+      { uid: 22, title: { fr: "Paris Peer One en concert live" }, canonicalUrl: "https://openagenda.com/test/22", location: { name: "Example Music Club" } }
+    ] }));
+    const provider = buildOpenAgendaArtistEventHistoryProvider({ env: enabledEnv, fetchImpl });
+
+    const events = await provider.findPastEvents({ artistName: "Paris Peer One" });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.venueName).toBe("Example Music Club");
+  });
+
+  it("requires a one-word artist name in the title as well as live-music context", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(responseWithJson({ events: [
+      { uid: 30, title: { fr: "Conférence sur la justice" }, description: { fr: "Justice et musique dans la société" }, canonicalUrl: "https://openagenda.com/test/30", location: { name: "Université Exemple" } },
+      { uid: 31, title: { fr: "Justice live en concert" }, canonicalUrl: "https://openagenda.com/test/31", location: { name: "Example Music Club" } }
+    ] }));
+    const provider = buildOpenAgendaArtistEventHistoryProvider({ env: enabledEnv, fetchImpl });
+
+    const events = await provider.findPastEvents({ artistName: "Justice" });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.eventName).toBe("Justice live en concert");
+  });
+
   it("memoizes agenda resolution per resolved location across multiple artists", async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(responseWithJson({ agendas: [] }));
     // No configured/seeded UIDs: exercises the discovery path so the test

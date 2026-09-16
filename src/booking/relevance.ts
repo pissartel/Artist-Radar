@@ -5,6 +5,7 @@ import { toDateOnlyString } from "../utils/dateOnly.js";
 import { isEligibleConcertLeadTime, MIN_CONCERT_LEAD_TIME_DAYS } from "./concertLeadTime.js";
 import { isEligibleSimilarArtistForBookingVenueDiscovery } from "./similarArtistEligibility.js";
 import { isInTargetMarket, resolveTargetCountry } from "./targetCountry.js";
+import { qualifyEventDerivedVenue } from "./venueQualification.js";
 
 export interface BookingRelevanceEnv {
   BOOKING_RECENT_EVENT_MONTHS?: string;
@@ -115,6 +116,13 @@ export function filterBookingTargetsForRelevance(
 
   for (const target of targets) {
     const isEvergreen = isEvergreenOrganizationCategory(target.category);
+    const venueQualification = qualifyEventDerivedVenue(target);
+    if (!venueQualification.eligible) {
+      summary.rejectedLowConfidenceEvents += 1;
+      summary.venueCandidatesRejectedByConfidence += 1;
+      recordVenueRejection(summary, target, venueQualification.reason);
+      continue;
+    }
     const dateStatus = computeBookingDateStatus(target, recentMonths, now);
     const genreStatus = classifyBookingGenreEvidence(input, target);
 

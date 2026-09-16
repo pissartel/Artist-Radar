@@ -2,6 +2,7 @@ import { pickBestContact } from "./contactExtraction.js";
 import { analyzeSupportSlotPotential } from "./supportSlotPotential.js";
 import type { BookingScore, BookingSearchInput, BookingTarget } from "./types.js";
 import type { DateProximityResult } from "./dateProximity.js";
+import { hasIndependentVenueGenreEvidence } from "./venueQualification.js";
 
 // Structured, backend-computed match factors (issue #130 review feedback):
 // the frontend must never parse a human-readable "why this matches" prose
@@ -74,6 +75,9 @@ export function buildMatchFactors(
 }
 
 function buildGenreFactor(target: BookingTarget, score: BookingScore): MatchFactor | null {
+  if (target.category === "venue" && !hasIndependentVenueGenreEvidence(target)) {
+    return null;
+  }
   if (score.genreLevel === "exact") {
     return { code: "genre_match", label: "Genre matches the artist", impact: "positive", scoreContribution: score.genreFit };
   }
@@ -85,7 +89,7 @@ function buildGenreFactor(target: BookingTarget, score: BookingScore): MatchFact
       scoreContribution: score.genreFit
     };
   }
-  if (target.category === "venue" && !hasExplicitVenueGenreEvidence(target, score)) {
+  if (target.category === "venue" && score.genreLevel !== "incompatible") {
     return null;
   }
   if (score.genreFit < 50) {
@@ -100,11 +104,6 @@ function buildGenreFactor(target: BookingTarget, score: BookingScore): MatchFact
     };
   }
   return null;
-}
-
-function hasExplicitVenueGenreEvidence(target: BookingTarget, score: BookingScore): boolean {
-  if (target.category !== "venue") return true;
-  return score.genreLevel === "incompatible";
 }
 
 function buildLocationFactor(input: BookingSearchInput, target: BookingTarget, score: BookingScore): MatchFactor | null {

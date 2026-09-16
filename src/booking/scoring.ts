@@ -2,6 +2,7 @@ import { matchBookingGenres } from "./genreMatching.js";
 import { pickBestContact } from "./contactExtraction.js";
 import { analyzeSupportSlotPotential, type SupportSlotStatus } from "./supportSlotPotential.js";
 import type { BookingScore, BookingSearchInput, BookingSuggestedAction, BookingTarget } from "./types.js";
+import { hasIndependentVenueGenreEvidence } from "./venueQualification.js";
 
 const SUPPORT_SLOT_PATTERN = /\b(guest|support tba|support à venir|support a venir|première partie à venir|premiere partie a venir|line-?up soon|lineup soon)\b/i;
 const CONFIRMED_SUPPORT_SLOT_PATTERN = /\b(support confirmed|confirmed support|première partie confirmée|premiere partie confirmee|support confirmé|support confirme)\b/i;
@@ -17,7 +18,9 @@ const SCORE_WEIGHTS = {
 
 export function scoreBookingCompatibility(input: BookingSearchInput, target: BookingTarget): BookingScore {
   const text = buildTargetEvidenceText(target);
-  const genreMatch = matchBookingGenres([input.genre, ...(input.artistProfile?.genres ?? [])], target.genres, text);
+  const genreMatch = target.category === "venue" && !hasIndependentVenueGenreEvidence(target)
+    ? { level: "unknown" as const, score: 25, matchedGenres: [], incompatibleGenres: [] }
+    : matchBookingGenres([input.genre, ...(input.artistProfile?.genres ?? [])], target.genres, text);
   const sizeFit = scoreSizeFit(input, target);
   const supportSlotPotential = scoreSupportSlotPotential(input, target, text);
   const locationFit = scoreLocationFit(input, target);

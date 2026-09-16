@@ -88,6 +88,8 @@ describe("artist event history", () => {
       venueName: "Le Sample"
     });
     expect(targets[0]?.venueArtistEvidence).toHaveLength(2);
+    expect(targets[0]?.genres).toEqual([]);
+    expect(targets[0]?.programmingEvidence?.every((entry) => entry.genres.length === 0)).toBe(true);
     expect(targets[0]?.venueArtistEvidence?.[0]).toMatchObject({
       venueId: "sample:paris:france",
       similarArtistId: "paris-peer-one",

@@ -173,17 +173,15 @@ export function buildVenueTargetsFromArtistEventHistory(
       event.eventDate ? `Historical concert date: ${toDateOnlyString(event.eventDate) ?? event.eventDate}.` : "Historical concert date unavailable.",
       event.eventName ? `Event: ${event.eventName}.` : null,
       event.organizer ? `Organizer/promoter: ${event.organizer}.` : null,
-      `Popularity comparison: ${popularity.comparison}.`,
-      genreMatch.matchedGenres.length > 0 ? `Matched genres: ${genreMatch.matchedGenres.join(", ")}.` : null
+      `Popularity comparison: ${popularity.comparison}.`
     ].filter((value): value is string => Boolean(value));
 
     if (existing) {
       existing.evidence.push(evidence);
-      existing.genres = uniqueStrings([...existing.genres, ...artist.genres, ...genreMatch.matchedGenres]);
       existing.pastProgramming = uniqueStrings([...existing.pastProgramming, artist.name, ...(event.lineup ?? [])]);
       existing.programmingEvidence = mergeProgrammingEvidence([
         ...existing.programmingEvidence,
-        programmingEvidenceFromEvent(event, artist, genreMatch.matchedGenres)
+        programmingEvidenceFromEvent(event, artist)
       ]);
       existing.textEvidence = uniqueStrings([...existing.textEvidence, ...textEvidence]);
       existing.sourceUrlCandidates.push(event.sourceUrl);
@@ -196,9 +194,11 @@ export function buildVenueTargetsFromArtistEventHistory(
       city: event.city ?? null,
       country: event.country ?? input.artistProfile?.country ?? null,
       sourceUrlCandidates: [event.sourceUrl],
-      genres: uniqueStrings([...artist.genres, ...genreMatch.matchedGenres]),
+      // The artist led us to this venue, but does not define the venue's
+      // genres. Only independent venue/programming sources may fill this.
+      genres: [],
       pastProgramming: uniqueStrings([artist.name, ...(event.lineup ?? [])]),
-      programmingEvidence: [programmingEvidenceFromEvent(event, artist, genreMatch.matchedGenres)],
+      programmingEvidence: [programmingEvidenceFromEvent(event, artist)],
       evidence: [evidence],
       textEvidence,
       derivedFromSimilarArtist: {
@@ -389,8 +389,7 @@ function scoreVenueCandidateConfidence(evidence: VenueArtistEvidence[], now: Dat
 
 function programmingEvidenceFromEvent(
   event: HistoricalArtistEvent,
-  artist: SimilarArtist,
-  matchedGenres: string[]
+  artist: SimilarArtist
 ): NonNullable<BookingTarget["programmingEvidence"]>[number] {
   return {
     artistName: artist.name,
@@ -398,7 +397,8 @@ function programmingEvidenceFromEvent(
     eventName: event.eventName ?? null,
     eventDate: toDateOnlyString(event.eventDate ?? "") ?? event.eventDate ?? null,
     sourceUrl: event.sourceUrl,
-    genres: uniqueStrings([...artist.genres, ...matchedGenres])
+    // Relationship evidence, not independent venue-genre evidence.
+    genres: []
   };
 }
 

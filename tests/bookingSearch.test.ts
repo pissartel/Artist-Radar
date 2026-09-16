@@ -309,6 +309,8 @@ describe("Booking Search core", () => {
   });
 
   it("wraps existing web search/extract providers into BookingSourceProvider", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-15T00:00:00Z"));
     const provider = buildWebSearchBookingSourceProvider({
       maxQueries: 1,
       maxResultsPerQuery: 1,
@@ -345,13 +347,13 @@ describe("Booking Search core", () => {
       providers: [provider],
       now: new Date("2026-06-15T00:00:00Z")
     });
-
     expect(result.targets.some((target) => target.sourceUrl === "https://example.test/pop-punk-venue")).toBe(true);
     expect(result.opportunities[0]?.sourceUrl).toBe("https://example.test/pop-punk-venue");
     expect(result.sourceMetadata[0]?.metadata).toMatchObject({
       searchProvider: "test-search",
       extractProvider: "test-extract"
     });
+    vi.useRealTimers();
   });
 
   it("returns an OpenAgenda provider warning when disabled", async () => {

@@ -14,6 +14,7 @@ import {
 import type { ArtistEventHistoryProvider, HistoricalArtistEvent } from "../artistEventHistory.js";
 import type { BookingSearchInput } from "../types.js";
 import { warnLog } from "../../utils/logger.js";
+import { isMusicOrLivePerformanceText } from "../venueQualification.js";
 
 type FetchLike = typeof fetch;
 
@@ -331,6 +332,9 @@ function toHistoricalArtistEvent(
   if (!eventMentionsArtist(event, artistName)) {
     return null;
   }
+  if (!isMusicLivePerformanceEvent(event, artistName)) {
+    return null;
+  }
 
   const constructedUrl = buildOpenAgendaEventPageUrl(event, agenda);
   const sourceUrl = firstText(event.canonicalUrl, event.url, event.registrationUrl) ?? constructedUrl;
@@ -358,13 +362,34 @@ function eventMentionsArtist(event: OpenAgendaEvent, artistName: string): boolea
   if (!normalizedArtistName) {
     return false;
   }
+  const title = normalizeForMatch(localizedText(event.title) ?? "");
   const text = normalizeForMatch([
     localizedText(event.title) ?? "",
     localizedText(event.description) ?? "",
     localizedText(event.longDescription) ?? "",
     ...textList(event.keywords)
   ].join(" "));
-  return text.includes(normalizedArtistName);
+  // A one-word/common artist name is too ambiguous in descriptions and
+  // keywords. Require it in the title; multi-word names still require the
+  // complete normalized phrase anywhere in the event's own content.
+  return normalizedArtistName.includes(" ")
+    ? text.includes(normalizedArtistName)
+    : title.includes(normalizedArtistName);
+}
+
+function isMusicLivePerformanceEvent(event: OpenAgendaEvent, artistName: string): boolean {
+  const title = localizedText(event.title) ?? "";
+  const text = [
+    localizedText(event.title) ?? "",
+    localizedText(event.description) ?? "",
+    localizedText(event.longDescription) ?? "",
+    ...textList(event.keywords)
+  ].join(" ");
+  // For a common one-word artist name, require the live-music signal in the
+  // title itself; a stray "music" word in a long description is insufficient.
+  return normalizeForMatch(artistName).includes(" ")
+    ? isMusicOrLivePerformanceText(text)
+    : isMusicOrLivePerformanceText(title);
 }
 
 // Lowercases, strips accents and collapses punctuation to spaces so minor

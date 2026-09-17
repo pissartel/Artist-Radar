@@ -2,7 +2,12 @@ import { mapPipelineResultToArtistRadarResponse } from "@/lib/server/artistRadar
 import { ArtistInputSchema, runOpportunitySearch, warnLog } from "@/lib/server/backendPipeline";
 import type { ArtistRadarRequest } from "@/types/artistRadar";
 import { geocodeOpportunities } from "@/lib/server/geocodeOpportunities";
-import { persistAnalysis, readPersistedAnalysis } from "@/lib/server/analysisPersistence";
+import {
+  ANALYSIS_CACHE_VERSION,
+  analysisFingerprint,
+  persistAnalysis,
+  readPersistedAnalysis,
+} from "@/lib/server/analysisPersistence";
 
 interface RawRequestBody {
   artistName?: unknown;
@@ -153,12 +158,39 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const persistedAnalysis = await readPersistedAnalysis(artistRadarRequest).catch((error) => {
-    warnLog("analysis-persistence", "Failed to read a persisted analysis", { error });
-    return null;
-  });
-  if (persistedAnalysis) {
-    return Response.json(persistedAnalysis, { status: 200 });
+  const fingerprint = analysisFingerprint(artistRadarRequest);
+  // P0 diagnostic: persisted reads are opt-in until preview confirms that the
+  // stale pre-versioned responses were the production regression. Writes stay
+  // enabled so fresh booking-v3 data is available when reads are re-enabled.
+  const persistedReadsEnabled = process.env.ENABLE_PERSISTED_ANALYSIS_READS === "true";
+  let persistenceDiagnostic = "Persisted analysis read bypassed";
+  if (persistedReadsEnabled) {
+    const persistedAnalysis = await readPersistedAnalysis(artistRadarRequest).catch((error) => {
+      warnLog("analysis-persistence", "Persisted analysis MISS (read failed)", {
+        cacheVersion: ANALYSIS_CACHE_VERSION,
+        fingerprint,
+        error,
+      });
+      return null;
+    });
+    if (persistedAnalysis?.isFresh) {
+      warnLog("analysis-persistence", "Persisted analysis HIT", {
+        cacheVersion: ANALYSIS_CACHE_VERSION,
+        fingerprint,
+        persistedCreatedAt: persistedAnalysis.createdAt,
+        pipelineExecuted: false,
+      });
+      return Response.json(persistedAnalysis.response, { status: 200 });
+    }
+    if (persistedAnalysis) {
+      warnLog("analysis-persistence", "Persisted analysis STALE", {
+        cacheVersion: ANALYSIS_CACHE_VERSION,
+        fingerprint,
+        persistedCreatedAt: persistedAnalysis.createdAt,
+        pipelineExecuted: true,
+      });
+    }
+    persistenceDiagnostic = "Persisted analysis MISS";
   }
 
   const missingEnvVars = getMissingRequiredEnvVars();
@@ -174,6 +206,11 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   logBookingProviderDiagnostics();
+  warnLog("analysis-persistence", persistenceDiagnostic, {
+    cacheVersion: ANALYSIS_CACHE_VERSION,
+    fingerprint,
+    pipelineExecuted: true,
+  });
 
   try {
     const input = ArtistInputSchema.parse({

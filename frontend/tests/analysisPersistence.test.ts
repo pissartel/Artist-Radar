@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { analysisFingerprint } from "@/lib/server/analysisPersistence";
+import {
+  ANALYSIS_CACHE_VERSION,
+  ANALYSIS_CACHE_TTL_SECONDS,
+  analysisFingerprint,
+} from "@/lib/server/analysisPersistence";
 
 describe("analysis persistence", () => {
   it("uses stable normalized request fingerprints and ignores execution IDs", () => {
@@ -33,5 +37,37 @@ describe("analysis persistence", () => {
     expect(analysisFingerprint(base)).not.toBe(
       analysisFingerprint({ ...base, location: "Paris" })
     );
+  });
+
+  it("includes every result-affecting request field", () => {
+    const base = {
+      artistName: "Tuesday Fall",
+      genre: "pop punk",
+      location: "Paris",
+      referenceCountry: "France",
+      spotifyUrl: "https://open.spotify.com/artist/tuesday-fall",
+      enableBooking: true,
+    };
+
+    expect(analysisFingerprint({ ...base, referenceCountry: "Belgium" })).not.toBe(
+      analysisFingerprint(base)
+    );
+    expect(analysisFingerprint({ ...base, spotifyUrl: undefined })).not.toBe(
+      analysisFingerprint(base)
+    );
+    expect(analysisFingerprint({ ...base, enableBooking: false })).not.toBe(
+      analysisFingerprint(base)
+    );
+    expect(
+      analysisFingerprint({
+        ...base,
+        features: { chartmetricArtistEnrichment: true },
+      })
+    ).not.toBe(analysisFingerprint(base));
+  });
+
+  it("uses the explicit booking cache version and a short freshness window", () => {
+    expect(ANALYSIS_CACHE_VERSION).toBe("booking-v3");
+    expect(ANALYSIS_CACHE_TTL_SECONDS).toBe(15 * 60);
   });
 });

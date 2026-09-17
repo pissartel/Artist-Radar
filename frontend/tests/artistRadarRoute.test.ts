@@ -19,6 +19,8 @@ vi.mock("@/lib/server/backendPipeline", () => ({
 }));
 
 vi.mock("@/lib/server/analysisPersistence", () => ({
+  ANALYSIS_CACHE_VERSION: "booking-v3",
+  analysisFingerprint: () => "test-fingerprint",
   readPersistedAnalysis: (...args: unknown[]) => readPersistedAnalysis(...args),
   persistAnalysis: (...args: unknown[]) => persistAnalysis(...args),
 }));
@@ -41,6 +43,7 @@ const VALID_BODY = {
 
 describe("POST /api/artist-radar", () => {
   const originalOpenAiKey = process.env.OPENAI_API_KEY;
+  const originalPersistedReads = process.env.ENABLE_PERSISTED_ANALYSIS_READS;
 
   beforeEach(() => {
     vi.resetModules();
@@ -49,10 +52,14 @@ describe("POST /api/artist-radar", () => {
     readPersistedAnalysis.mockReset().mockResolvedValue(null);
     persistAnalysis.mockReset().mockResolvedValue(undefined);
     process.env.OPENAI_API_KEY = "test-key";
+    delete process.env.ENABLE_PERSISTED_ANALYSIS_READS;
   });
 
   afterEach(() => {
-    process.env.OPENAI_API_KEY = originalOpenAiKey;
+    if (originalOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = originalOpenAiKey;
+    if (originalPersistedReads === undefined) delete process.env.ENABLE_PERSISTED_ANALYSIS_READS;
+    else process.env.ENABLE_PERSISTED_ANALYSIS_READS = originalPersistedReads;
   });
 
   it("rejects a malformed JSON body with a structured 400", async () => {
@@ -153,9 +160,51 @@ describe("POST /api/artist-radar", () => {
     expect(persistAnalysis).toHaveBeenCalledWith(VALID_BODY, payload);
   });
 
-  it("returns a matching persisted analysis without rerunning the pipeline", async () => {
+  it("bypasses persisted reads by default and always runs the current pipeline", async () => {
+    const persisted = { artist: { name: "Stale Artist" }, bookingOpportunities: [] };
+    readPersistedAnalysis.mockResolvedValueOnce({
+      response: persisted,
+      createdAt: "2026-08-24T14:30:00.000Z",
+      isFresh: false,
+    });
+    runOpportunitySearch.mockResolvedValueOnce({
+      artistProfile: {
+        artistName: "Tuesday Fall",
+        city: "Paris",
+        country: "France",
+        genres: ["pop punk"],
+        socialLinks: {},
+        platformStats: {},
+      },
+      similarArtists: {},
+      opportunities: [],
+    });
+    const { POST } = await import("@/app/api/artist-radar/route");
+
+    const response = await POST(jsonRequest(VALID_BODY));
+
+    expect(response.status).toBe(200);
+    expect(readPersistedAnalysis).not.toHaveBeenCalled();
+    expect(runOpportunitySearch).toHaveBeenCalledOnce();
+    expect(persistAnalysis).toHaveBeenCalledOnce();
+    expect(warnLog).toHaveBeenCalledWith(
+      "analysis-persistence",
+      "Persisted analysis read bypassed",
+      expect.objectContaining({
+        cacheVersion: "booking-v3",
+        pipelineExecuted: true,
+      })
+    );
+  });
+
+  it("can return a fresh versioned persisted analysis when reads are explicitly enabled", async () => {
     const persisted = { artist: { name: "Tuesday Fall" }, bookingOpportunities: [] };
-    readPersistedAnalysis.mockResolvedValueOnce(persisted);
+    process.env.ENABLE_PERSISTED_ANALYSIS_READS = "true";
+    readPersistedAnalysis.mockResolvedValueOnce({
+      response: persisted,
+      createdAt: "2026-09-17T00:00:00.000Z",
+      isFresh: true,
+    });
     const { POST } = await import("@/app/api/artist-radar/route");
 
     const response = await POST(jsonRequest(VALID_BODY));
@@ -164,6 +213,42 @@ describe("POST /api/artist-radar", () => {
     expect(await response.json()).toEqual(persisted);
     expect(runOpportunitySearch).not.toHaveBeenCalled();
     expect(persistAnalysis).not.toHaveBeenCalled();
+  });
+
+  it("rejects an expired persisted analysis and executes the pipeline", async () => {
+    process.env.ENABLE_PERSISTED_ANALYSIS_READS = "true";
+    readPersistedAnalysis.mockResolvedValueOnce({
+      response: { artist: { name: "Stale Artist" }, bookingOpportunities: [] },
+      createdAt: "2026-08-24T14:30:00.000Z",
+      isFresh: false,
+    });
+    runOpportunitySearch.mockResolvedValueOnce({
+      artistProfile: {
+        artistName: "Tuesday Fall",
+        city: "Paris",
+        country: "France",
+        genres: ["pop punk"],
+        socialLinks: {},
+        platformStats: {},
+      },
+      similarArtists: {},
+      opportunities: [],
+    });
+    const { POST } = await import("@/app/api/artist-radar/route");
+
+    const response = await POST(jsonRequest(VALID_BODY));
+
+    expect(response.status).toBe(200);
+    expect(runOpportunitySearch).toHaveBeenCalledOnce();
+    expect(persistAnalysis).toHaveBeenCalledOnce();
+    expect(warnLog).toHaveBeenCalledWith(
+      "analysis-persistence",
+      "Persisted analysis STALE",
+      expect.objectContaining({
+        persistedCreatedAt: "2026-08-24T14:30:00.000Z",
+        pipelineExecuted: true,
+      })
+    );
   });
 
   it("passes a provided executionId through to the pipeline so its status can be polled", async () => {

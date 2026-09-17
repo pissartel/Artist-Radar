@@ -6,6 +6,14 @@ import type { ArtistRadarRequest, ArtistRadarResponse } from "@/types/artistRada
 
 const ANONYMOUS_SESSION_COOKIE = "artist_radar_anonymous_analysis";
 const RETENTION_SECONDS = 30 * 24 * 60 * 60;
+export const ANALYSIS_CACHE_VERSION = "booking-v3";
+export const ANALYSIS_CACHE_TTL_SECONDS = 15 * 60;
+
+export interface PersistedAnalysis {
+  response: ArtistRadarResponse;
+  createdAt: string;
+  isFresh: boolean;
+}
 
 interface AnonymousSession {
   id: string;
@@ -18,12 +26,37 @@ function hash(value: string): string {
 
 export function analysisFingerprint(request: ArtistRadarRequest): string {
   return hash(JSON.stringify({
+    analysisCacheVersion: ANALYSIS_CACHE_VERSION,
     artistName: request.artistName.trim().toLowerCase(),
     genre: request.genre.trim().toLowerCase(),
     location: request.location.trim().toLowerCase(),
+    referenceCountry: request.referenceCountry?.trim().toLowerCase() ?? null,
     enableBooking: request.enableBooking ?? true,
     spotifyUrl: request.spotifyUrl?.trim() ?? null,
+    features: {
+      chartmetricArtistEnrichment:
+        request.features?.chartmetricArtistEnrichment === true,
+    },
   }));
+}
+
+function parsePersistedAnalysis(value: unknown): PersistedAnalysis | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const candidate = value as Record<string, unknown>;
+  if (
+    !candidate.resultData ||
+    typeof candidate.resultData !== "object" ||
+    Array.isArray(candidate.resultData) ||
+    typeof candidate.createdAt !== "string" ||
+    typeof candidate.isFresh !== "boolean"
+  ) {
+    return null;
+  }
+  return {
+    response: candidate.resultData as ArtistRadarResponse,
+    createdAt: candidate.createdAt,
+    isFresh: candidate.isFresh,
+  };
 }
 
 function parseAnonymousSession(value: string | undefined): AnonymousSession | null {
@@ -52,27 +85,31 @@ async function getAnonymousSession(create: boolean): Promise<AnonymousSession | 
 
 export async function readPersistedAnalysis(
   request: ArtistRadarRequest
-): Promise<ArtistRadarResponse | null> {
+): Promise<PersistedAnalysis | null> {
   if (!isAuthConfigured()) return null;
   const client = await createClient();
   const fingerprint = analysisFingerprint(request);
   const { data: authData } = await client.auth.getUser();
 
   if (authData.user) {
-    const { data } = await client.rpc("read_latest_user_analysis", {
+    const { data, error } = await client.rpc("read_latest_user_analysis_v2", {
       requested_fingerprint: fingerprint,
+      requested_max_age_seconds: ANALYSIS_CACHE_TTL_SECONDS,
     });
-    return (data as ArtistRadarResponse | null) ?? null;
+    if (error) throw error;
+    return parsePersistedAnalysis(data);
   }
 
   const session = await getAnonymousSession(false);
   if (!session) return null;
-  const { data } = await client.rpc("read_anonymous_analysis", {
+  const { data, error } = await client.rpc("read_anonymous_analysis_v2", {
     requested_session_id: session.id,
     requested_claim_token_hash: session.tokenHash,
     requested_fingerprint: fingerprint,
+    requested_max_age_seconds: ANALYSIS_CACHE_TTL_SECONDS,
   });
-  return (data as ArtistRadarResponse | null) ?? null;
+  if (error) throw error;
+  return parsePersistedAnalysis(data);
 }
 
 export async function persistAnalysis(

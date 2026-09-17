@@ -156,7 +156,7 @@ export async function runOpportunitySearch(
       options.features?.chartmetricArtistEnrichment
     );
     const effectiveGenre = resolveEffectiveGenre(input.genre, profile.genres);
-    const effectiveCity = profile.city?.trim() || input.city;
+    const effectiveCity = profile.city?.trim() || profile.country?.trim() || input.city;
     const effectiveTarget = input.target?.trim() || profile.country?.trim() || null;
     const effectiveProfile = {
       ...profile,

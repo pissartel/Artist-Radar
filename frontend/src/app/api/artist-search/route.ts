@@ -1,4 +1,5 @@
 import * as deezerRuntime from "../../../../../dist/services/deezerService.js";
+import * as lastFmRuntime from "../../../../../dist/services/lastfmService.js";
 import * as musicBrainzRuntime from "../../../../../dist/services/musicBrainzService.js";
 import * as spotifyRuntime from "../../../../../dist/services/spotifyService.js";
 
@@ -30,6 +31,11 @@ interface MusicBrainzArtist {
   score: number | null;
 }
 
+interface LastFmArtist {
+  name: string;
+  tags: string[];
+}
+
 interface ArtistSearchCandidate {
   id: string;
   name: string;
@@ -54,7 +60,7 @@ export async function GET(request: Request) {
     return Response.json({ error: "Enter an artist name." }, { status: 400 });
   }
 
-  const [spotify, deezer, musicBrainz] = await Promise.all([
+  const [spotify, deezer, musicBrainz, lastFm] = await Promise.all([
     (spotifyRuntime.searchSpotifyArtists as (
       query: string,
       limit: number,
@@ -69,6 +75,10 @@ export async function GET(request: Request) {
       query: string,
       env: NodeJS.ProcessEnv
     ) => Promise<MusicBrainzArtist | null>)(query, process.env).catch(() => null),
+    (lastFmRuntime.getLastFmArtistInfo as (
+      query: string,
+      env: NodeJS.ProcessEnv
+    ) => Promise<LastFmArtist | null>)(query, process.env).catch(() => null),
   ]);
 
   const candidates: ArtistSearchCandidate[] = spotify.map((artist, index) => ({
@@ -137,9 +147,31 @@ export async function GET(request: Request) {
     }
   }
 
+  if (lastFm) {
+    const candidate = candidates.find(
+      (item) => normalize(item.name) === normalize(lastFm.name) || normalize(item.name) === normalize(query)
+    );
+    if (candidate && candidate.genres.length === 0) {
+      candidate.genres = lastFm.tags;
+    }
+  }
+
   const exactCandidate = candidates.find(
     (candidate) => normalize(candidate.name) === normalize(query)
   );
   if (exactCandidate) exactCandidate.bestMatch = true;
-  return Response.json({ candidates: candidates.slice(0, 8) });
+  return Response.json({
+    candidates: candidates.slice(0, 8),
+    detectedCountry: countryNameFromRequest(request),
+  });
+}
+
+function countryNameFromRequest(request: Request): string | null {
+  const code = request.headers.get("x-vercel-ip-country")?.trim().toUpperCase();
+  if (!code || !/^[A-Z]{2}$/.test(code)) return null;
+  try {
+    return new Intl.DisplayNames(["en"], { type: "region" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
 }

@@ -2,8 +2,8 @@ import { ArtistInputSchema, type ArtistInput, type Mode } from "./schemas.js";
 
 export interface CliArtistInputOptions {
   artist: string;
-  city: string;
-  genre: string;
+  city?: string;
+  genre?: string;
   target?: string;
   links?: string[];
   limit?: string | number;
@@ -27,8 +27,8 @@ export function buildCliArtistInput(
   return ArtistInputSchema.parse({
     mode,
     artist: options.artist,
-    city: options.city,
-    genre: options.genre,
+    city: options.city?.trim() || "unknown",
+    genre: options.genre?.trim() || "unknown",
     target: options.target ?? null,
     links: options.links ?? [],
     limit: options.limit ?? 10,

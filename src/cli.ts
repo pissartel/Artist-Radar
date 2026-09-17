@@ -8,8 +8,8 @@ import { BookingOutputWriteError, exportOpportunities, formatBookingOutputLog } 
 
 interface CliOptions {
   artist: string;
-  city: string;
-  genre: string;
+  city?: string;
+  genre?: string;
   target?: string;
   links?: string;
   limit?: string;
@@ -50,8 +50,8 @@ function addOpportunityCommand(mode: Mode, description: string): void {
     .command(mode)
     .description(description)
     .requiredOption("--artist <artist>", "artist name")
-    .requiredOption("--city <city>", "artist city")
-    .requiredOption("--genre <genre>", "artist genre")
+    .option("--city <city>", "artist city (auto-detected when omitted)")
+    .option("--genre <genre>", "artist genre (auto-detected when omitted)")
     .option("--target <target>", "target region or country")
     .option("--links <links>", "comma-separated artist links")
     .option("--limit <limit>", "maximum number of opportunities", "10")

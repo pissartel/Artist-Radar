@@ -5,6 +5,15 @@ import {
 } from "../src/artistInputBuilders.js";
 
 describe("CLI/web booking ArtistInput parity", () => {
+  it("allows the CLI to omit city and genre for automatic enrichment", () => {
+    expect(buildCliArtistInput("booking", { artist: "Tuesday Fall" })).toMatchObject({
+      artist: "Tuesday Fall",
+      city: "unknown",
+      genre: "unknown",
+      target: null,
+    });
+  });
+
   it("builds identical booking input for Tuesday Fall / Paris / France", () => {
     const cliInput = buildCliArtistInput("booking", {
       artist: "Tuesday Fall",

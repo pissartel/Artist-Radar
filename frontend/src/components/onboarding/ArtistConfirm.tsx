@@ -36,6 +36,7 @@ export default function ArtistConfirm() {
       setGenre(value.genres[0] ?? "");
       setCity(value.city ?? "");
       setCountry(value.country ?? "");
+      setTarget(value.defaultTargetCountry ?? "");
     } catch {
       router.replace("/");
     }

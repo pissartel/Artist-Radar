@@ -2,7 +2,7 @@ import { mapPipelineResultToArtistRadarResponse } from "@/lib/server/artistRadar
 import { ArtistInputSchema, runOpportunitySearch, warnLog } from "@/lib/server/backendPipeline";
 import type { ArtistRadarRequest } from "@/types/artistRadar";
 import { geocodeOpportunities } from "@/lib/server/geocodeOpportunities";
-import { persistAnalysis, readPersistedAnalysis } from "@/lib/server/analysisPersistence";
+import { persistAnalysis } from "@/lib/server/analysisPersistence";
 
 interface RawRequestBody {
   artistName?: unknown;
@@ -155,13 +155,12 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const persistedAnalysis = await readPersistedAnalysis(artistRadarRequest).catch((error) => {
-    warnLog("analysis-persistence", "Failed to read a persisted analysis", { error });
-    return null;
+  // P0: booking opportunities are time-sensitive and older persisted runs
+  // were generated with different provider/input semantics. Always execute
+  // the current pipeline; persistence remains write-only for account history.
+  warnLog("analysis-persistence", "Persisted analysis read bypassed", {
+    pipelineExecuted: true,
   });
-  if (persistedAnalysis) {
-    return Response.json(persistedAnalysis, { status: 200 });
-  }
 
   const missingEnvVars = getMissingRequiredEnvVars();
   if (missingEnvVars.length > 0) {

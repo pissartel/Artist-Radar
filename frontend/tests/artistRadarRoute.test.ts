@@ -222,17 +222,34 @@ describe("POST /api/artist-radar", () => {
     );
   });
 
-  it("returns a matching persisted analysis without rerunning the pipeline", async () => {
+  it("bypasses a stale persisted analysis and runs the current pipeline", async () => {
     const persisted = { artist: { name: "Tuesday Fall" }, bookingOpportunities: [] };
     readPersistedAnalysis.mockResolvedValueOnce(persisted);
+    runOpportunitySearch.mockResolvedValueOnce({
+      artistProfile: {
+        artistName: "Tuesday Fall",
+        city: "Bordeaux",
+        country: "France",
+        genres: ["pop punk"],
+        socialLinks: {},
+        platformStats: {},
+      },
+      similarArtists: {},
+      opportunities: [],
+    });
     const { POST } = await import("@/app/api/artist-radar/route");
 
     const response = await POST(jsonRequest(VALID_BODY));
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual(persisted);
-    expect(runOpportunitySearch).not.toHaveBeenCalled();
-    expect(persistAnalysis).not.toHaveBeenCalled();
+    expect(readPersistedAnalysis).not.toHaveBeenCalled();
+    expect(runOpportunitySearch).toHaveBeenCalledOnce();
+    expect(persistAnalysis).toHaveBeenCalledOnce();
+    expect(warnLog).toHaveBeenCalledWith(
+      "analysis-persistence",
+      "Persisted analysis read bypassed",
+      { pipelineExecuted: true },
+    );
   });
 
   it("passes a provided executionId through to the pipeline so its status can be polled", async () => {

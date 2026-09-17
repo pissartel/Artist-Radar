@@ -33,7 +33,10 @@ function buildQueryKey(request: ArtistRadarRequest | null) {
     request?.artistName ?? null,
     request?.genre ?? null,
     request?.location ?? null,
+    request?.referenceCountry ?? null,
     request?.enableBooking ?? null,
+    request?.spotifyUrl ?? null,
+    request?.features?.chartmetricArtistEnrichment ?? null,
     request?.previewData ?? null,
   ] as const;
 }

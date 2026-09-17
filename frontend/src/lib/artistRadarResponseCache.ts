@@ -1,6 +1,7 @@
 import type { ArtistRadarRequest, ArtistRadarResponse } from "@/types/artistRadar";
 
 const STORAGE_KEY = "artistRadarResponse:v1";
+const ANALYSIS_CACHE_VERSION = "booking-v3";
 
 interface CachedArtistRadarResponse {
   requestKey: string;
@@ -9,12 +10,15 @@ interface CachedArtistRadarResponse {
 
 function buildRequestKey(request: ArtistRadarRequest): string {
   return JSON.stringify({
+    analysisCacheVersion: ANALYSIS_CACHE_VERSION,
     artistName: request.artistName,
     genre: request.genre,
     location: request.location,
+    referenceCountry: request.referenceCountry ?? null,
     enableBooking: request.enableBooking,
     spotifyUrl: request.spotifyUrl,
     features: request.features,
+    previewData: request.previewData === true,
   });
 }
 

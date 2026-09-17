@@ -48,6 +48,14 @@ describe("Artist Radar response cache", () => {
     expect(readArtistRadarResponse({ ...REQUEST, artistName: "Another Artist" })).toBeUndefined();
   });
 
+  it("does not restore data for a different reference country", () => {
+    writeArtistRadarResponse({ ...REQUEST, referenceCountry: "France" }, RESPONSE);
+
+    expect(
+      readArtistRadarResponse({ ...REQUEST, referenceCountry: "Belgium" })
+    ).toBeUndefined();
+  });
+
   it("ignores malformed stored data", () => {
     window.sessionStorage.setItem("artistRadarResponse:v1", "{not-json");
 

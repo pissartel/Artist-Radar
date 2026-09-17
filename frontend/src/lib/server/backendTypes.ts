@@ -409,6 +409,7 @@ export interface BackendBookingSourceMetadata {
   providerName: string;
   sourceProvider: string;
   targetCount: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface BackendBookingDiagnostics {

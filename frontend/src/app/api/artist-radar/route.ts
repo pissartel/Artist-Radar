@@ -1,5 +1,5 @@
 import { mapPipelineResultToArtistRadarResponse } from "@/lib/server/artistRadarMapper";
-import { ArtistInputSchema, runOpportunitySearch, warnLog } from "@/lib/server/backendPipeline";
+import { buildWebBookingArtistInput, runOpportunitySearch, warnLog } from "@/lib/server/backendPipeline";
 import type { ArtistRadarRequest } from "@/types/artistRadar";
 import { geocodeOpportunities } from "@/lib/server/geocodeOpportunities";
 import { persistAnalysis, readPersistedAnalysis } from "@/lib/server/analysisPersistence";
@@ -119,6 +119,8 @@ function logBookingProviderDiagnostics(): void {
   warnLog("artist-radar-api", "Booking provider diagnostics", {
     enableOpenAgenda: process.env.ENABLE_OPENAGENDA === "true",
     openAgendaApiKeyPresent: Boolean(process.env.OPENAGENDA_API_KEY),
+    enableTicketmaster: process.env.ENABLE_TICKETMASTER_CONCERTS === "true",
+    ticketmasterApiKeyPresent: Boolean(process.env.TICKETMASTER_API_KEY),
     enableFirecrawlBooking: process.env.ENABLE_FIRECRAWL_BOOKING === "true",
     firecrawlApiKeyPresent: Boolean(process.env.FIRECRAWL_API_KEY),
   });
@@ -176,12 +178,22 @@ export async function POST(request: Request): Promise<Response> {
   logBookingProviderDiagnostics();
 
   try {
-    const input = ArtistInputSchema.parse({
-      mode: "booking",
-      artist: artistRadarRequest.artistName,
-      city: artistRadarRequest.location,
+    const input = buildWebBookingArtistInput({
+      artistName: artistRadarRequest.artistName,
+      location: artistRadarRequest.location,
       genre: artistRadarRequest.genre,
-      spotifyUrl: isValidHttpUrl(artistRadarRequest.spotifyUrl) ? artistRadarRequest.spotifyUrl : undefined,
+      ...(artistRadarRequest.referenceCountry
+        ? { referenceCountry: artistRadarRequest.referenceCountry }
+        : {}),
+      ...(isValidHttpUrl(artistRadarRequest.spotifyUrl)
+        ? { spotifyUrl: artistRadarRequest.spotifyUrl }
+        : {}),
+    });
+    warnLog("artist-radar-api", "Effective booking input", {
+      artist: input.artist,
+      city: input.city,
+      genre: input.genre,
+      target: input.target,
     });
 
     const searchOptions = {
@@ -192,6 +204,18 @@ export async function POST(request: Request): Promise<Response> {
       input,
       Object.keys(searchOptions).length > 0 ? searchOptions : undefined
     );
+    warnLog("artist-radar-api", "Booking provider target counts", {
+      providers: (result.bookingSearch?.sourceMetadata ?? []).map((source) => {
+        const metadata = source.metadata ?? {};
+        return {
+          provider: source.sourceProvider,
+          targetCount: source.targetCount,
+          venueOpportunitiesCreated: metadata.venueOpportunitiesCreated ?? null,
+          locationMode: metadata.locationMode ?? null,
+          resolvedLocations: metadata.resolvedLocations ?? null,
+        };
+      }),
+    });
     const response = mapPipelineResultToArtistRadarResponse(result, artistRadarRequest);
     response.bookingOpportunities = await geocodeOpportunities(response.bookingOpportunities);
 

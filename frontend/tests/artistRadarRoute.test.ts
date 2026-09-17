@@ -13,9 +13,24 @@ const persistAnalysis = vi.fn();
 vi.mock("@/lib/server/backendPipeline", () => ({
   runOpportunitySearch: (...args: unknown[]) => runOpportunitySearch(...args),
   warnLog: (...args: unknown[]) => warnLog(...args),
-  ArtistInputSchema: {
-    parse: (raw: unknown) => raw,
-  },
+  buildWebBookingArtistInput: (request: {
+    artistName: string;
+    genre: string;
+    location: string;
+    referenceCountry?: string;
+    spotifyUrl?: string;
+  }) => ({
+    mode: "booking",
+    artist: request.artistName,
+    city: request.location,
+    genre: request.genre,
+    target: request.referenceCountry ?? null,
+    links: [],
+    limit: 20,
+    spotifyUrl: request.spotifyUrl ?? null,
+    youtubeUrl: null,
+    instagramUrl: null,
+  }),
 }));
 
 vi.mock("@/lib/server/analysisPersistence", () => ({
@@ -141,6 +156,18 @@ describe("POST /api/artist-radar", () => {
       },
       similarArtists: {},
       opportunities: [],
+      bookingSearch: {
+        sourcesUsed: ["Ticketmaster"],
+        warnings: [],
+        sourceMetadata: [
+          {
+            providerName: "Ticketmaster",
+            sourceProvider: "ticketmaster",
+            targetCount: 13,
+            metadata: { venueOpportunitiesCreated: 5 },
+          },
+        ],
+      },
     });
     const { POST } = await import("@/app/api/artist-radar/route");
 
@@ -150,7 +177,36 @@ describe("POST /api/artist-radar", () => {
     expect(response.status).toBe(200);
     expect(payload.artist.name).toBe("Tuesday Fall");
     expect(runOpportunitySearch).toHaveBeenCalledOnce();
+    expect(runOpportunitySearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "booking",
+        artist: "Tuesday Fall",
+        city: "Bordeaux",
+        genre: "pop punk",
+        target: "France",
+        limit: 20,
+      }),
+      undefined,
+    );
     expect(persistAnalysis).toHaveBeenCalledWith(VALID_BODY, payload);
+    expect(warnLog).toHaveBeenCalledWith(
+      "artist-radar-api",
+      "Effective booking input",
+      { artist: "Tuesday Fall", city: "Bordeaux", genre: "pop punk", target: "France" },
+    );
+    expect(warnLog).toHaveBeenCalledWith(
+      "artist-radar-api",
+      "Booking provider target counts",
+      {
+        providers: [{
+          provider: "ticketmaster",
+          targetCount: 13,
+          venueOpportunitiesCreated: 5,
+          locationMode: null,
+          resolvedLocations: null,
+        }],
+      },
+    );
   });
 
   it("returns a matching persisted analysis without rerunning the pipeline", async () => {

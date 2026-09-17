@@ -2,7 +2,8 @@
 import "dotenv/config";
 import { Command } from "commander";
 import { runOpportunitySearch } from "./pipeline.js";
-import { ArtistInputSchema, type Mode } from "./schemas.js";
+import { type Mode } from "./schemas.js";
+import { buildCliArtistInput } from "./artistInputBuilders.js";
 import { BookingOutputWriteError, exportOpportunities, formatBookingOutputLog } from "./services/exportService.js";
 
 interface CliOptions {
@@ -59,17 +60,16 @@ function addOpportunityCommand(mode: Mode, description: string): void {
     .option("--instagram-url <url>", "Instagram profile URL")
     .option("--chartmetric", "enable Chartmetric enrichment for this run")
     .action(async (options: CliOptions) => {
-      const input = ArtistInputSchema.parse({
-        mode,
+      const input = buildCliArtistInput(mode, {
         artist: options.artist,
         city: options.city,
         genre: options.genre,
-        target: options.target ?? null,
+        target: options.target,
         links: parseLinks(options.links),
         limit: options.limit,
-        spotifyUrl: options.spotifyUrl ?? null,
-        youtubeUrl: options.youtubeUrl ?? null,
-        instagramUrl: options.instagramUrl ?? null
+        spotifyUrl: options.spotifyUrl,
+        youtubeUrl: options.youtubeUrl,
+        instagramUrl: options.instagramUrl
       });
 
       const result = await runOpportunitySearch(input, {

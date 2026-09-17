@@ -94,50 +94,59 @@ export async function searchDeezerArtistByName(
   env: DeezerEnv = process.env,
   fetchImpl: FetchLike = fetch
 ): Promise<DeezerArtistProfile | null> {
+  const candidates = await searchDeezerArtistsByName(name, 5, env, fetchImpl);
+  const normalizedTarget = normalizeArtistName(name);
+  return candidates.find((artist) => normalizeArtistName(artist.name) === normalizedTarget) ?? null;
+}
+
+export async function searchDeezerArtistsByName(
+  name: string,
+  limit = 5,
+  env: DeezerEnv = process.env,
+  fetchImpl: FetchLike = fetch
+): Promise<DeezerArtistProfile[]> {
   const trimmedName = name.trim();
   if (!trimmedName || env.ENABLE_DEEZER_ARTIST_SEARCH !== "true") {
-    return null;
+    return [];
   }
 
   if (env.MOCK_AI === "true") {
-    return {
+    return [{
       id: 123,
       name: trimmedName,
       fans: 950,
       deezerUrl: "https://www.deezer.com/artist/123",
       imageUrl: null
-    };
+    }];
   }
 
   try {
-    const params = new URLSearchParams({ q: trimmedName, limit: "5" });
+    const params = new URLSearchParams({ q: trimmedName, limit: String(Math.max(1, Math.min(limit, 10))) });
     const response = await fetchImpl(`https://api.deezer.com/search/artist?${params.toString()}`);
     debugLog("deezer", "Deezer artist search status", { artistName: trimmedName, status: response.status });
     if (!response.ok) {
       warnLog("deezer", "Deezer artist search failed.", { artistName: trimmedName, status: response.status });
-      return null;
+      return [];
     }
 
     const data = await response.json() as DeezerSearchArtistResponse;
-    const normalizedTarget = normalizeArtistName(trimmedName);
-    const exactMatch = (data.data ?? [])
+    const candidates = (data.data ?? [])
       .map(mapDeezerArtist)
-      .filter((artist): artist is DeezerArtistProfile => artist !== null)
-      .find((artist) => normalizeArtistName(artist.name) === normalizedTarget);
+      .filter((artist): artist is DeezerArtistProfile => artist !== null);
 
     debugLog("deezer", "Deezer search-by-name confidence check", {
       artistName: trimmedName,
       candidateCount: data.data?.length ?? 0,
-      confidentMatchFound: Boolean(exactMatch)
+      confidentMatchFound: candidates.some((artist) => normalizeArtistName(artist.name) === normalizeArtistName(trimmedName))
     });
 
-    return exactMatch ?? null;
+    return candidates;
   } catch (error) {
     warnLog("deezer", "Deezer artist search failed.", {
       artistName: trimmedName,
       error: error instanceof Error ? error.message : String(error)
     });
-    return null;
+    return [];
   }
 }
 

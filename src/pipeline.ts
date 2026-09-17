@@ -155,12 +155,29 @@ export async function runOpportunitySearch(
       options.chartmetricProvider,
       options.features?.chartmetricArtistEnrichment
     );
+    const effectiveGenre = resolveEffectiveGenre(input.genre, profile.genres);
+    const effectiveCity = profile.city?.trim() || input.city;
+    const effectiveTarget = input.target?.trim() || profile.country?.trim() || null;
+    const effectiveProfile = {
+      ...profile,
+      city: effectiveCity,
+      genres: effectiveGenre === input.genre
+        ? profile.genres
+        : [effectiveGenre, ...profile.genres.filter((genre) => genre.toLowerCase() !== effectiveGenre.toLowerCase())]
+    };
+    debugLog("pipeline", "resolved search context", {
+      requestedGenre: input.genre,
+      effectiveGenre,
+      effectiveCity,
+      effectiveTarget,
+      genreEnriched: effectiveGenre !== input.genre
+    });
     track("FINDING_SIMILAR_ARTISTS");
     const similarArtists = await findSimilarArtists({
-      profile,
-      target: input.target,
-      genre: input.genre,
-      city: input.city,
+      profile: effectiveProfile,
+      target: effectiveTarget,
+      genre: effectiveGenre,
+      city: effectiveCity,
       links: input.links,
       spotifyRelatedArtists: options.spotifyRelatedArtists,
       spotifySearch: options.spotifySearch,
@@ -182,7 +199,7 @@ export async function runOpportunitySearch(
     debugLog("chartmetric", "similar artists before enrichment", summarizeSimilarArtistOrdering(similarArtists));
     const groupedSimilarArtists = await enrichSimilarArtistsWithChartmetricSafely(
       groupSimilarArtistsByTier(similarArtists),
-      profile,
+      effectiveProfile,
       chartmetric,
       options.chartmetricSimilarArtistProvider,
       options.features?.chartmetricArtistEnrichment
@@ -199,7 +216,7 @@ export async function runOpportunitySearch(
     // sample. Purely additive — never changes which similar artists exist or
     // their ordering, only adds artistScale* fields to each entry.
     const { artistScale, similarArtists: scaledSimilarArtists } = computeArtistScaleSafely(
-      profile,
+      effectiveProfile,
       chartmetric,
       groupedSimilarArtists
     );
@@ -209,22 +226,22 @@ export async function runOpportunitySearch(
     );
     track("SEARCHING_OPPORTUNITIES");
     const { venueCandidates, eventCandidates } = await findVenueEventCandidates({
-      profile,
-      target: input.target,
-      genre: input.genre,
-      city: input.city
+      profile: effectiveProfile,
+      target: effectiveTarget,
+      genre: effectiveGenre,
+      city: effectiveCity
     });
     await gatherSearchContext(input);
 
     if (input.mode === "booking") {
       const bookingSearch = await searchBookingOpportunities({
         artist: input.artist,
-        city: input.city,
-        genre: input.genre,
-        target: input.target,
+        city: effectiveCity,
+        genre: effectiveGenre,
+        target: effectiveTarget,
         links: input.links,
         limit: input.limit,
-        artistProfile: profile,
+        artistProfile: effectiveProfile,
         similarArtists: similarArtistsForLiveSearch
       }, options.bookingSearchOptions);
       debugLog("pipeline", "runOpportunitySearch booking provider summary", {
@@ -246,18 +263,18 @@ export async function runOpportunitySearch(
 
       const labelOpportunities = await runLabelDiscoverySafely({
         artist: input.artist,
-        city: input.city,
-        genre: input.genre,
-        target: input.target,
+        city: effectiveCity,
+        genre: effectiveGenre,
+        target: effectiveTarget,
         limit: input.limit,
-        artistProfile: profile,
+        artistProfile: effectiveProfile,
         similarArtists: similarArtistsForLiveSearch
       }, options.labelDiscoveryOptions);
       track("SCORING_RESULTS");
       track("PREPARING_OVERVIEW");
 
       const bookingResult: OpportunitySearchRunResult = {
-        artistProfile: profile,
+        artistProfile: effectiveProfile,
         similarArtists: scaledSimilarArtists,
         venueCandidates,
         eventCandidates,
@@ -320,6 +337,16 @@ export async function runOpportunitySearch(
     }
     throw error;
   }
+}
+
+const GENERIC_SEARCH_GENRES = new Set(["music", "unknown", "other", "various"]);
+
+function resolveEffectiveGenre(requestedGenre: string, enrichedGenres: string[]): string {
+  const requested = requestedGenre.trim();
+  if (!GENERIC_SEARCH_GENRES.has(requested.toLowerCase())) {
+    return requested;
+  }
+  return enrichedGenres.find((genre) => !GENERIC_SEARCH_GENRES.has(genre.trim().toLowerCase()))?.trim() || requested;
 }
 
 // Label discovery (issue #169) is an additive enrichment of the booking

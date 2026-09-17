@@ -492,7 +492,7 @@ describe("runOpportunitySearch", () => {
     const result = await runOpportunitySearch(input, {
       generator: generatorReturning(validResult),
       seedCandidates: [],
-      bookingSearchOptions: { providers: [provider] }
+      bookingSearchOptions: { providers: [provider], now: new Date("2026-08-01T00:00:00Z") }
     });
 
     const opportunity = result.opportunities.find((o) => o.source_url === "https://example.test/the-slugz-maroquinerie");

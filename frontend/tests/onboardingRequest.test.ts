@@ -55,9 +55,14 @@ describe("readOnboardingRequest", () => {
 
     expect(readOnboardingRequest()).toMatchObject({
       artistName: "Tuesday Fall",
-      genre: "music",
+      genre: "unknown",
       location: "Worldwide",
     });
+  });
+
+  it("uses the requested target before the artist country", () => {
+    stubLocalStorage(JSON.stringify(onboardingData({ targetLocation: "Belgium", countryOfOrigin: "France" })));
+    expect(readOnboardingRequest()?.referenceCountry).toBe("Belgium");
   });
 
   it("uses the optional target location before the worldwide fallback", () => {

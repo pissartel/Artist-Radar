@@ -2,7 +2,7 @@ import type { ArtistRadarRequest } from "@/types/artistRadar";
 import type { OnboardingFormData } from "@/types";
 
 const ONBOARDING_STORAGE_KEY = "artistRadarOnboardingData";
-const DEFAULT_GENRE = "music";
+const DEFAULT_GENRE = "unknown";
 const DEFAULT_LOCATION = "Worldwide";
 
 export function readOnboardingRequest(): ArtistRadarRequest | null {
@@ -25,13 +25,16 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
   }
 
   const artistName = onboarding.artistName?.trim();
-  const genre = onboarding.mainGenre?.trim() || DEFAULT_GENRE;
+  const genre =
+    onboarding.mainGenre?.trim() ||
+    onboarding.secondaryGenres?.split(",").map((value) => value.trim()).find(Boolean) ||
+    DEFAULT_GENRE;
   const location =
     onboarding.city?.trim() ||
     onboarding.countryOfOrigin?.trim() ||
     onboarding.targetLocation?.trim() ||
     DEFAULT_LOCATION;
-  const referenceCountry = onboarding.countryOfOrigin?.trim();
+  const referenceCountry = onboarding.targetLocation?.trim() || onboarding.countryOfOrigin?.trim();
 
   if (!artistName) {
     return null;

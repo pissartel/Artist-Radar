@@ -60,10 +60,11 @@ export async function GET(request: Request) {
       limit: number,
       env: NodeJS.ProcessEnv
     ) => Promise<SpotifyArtist[]>)(query, 5, process.env).catch(() => []),
-    (deezerRuntime.searchDeezerArtistByName as (
+    (deezerRuntime.searchDeezerArtistsByName as (
       query: string,
+      limit: number,
       env: NodeJS.ProcessEnv
-    ) => Promise<DeezerArtist | null>)(query, process.env).catch(() => null),
+    ) => Promise<DeezerArtist[]>)(query, 5, { ...process.env, ENABLE_DEEZER_ARTIST_SEARCH: "true" }).catch(() => []),
     (musicBrainzRuntime.enrichArtistWithMusicBrainz as (
       query: string,
       env: NodeJS.ProcessEnv
@@ -84,30 +85,26 @@ export async function GET(request: Request) {
     bestMatch: index === 0,
   }));
 
-  const exactCandidate = candidates.find(
-    (candidate) => normalize(candidate.name) === normalize(query)
-  );
-
-  if (deezer) {
+  for (const deezerArtist of deezer) {
     const candidate = candidates.find(
-      (item) => normalize(item.name) === normalize(deezer.name)
+      (item) => normalize(item.name) === normalize(deezerArtist.name)
     );
     if (candidate) {
       candidate.sources.push("deezer");
-      candidate.deezerUrl = deezer.deezerUrl;
-      candidate.imageUrl ??= deezer.imageUrl;
-      candidate.followers ??= deezer.fans;
+      candidate.deezerUrl = deezerArtist.deezerUrl;
+      candidate.imageUrl ??= deezerArtist.imageUrl;
+      candidate.followers ??= deezerArtist.fans;
     } else {
       candidates.push({
-        id: `deezer:${deezer.id}`,
-        name: deezer.name,
+        id: `deezer:${deezerArtist.id}`,
+        name: deezerArtist.name,
         genres: [],
         city: null,
         country: null,
-        followers: deezer.fans,
-        imageUrl: deezer.imageUrl,
+        followers: deezerArtist.fans,
+        imageUrl: deezerArtist.imageUrl,
         spotifyUrl: null,
-        deezerUrl: deezer.deezerUrl,
+        deezerUrl: deezerArtist.deezerUrl,
         sources: ["deezer"],
         bestMatch: candidates.length === 0,
       });
@@ -140,6 +137,9 @@ export async function GET(request: Request) {
     }
   }
 
+  const exactCandidate = candidates.find(
+    (candidate) => normalize(candidate.name) === normalize(query)
+  );
   if (exactCandidate) exactCandidate.bestMatch = true;
-  return Response.json({ candidates });
+  return Response.json({ candidates: candidates.slice(0, 8) });
 }

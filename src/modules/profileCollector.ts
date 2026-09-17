@@ -231,7 +231,11 @@ function mergePlatformStats(
 
 function mergeGenres(userGenres: string[], spotifyGenres: string[]): string[] {
   const seen = new Set<string>();
-  return [...userGenres, ...spotifyGenres].filter((genre) => {
+  const specificSpotifyGenres = spotifyGenres.filter((genre) => !isGenericGenre(genre));
+  const orderedGenres = specificSpotifyGenres.length > 0
+    ? [...specificSpotifyGenres, ...userGenres.filter((genre) => !isGenericGenre(genre))]
+    : [...userGenres, ...spotifyGenres];
+  return orderedGenres.filter((genre) => {
     const normalized = genre.trim().toLowerCase();
     if (!normalized || seen.has(normalized)) {
       return false;
@@ -240,6 +244,10 @@ function mergeGenres(userGenres: string[], spotifyGenres: string[]): string[] {
     seen.add(normalized);
     return true;
   });
+}
+
+function isGenericGenre(genre: string): boolean {
+  return /^(music|unknown|other|various)$/i.test(genre.trim());
 }
 
 function calculateConfidence(

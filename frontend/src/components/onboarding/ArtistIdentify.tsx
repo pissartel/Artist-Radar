@@ -147,7 +147,6 @@ export default function ArtistIdentify() {
                 <span className="block text-[13px] font-semibold text-foreground-muted">
                   {[item.genres.slice(0, 2).join(" · "), item.city, item.country, item.followers && `${item.followers.toLocaleString()} followers`].filter(Boolean).join(" · ") || "Profile details available after selection"}
                 </span>
-                <span className="font-mono text-xs text-muted">{item.sources.join(" · ")}</span>
               </span>
               <span className="text-[13px] font-bold text-accent-text">Select</span>
             </button>

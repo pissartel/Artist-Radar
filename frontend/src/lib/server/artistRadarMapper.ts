@@ -345,7 +345,6 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
       ? [{
           url: opportunity.source_url,
           title: opportunity.displayTitle || opportunity.name,
-          retrievedInfo: opportunity.sourceProvider ? `Source provider: ${opportunity.sourceProvider}` : undefined,
         }]
       : undefined;
 

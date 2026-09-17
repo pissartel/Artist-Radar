@@ -32,6 +32,13 @@ function isStructuredErrorPayload(payload: unknown): payload is StructuredErrorP
 export async function fetchArtistRadarData(
   request: ArtistRadarRequest
 ): Promise<ArtistRadarResponse> {
+  console.info("[artist-radar-request] POST /api/artist-radar", {
+    artistName: request.artistName,
+    genre: request.genre,
+    location: request.location,
+    referenceCountry: request.referenceCountry ?? null,
+    enableBooking: request.enableBooking ?? true,
+  });
   let response: Response;
   try {
     response = await fetch("/api/artist-radar", {

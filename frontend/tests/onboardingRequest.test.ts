@@ -27,6 +27,8 @@ function onboardingData(overrides: Partial<OnboardingFormData> = {}): Onboarding
     mainGoal: "booking_opportunities",
     useChartmetricEnrichment: false,
     chartmetricToggleVisible: false,
+    usePreviewData: false,
+    previewDataToggleVisible: false,
     ...overrides,
   };
 }
@@ -41,7 +43,7 @@ describe("readOnboardingRequest", () => {
     expect(readOnboardingRequest()).toBeNull();
   });
 
-  it("uses broad fallbacks when artist enrichment has no genre or location", () => {
+  it("does not execute booking when all location data is missing", () => {
     stubLocalStorage(
       JSON.stringify(
         onboardingData({
@@ -53,25 +55,44 @@ describe("readOnboardingRequest", () => {
       )
     );
 
-    expect(readOnboardingRequest()).toMatchObject({
-      artistName: "Tuesday Fall",
-      genre: "music",
-      location: "Worldwide",
-    });
+    expect(readOnboardingRequest()).toBeNull();
   });
 
-  it("uses the optional target location before the worldwide fallback", () => {
+  it("uses an explicit target country when city is missing", () => {
     stubLocalStorage(
       JSON.stringify(
         onboardingData({
           countryOfOrigin: "",
           city: "",
-          targetLocation: "Berlin",
+          targetLocation: "France",
         })
       )
     );
 
-    expect(readOnboardingRequest()?.location).toBe("Berlin");
+    expect(readOnboardingRequest()).toMatchObject({
+      location: "France",
+      enableBooking: true,
+    });
+  });
+
+  it("keeps city and reference country as separate concepts", () => {
+    stubLocalStorage(JSON.stringify(onboardingData({ city: "Paris" })));
+
+    expect(readOnboardingRequest()).toMatchObject({
+      artistName: "Tuesday Fall",
+      genre: "pop punk",
+      location: "Paris",
+      referenceCountry: "France",
+      enableBooking: true,
+    });
+  });
+
+  it("only uses Worldwide when the user explicitly entered it", () => {
+    stubLocalStorage(
+      JSON.stringify(onboardingData({ city: "", countryOfOrigin: "", targetLocation: "Worldwide" }))
+    );
+
+    expect(readOnboardingRequest()?.location).toBe("Worldwide");
   });
 
   it("omits the Chartmetric feature field for a standard production-shaped request (toggle never rendered)", () => {

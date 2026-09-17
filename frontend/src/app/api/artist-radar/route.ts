@@ -176,6 +176,13 @@ export async function POST(request: Request): Promise<Response> {
   logBookingProviderDiagnostics();
 
   try {
+    warnLog("artist-radar-api", "Executing Artist Radar request", {
+      artistName: artistRadarRequest.artistName,
+      genre: artistRadarRequest.genre,
+      location: artistRadarRequest.location,
+      referenceCountry: artistRadarRequest.referenceCountry ?? null,
+      enableBooking: artistRadarRequest.enableBooking ?? true,
+    });
     const input = ArtistInputSchema.parse({
       mode: "booking",
       artist: artistRadarRequest.artistName,

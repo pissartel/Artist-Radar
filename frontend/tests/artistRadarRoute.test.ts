@@ -151,6 +151,17 @@ describe("POST /api/artist-radar", () => {
     expect(payload.artist.name).toBe("Tuesday Fall");
     expect(runOpportunitySearch).toHaveBeenCalledOnce();
     expect(persistAnalysis).toHaveBeenCalledWith(VALID_BODY, payload);
+    expect(warnLog).toHaveBeenCalledWith(
+      "artist-radar-api",
+      "Executing Artist Radar request",
+      {
+        artistName: "Tuesday Fall",
+        genre: "pop punk",
+        location: "Bordeaux",
+        referenceCountry: "France",
+        enableBooking: true,
+      }
+    );
   });
 
   it("returns a matching persisted analysis without rerunning the pipeline", async () => {

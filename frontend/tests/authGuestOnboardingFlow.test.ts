@@ -22,11 +22,11 @@ describe("issue #255 guest onboarding and conversion", () => {
     expect(confirmation).toContain('role="alert"');
   });
 
-  it("does not block artist confirmation when enrichment has no genre or location", () => {
+  it("requires missing booking context to be completed before analysis", () => {
     const confirmation = source("components/onboarding/ArtistConfirm.tsx");
-    expect(confirmation).not.toContain("Add a main genre before continuing.");
-    expect(confirmation).not.toContain("Add your city or country before continuing.");
-    expect(confirmation).not.toMatch(/<Input required value=\{genre\}/);
+    expect(confirmation).toContain("Add a main genre before continuing.");
+    expect(confirmation).toContain("Add a city, target market, or country before continuing.");
+    expect(confirmation).toMatch(/<Input required value=\{genre\}/);
     expect(confirmation).toContain('router.push("/analyzing")');
   });
 

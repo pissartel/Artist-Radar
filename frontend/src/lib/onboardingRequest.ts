@@ -3,7 +3,6 @@ import type { OnboardingFormData } from "@/types";
 
 const ONBOARDING_STORAGE_KEY = "artistRadarOnboardingData";
 const DEFAULT_GENRE = "music";
-const DEFAULT_LOCATION = "Worldwide";
 
 export function readOnboardingRequest(): ArtistRadarRequest | null {
   let stored: string | null;
@@ -26,14 +25,20 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
 
   const artistName = onboarding.artistName?.trim();
   const genre = onboarding.mainGenre?.trim() || DEFAULT_GENRE;
+  const enableBooking = onboarding.mainGoal !== "similar_artists";
+  const city = onboarding.city?.trim();
+  const targetLocation = onboarding.targetLocation?.trim();
+  const countryOfOrigin = onboarding.countryOfOrigin?.trim();
   const location =
-    onboarding.city?.trim() ||
-    onboarding.countryOfOrigin?.trim() ||
-    onboarding.targetLocation?.trim() ||
-    DEFAULT_LOCATION;
-  const referenceCountry = onboarding.countryOfOrigin?.trim();
+    city ||
+    targetLocation ||
+    countryOfOrigin;
+  const referenceCountry = countryOfOrigin;
 
-  if (!artistName) {
+  // Booking is geographic. Never silently turn incomplete onboarding into a
+  // global search: Worldwide is only valid when it was explicitly entered in
+  // one of the location fields.
+  if (!artistName || !location) {
     return null;
   }
 
@@ -53,7 +58,7 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
     artistName,
     genre,
     location,
-    enableBooking: onboarding.mainGoal !== "similar_artists",
+    enableBooking,
     ...(spotifyUrl ? { spotifyUrl } : {}),
     ...(chartmetricArtistEnrichment ? { features: { chartmetricArtistEnrichment: true } } : {}),
     ...(previewData ? { previewData: true } : {}),

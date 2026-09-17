@@ -44,6 +44,36 @@ describe("fetchArtistRadarData", () => {
     expect(result).toEqual({ artist: { name: "Tuesday Fall" } });
   });
 
+  it("posts and logs the exact safe booking context", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const request: ArtistRadarRequest = {
+      artistName: "Tuesday Fall",
+      genre: "pop punk",
+      location: "Paris",
+      referenceCountry: "France",
+      enableBooking: true,
+    };
+    mockFetchOnce({ ok: true, json: async () => ({ artist: { name: "Tuesday Fall" } }) });
+
+    await fetchArtistRadarData(request);
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/artist-radar",
+      expect.objectContaining({ body: JSON.stringify(request) })
+    );
+    expect(info).toHaveBeenCalledWith(
+      "[artist-radar-request] POST /api/artist-radar",
+      {
+        artistName: "Tuesday Fall",
+        genre: "pop punk",
+        location: "Paris",
+        referenceCountry: "France",
+        enableBooking: true,
+      }
+    );
+    info.mockRestore();
+  });
+
   it("throws ArtistRadarClientError with the structured code/message on a { success:false } error response", async () => {
     mockFetchOnce({
       ok: false,

@@ -8,7 +8,6 @@ import { config as loadEnv } from "dotenv";
 import * as pipelineRuntime from "../../../../dist/pipeline.js";
 import * as pipelineExecutionStateRuntime from "../../../../dist/pipelineExecutionState.js";
 import * as schemasRuntime from "../../../../dist/schemas.js";
-import * as artistInputBuildersRuntime from "../../../../dist/artistInputBuilders.js";
 import * as loggerRuntime from "../../../../dist/utils/logger.js";
 import type {
   BackendArtistInput,
@@ -26,13 +25,6 @@ type RunOpportunitySearchFn = (
   options?: BackendRunOpportunitySearchOptions
 ) => Promise<BackendPipelineResult>;
 type ArtistInputParseFn = (raw: unknown) => BackendArtistInput;
-type BuildWebBookingArtistInputFn = (request: {
-  artistName: string;
-  genre: string;
-  location: string;
-  referenceCountry?: string;
-  spotifyUrl?: string;
-}) => BackendArtistInput;
 type WarnLogFn = (scope: string, message: string, data?: unknown) => void;
 type GetPipelineExecutionStateFn = (executionId: string) => BackendPipelineExecutionState | null;
 
@@ -40,8 +32,6 @@ export const runOpportunitySearch = pipelineRuntime.runOpportunitySearch as RunO
 export const ArtistInputSchema = {
   parse: schemasRuntime.ArtistInputSchema.parse as ArtistInputParseFn,
 };
-export const buildWebBookingArtistInput =
-  artistInputBuildersRuntime.buildWebBookingArtistInput as BuildWebBookingArtistInputFn;
 export const warnLog = loggerRuntime.warnLog as WarnLogFn;
 export const getPipelineExecutionState =
   pipelineExecutionStateRuntime.getPipelineExecutionState as GetPipelineExecutionStateFn;

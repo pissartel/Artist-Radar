@@ -13,24 +13,9 @@ const persistAnalysis = vi.fn();
 vi.mock("@/lib/server/backendPipeline", () => ({
   runOpportunitySearch: (...args: unknown[]) => runOpportunitySearch(...args),
   warnLog: (...args: unknown[]) => warnLog(...args),
-  buildWebBookingArtistInput: (request: {
-    artistName: string;
-    genre: string;
-    location: string;
-    referenceCountry?: string;
-    spotifyUrl?: string;
-  }) => ({
-    mode: "booking",
-    artist: request.artistName,
-    city: request.location,
-    genre: request.genre,
-    target: request.referenceCountry ?? null,
-    links: [],
-    limit: 20,
-    spotifyUrl: request.spotifyUrl ?? null,
-    youtubeUrl: null,
-    instagramUrl: null,
-  }),
+  ArtistInputSchema: {
+    parse: (raw: unknown) => raw,
+  },
 }));
 
 vi.mock("@/lib/server/analysisPersistence", () => ({
@@ -184,7 +169,6 @@ describe("POST /api/artist-radar", () => {
         city: "Bordeaux",
         genre: "pop punk",
         target: "France",
-        limit: 20,
       }),
       undefined,
     );
@@ -206,6 +190,35 @@ describe("POST /api/artist-radar", () => {
           resolvedLocations: null,
         }],
       },
+    );
+  });
+
+  it("maps Paris and reference country France to the CLI-equivalent booking fields", async () => {
+    runOpportunitySearch.mockResolvedValueOnce({
+      artistProfile: {
+        artistName: "Tuesday Fall",
+        city: "Paris",
+        country: "France",
+        genres: ["pop punk"],
+        socialLinks: {},
+        platformStats: {},
+      },
+      similarArtists: {},
+      opportunities: [],
+    });
+    const { POST } = await import("@/app/api/artist-radar/route");
+
+    await POST(jsonRequest({ ...VALID_BODY, location: "Paris" }));
+
+    expect(runOpportunitySearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "booking",
+        artist: "Tuesday Fall",
+        city: "Paris",
+        genre: "pop punk",
+        target: "France",
+      }),
+      undefined,
     );
   });
 

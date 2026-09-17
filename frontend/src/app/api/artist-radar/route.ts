@@ -1,5 +1,5 @@
 import { mapPipelineResultToArtistRadarResponse } from "@/lib/server/artistRadarMapper";
-import { buildWebBookingArtistInput, runOpportunitySearch, warnLog } from "@/lib/server/backendPipeline";
+import { ArtistInputSchema, runOpportunitySearch, warnLog } from "@/lib/server/backendPipeline";
 import type { ArtistRadarRequest } from "@/types/artistRadar";
 import { geocodeOpportunities } from "@/lib/server/geocodeOpportunities";
 import { persistAnalysis, readPersistedAnalysis } from "@/lib/server/analysisPersistence";
@@ -178,16 +178,15 @@ export async function POST(request: Request): Promise<Response> {
   logBookingProviderDiagnostics();
 
   try {
-    const input = buildWebBookingArtistInput({
-      artistName: artistRadarRequest.artistName,
-      location: artistRadarRequest.location,
+    const input = ArtistInputSchema.parse({
+      mode: "booking",
+      artist: artistRadarRequest.artistName,
+      city: artistRadarRequest.location,
       genre: artistRadarRequest.genre,
-      ...(artistRadarRequest.referenceCountry
-        ? { referenceCountry: artistRadarRequest.referenceCountry }
-        : {}),
-      ...(isValidHttpUrl(artistRadarRequest.spotifyUrl)
-        ? { spotifyUrl: artistRadarRequest.spotifyUrl }
-        : {}),
+      target: artistRadarRequest.referenceCountry ?? null,
+      spotifyUrl: isValidHttpUrl(artistRadarRequest.spotifyUrl)
+        ? artistRadarRequest.spotifyUrl
+        : undefined,
     });
     warnLog("artist-radar-api", "Effective booking input", {
       artist: input.artist,

@@ -4,6 +4,7 @@ import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ArtistRadarClientError, fetchArtistRadarData } from "@/lib/artistRadarClient";
 import {
+  ANALYSIS_CACHE_VERSION,
   readArtistRadarResponse,
   writeArtistRadarResponse,
 } from "@/lib/artistRadarResponseCache";
@@ -30,6 +31,7 @@ export interface UseArtistRadarDataResult {
 function buildQueryKey(request: ArtistRadarRequest | null) {
   return [
     "artistRadar",
+    ANALYSIS_CACHE_VERSION,
     request?.artistName ?? null,
     request?.genre ?? null,
     request?.location ?? null,

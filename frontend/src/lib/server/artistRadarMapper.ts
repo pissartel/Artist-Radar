@@ -517,6 +517,17 @@ export function mapPipelineResultToArtistRadarResponse(
     sources: includeBooking ? buildSources(result) : [],
     bookingDiagnostics: includeBooking
       ? {
+          analysis: {
+            cacheVersion: "unavailable",
+            pipelineExecuted: true,
+            effectiveInput: {
+              artist: request.artistName,
+              city: request.location,
+              genre: request.genre,
+              target: request.referenceCountry ?? null,
+            },
+            providers: [],
+          },
           backendOpportunityCount: backendOpportunities.length,
           frontendMappedOpportunityCount: bookingOpportunities.length,
           droppedDuringFrontendMapping,

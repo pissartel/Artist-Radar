@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  ANALYSIS_CACHE_CLEARED_EVENT,
   clearArtistRadarResponse,
   readArtistRadarResponse,
   writeArtistRadarResponse,
@@ -28,8 +29,14 @@ function createFakeSessionStorage() {
 }
 
 describe("Artist Radar response cache", () => {
+  const dispatchEvent = vi.fn();
+
   beforeEach(() => {
-    vi.stubGlobal("window", { sessionStorage: createFakeSessionStorage() });
+    dispatchEvent.mockReset();
+    vi.stubGlobal("window", {
+      sessionStorage: createFakeSessionStorage(),
+      dispatchEvent,
+    });
   });
 
   afterEach(() => {
@@ -67,5 +74,9 @@ describe("Artist Radar response cache", () => {
     clearArtistRadarResponse();
 
     expect(readArtistRadarResponse(REQUEST)).toBeUndefined();
+    expect(dispatchEvent).toHaveBeenCalledOnce();
+    expect(dispatchEvent.mock.calls[0]?.[0]).toMatchObject({
+      type: ANALYSIS_CACHE_CLEARED_EVENT,
+    });
   });
 });

@@ -3,6 +3,7 @@ import { ArtistInputSchema, runOpportunitySearch, warnLog } from "@/lib/server/b
 import type { ArtistRadarRequest } from "@/types/artistRadar";
 import { geocodeOpportunities } from "@/lib/server/geocodeOpportunities";
 import { persistAnalysis } from "@/lib/server/analysisPersistence";
+import { ANALYSIS_CACHE_VERSION } from "@/lib/artistRadarResponseCache";
 
 interface RawRequestBody {
   artistName?: unknown;
@@ -215,6 +216,28 @@ export async function POST(request: Request): Promise<Response> {
       }),
     });
     const response = mapPipelineResultToArtistRadarResponse(result, artistRadarRequest);
+    if (response.bookingDiagnostics) {
+      response.bookingDiagnostics.analysis = {
+        cacheVersion: ANALYSIS_CACHE_VERSION,
+        pipelineExecuted: true,
+        effectiveInput: {
+          artist: input.artist,
+          city: input.city,
+          genre: input.genre,
+          target: input.target,
+        },
+        providers: (result.bookingSearch?.sourceMetadata ?? []).map((source) => {
+          const metadata = source.metadata ?? {};
+          return {
+            provider: source.sourceProvider,
+            targetCount: source.targetCount,
+            venueOpportunitiesCreated: metadata.venueOpportunitiesCreated ?? null,
+            locationMode: metadata.locationMode ?? null,
+            resolvedLocations: metadata.resolvedLocations ?? null,
+          };
+        }),
+      };
+    }
     response.bookingOpportunities = await geocodeOpportunities(response.bookingOpportunities);
 
     await persistAnalysis(artistRadarRequest, response).catch((error) => {

@@ -52,6 +52,7 @@ export default function ArtistConfirm() {
         JSON.stringify({
           artistName: artist.name,
           spotifyUrl: artist.spotifyUrl ?? "",
+          deezerUrl: artist.deezerUrl ?? "",
           youtubeUrl: "",
           instagramUrl: "",
           websiteUrl: "",

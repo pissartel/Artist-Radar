@@ -95,7 +95,7 @@ export async function resolveChartmetricFeatureFlag(
 
   let effectiveEnabled: boolean;
   let reason: ChartmetricSkipReason | undefined = serverReason;
-  if (environment === "production") {
+  if (environment === "production" || environment === "preview") {
     effectiveEnabled = serverFlagEnabled;
   } else {
     effectiveEnabled = serverFlagEnabled && input.requestToggleEnabled === true;

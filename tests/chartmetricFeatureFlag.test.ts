@@ -45,7 +45,14 @@ describe("resolveChartmetricFeatureFlag", () => {
     expect(disabled.reason).toBe("feature_disabled");
   });
 
-  it("in preview/development, requires both the server flag and an explicit request toggle", async () => {
+  it("in Vercel preview, uses the server flag because the client toggle is intentionally hidden", async () => {
+    const resolution = await resolveChartmetricFeatureFlag({
+      env: { CHARTMETRIC_REFRESH_TOKEN: "token", VERCEL_ENV: "preview" }
+    });
+    expect(resolution.effectiveEnabled).toBe(true);
+  });
+
+  it("in local development, requires both the server flag and an explicit request toggle", async () => {
     const withoutToggle = await resolveChartmetricFeatureFlag({
       env: { CHARTMETRIC_REFRESH_TOKEN: "token", VERCEL_ENV: "development" }
     });

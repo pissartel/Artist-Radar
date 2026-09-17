@@ -8,6 +8,7 @@ export interface CliArtistInputOptions {
   links?: string[];
   limit?: string | number;
   spotifyUrl?: string;
+  deezerUrl?: string;
   youtubeUrl?: string;
   instagramUrl?: string;
 }
@@ -18,6 +19,7 @@ export interface WebBookingArtistInputRequest {
   location: string;
   referenceCountry?: string;
   spotifyUrl?: string;
+  deezerUrl?: string;
 }
 
 export function buildCliArtistInput(
@@ -33,6 +35,7 @@ export function buildCliArtistInput(
     links: options.links ?? [],
     limit: options.limit ?? 10,
     spotifyUrl: options.spotifyUrl ?? null,
+    deezerUrl: options.deezerUrl ?? null,
     youtubeUrl: options.youtubeUrl ?? null,
     instagramUrl: options.instagramUrl ?? null,
   });
@@ -50,6 +53,7 @@ export function buildWebBookingArtistInput(
     links: [],
     limit: 20,
     spotifyUrl: request.spotifyUrl ?? null,
+    deezerUrl: request.deezerUrl ?? null,
     youtubeUrl: null,
     instagramUrl: null,
   });

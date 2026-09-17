@@ -12,6 +12,7 @@ interface RawRequestBody {
   referenceCountry?: unknown;
   enableBooking?: unknown;
   spotifyUrl?: unknown;
+  deezerUrl?: unknown;
   executionId?: unknown;
   features?: unknown;
 }
@@ -33,7 +34,7 @@ function errorResponse(status: number, code: ErrorCode, message: string): Respon
 }
 
 function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | null {
-  const { artistName, genre, location, referenceCountry, enableBooking, spotifyUrl, executionId, features } = body;
+  const { artistName, genre, location, referenceCountry, enableBooking, spotifyUrl, deezerUrl, executionId, features } = body;
 
   if (
     typeof artistName !== "string" || !artistName.trim() ||
@@ -48,6 +49,10 @@ function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | nul
   }
 
   if (spotifyUrl !== undefined && typeof spotifyUrl !== "string") {
+    return null;
+  }
+
+  if (deezerUrl !== undefined && typeof deezerUrl !== "string") {
     return null;
   }
 
@@ -74,6 +79,7 @@ function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | nul
     ...(typeof referenceCountry === "string" ? { referenceCountry: referenceCountry.trim() } : {}),
     enableBooking,
     ...(spotifyUrl?.trim() ? { spotifyUrl: spotifyUrl.trim() } : {}),
+    ...(typeof deezerUrl === "string" && deezerUrl.trim() ? { deezerUrl: deezerUrl.trim() } : {}),
     ...(executionId?.trim() ? { executionId: executionId.trim() } : {}),
     ...(chartmetricArtistEnrichment !== undefined ? { features: { chartmetricArtistEnrichment } } : {}),
   };
@@ -186,6 +192,9 @@ export async function POST(request: Request): Promise<Response> {
       target: artistRadarRequest.referenceCountry ?? null,
       spotifyUrl: isValidHttpUrl(artistRadarRequest.spotifyUrl)
         ? artistRadarRequest.spotifyUrl
+        : undefined,
+      deezerUrl: isValidHttpUrl(artistRadarRequest.deezerUrl)
+        ? artistRadarRequest.deezerUrl
         : undefined,
     });
     warnLog("artist-radar-api", "Effective booking input", {

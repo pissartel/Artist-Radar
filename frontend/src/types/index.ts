@@ -560,6 +560,7 @@ export type MainGoal =
 export interface OnboardingFormData {
   artistName: string;
   spotifyUrl: string;
+  deezerUrl?: string;
   youtubeUrl: string;
   instagramUrl: string;
   websiteUrl: string;

@@ -41,6 +41,7 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
   }
 
   const spotifyUrl = onboarding.spotifyUrl?.trim();
+  const deezerUrl = onboarding.deezerUrl?.trim();
   // Only ever sent when the checkbox was both server-verified visible for
   // this request AND checked (issue #142 follow-up). `chartmetricToggleVisible`
   // is a snapshot of the server-derived `showChartmetricToggle` prop
@@ -58,6 +59,7 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
     location,
     enableBooking: onboarding.mainGoal !== "similar_artists",
     ...(spotifyUrl ? { spotifyUrl } : {}),
+    ...(deezerUrl ? { deezerUrl } : {}),
     ...(chartmetricArtistEnrichment ? { features: { chartmetricArtistEnrichment: true } } : {}),
     ...(previewData ? { previewData: true } : {}),
     ...(referenceCountry ? { referenceCountry } : {}),

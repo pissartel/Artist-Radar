@@ -65,6 +65,11 @@ describe("readOnboardingRequest", () => {
     expect(readOnboardingRequest()?.referenceCountry).toBe("Belgium");
   });
 
+  it("retains the selected Deezer identity for backend enrichment", () => {
+    stubLocalStorage(JSON.stringify(onboardingData({ deezerUrl: "https://www.deezer.com/artist/123" })));
+    expect(readOnboardingRequest()?.deezerUrl).toBe("https://www.deezer.com/artist/123");
+  });
+
   it("uses the optional target location before the worldwide fallback", () => {
     stubLocalStorage(
       JSON.stringify(

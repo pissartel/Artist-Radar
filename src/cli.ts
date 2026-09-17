@@ -14,6 +14,7 @@ interface CliOptions {
   links?: string;
   limit?: string;
   spotifyUrl?: string;
+  deezerUrl?: string;
   youtubeUrl?: string;
   instagramUrl?: string;
   chartmetric?: boolean;
@@ -56,6 +57,7 @@ function addOpportunityCommand(mode: Mode, description: string): void {
     .option("--links <links>", "comma-separated artist links")
     .option("--limit <limit>", "maximum number of opportunities", "10")
     .option("--spotify-url <url>", "Spotify artist URL")
+    .option("--deezer-url <url>", "Deezer artist URL")
     .option("--youtube-url <url>", "YouTube channel or artist URL")
     .option("--instagram-url <url>", "Instagram profile URL")
     .option("--chartmetric", "enable Chartmetric enrichment for this run")
@@ -68,6 +70,7 @@ function addOpportunityCommand(mode: Mode, description: string): void {
         links: parseLinks(options.links),
         limit: options.limit,
         spotifyUrl: options.spotifyUrl,
+        deezerUrl: options.deezerUrl,
         youtubeUrl: options.youtubeUrl,
         instagramUrl: options.instagramUrl
       });

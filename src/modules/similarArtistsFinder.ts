@@ -310,6 +310,7 @@ export async function findSimilarArtists(input: SimilarArtistsFinderInput): Prom
     ? createSupabaseArtistSimilarityGraphStore(env as NodeJS.ProcessEnv)
     : input.similarityGraphStore;
   if (graphStore) {
+    let providerDiscoveryStarted = false;
     try {
       const graphResult = await findSimilarArtistsDbFirst({
         store: graphStore,
@@ -321,11 +322,18 @@ export async function findSimilarArtists(input: SimilarArtistsFinderInput): Prom
         // must not disappear merely because a generic DB neighborhood is
         // already fresh.
         deepSearch: isMockMode(env.SIMILARITY_GRAPH_DEEP_SEARCH) || userProvided.length > 0,
-        discover: () => discoverSimilarArtistsFromProviders(input, env)
+        discover: () => {
+          providerDiscoveryStarted = true;
+          return discoverSimilarArtistsFromProviders(input, env);
+        }
       });
       debugTierCounts(graphResult.artists);
       return graphResult.artists;
     } catch (error) {
+      // Only fall back when the graph store itself failed. If discovery was
+      // already attempted, retrying here would repeat the same expensive
+      // provider calls and can amplify an outage.
+      if (providerDiscoveryStarted) throw error;
       warnLog("similar-artists", "similarity graph unavailable; continuing with provider discovery", { error });
     }
   }

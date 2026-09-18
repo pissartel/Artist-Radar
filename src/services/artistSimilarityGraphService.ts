@@ -34,11 +34,34 @@ export interface PersistedSimilarityEdge {
   reverseResult?: SimilarArtist;
 }
 
+export type EncounteredArtistRole =
+  | "analyzed_artist"
+  | "similar_artist"
+  | "concert_artist"
+  | "lineup_artist"
+  | "headliner"
+  | "support"
+  | "venue_history_artist";
+
+export interface ArtistObservation {
+  role: EncounteredArtistRole;
+  sourceProvider: string;
+  sourceUrl?: string | null;
+  eventExternalId?: string | null;
+  eventName?: string | null;
+  venueName?: string | null;
+  confidence: number;
+  observedAt: string;
+  evidence?: Record<string, unknown>;
+}
+
 export interface SimilarityGraphStore {
   resolveArtist(identity: CanonicalArtistIdentity): Promise<string>;
   readEdges(artistId: string, scoreVersion: string): Promise<PersistedSimilarityEdge[]>;
+  hasEdgesForOtherScoreVersion?(artistId: string, scoreVersion: string): Promise<boolean>;
   upsertEdge(edge: Omit<PersistedSimilarityEdge, "firstSeenAt">): Promise<"created" | "recomputed">;
   enqueueRefresh?(artistId: string, reason: "stale" | "sparse" | "score_version"): Promise<void>;
+  recordArtistObservation?(artistId: string, observation: ArtistObservation): Promise<void>;
 }
 
 export interface SimilarityGraphMetrics {
@@ -78,6 +101,13 @@ export async function findSimilarArtistsDbFirst(options: DbFirstSimilarityOption
   const minimumConfidence = options.minimumConfidence ?? 0.55;
   const artistId = await options.store.resolveArtist(profileIdentity(options.profile));
   const edges = await options.store.readEdges(artistId, scoreVersion);
+  if (edges.length === 0 && await options.store.hasEdgesForOtherScoreVersion?.(artistId, scoreVersion)) {
+    try {
+      await options.store.enqueueRefresh?.(artistId, "score_version");
+    } catch (error) {
+      warnLog("similar-artists", "score-version refresh enqueue failed", { artistId, scoreVersion, error });
+    }
+  }
   const usable = edges.filter((edge) => edge.confidence >= minimumConfidence);
   const fresh = usable.filter((edge) => Date.parse(edge.nextRefreshAt) > now.getTime());
   const hasCoverage = usable.length >= minimumCandidates && hasSegmentCoverage(usable, options.profile);
@@ -132,9 +162,21 @@ export async function findSimilarArtistsDbFirst(options: DbFirstSimilarityOption
       });
     }
     const merged = mergeArtists(discovered, rankPersistedEdges(usable));
+    if (merged.length < minimumCandidates) {
+      try {
+        await options.store.enqueueRefresh?.(artistId, "sparse");
+      } catch (error) {
+        warnLog("similar-artists", "sparse graph expansion enqueue failed", { artistId, error });
+      }
+    }
     logGraphResult("provider_refreshed", artistId, metrics);
     return { artists: merged, metrics, source: "provider_refreshed" };
   } catch (error) {
+    try {
+      await options.store.enqueueRefresh?.(artistId, "sparse");
+    } catch (enqueueError) {
+      warnLog("similar-artists", "provider failure cooldown enqueue failed", { artistId, enqueueError });
+    }
     if (usable.length > 0) {
       warnLog("similar-artists", "provider refresh failed; reusing persisted similarity edges", {
         artistId,
@@ -160,7 +202,9 @@ interface PersistDiscoveryInput {
 
 async function persistDiscovery(input: PersistDiscoveryInput): Promise<void> {
   const nextRefreshAt = new Date(input.now.getTime() + input.edgeTtlDays * 86_400_000).toISOString();
-  for (const artist of input.artists) {
+  const uniqueArtists = deduplicateArtists(input.artists);
+  input.metrics.duplicateArtistsMerged += input.artists.length - uniqueArtists.length;
+  for (const artist of uniqueArtists) {
     const similarArtistId = await input.store.resolveArtist(similarArtistIdentity(artist));
     if (similarArtistId === input.artistId) continue;
     const status = await input.store.upsertEdge({
@@ -187,6 +231,16 @@ async function persistDiscovery(input: PersistDiscoveryInput): Promise<void> {
       scoreVersion: input.scoreVersion
     });
   }
+}
+
+function deduplicateArtists(artists: SimilarArtist[]): SimilarArtist[] {
+  const seen = new Set<string>();
+  return artists.filter((artist) => {
+    const key = artist.spotifyId ?? artist.spotify?.id ?? normalizeArtistName(artist.name);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function profileIdentity(profile: ArtistProfile): CanonicalArtistIdentity {

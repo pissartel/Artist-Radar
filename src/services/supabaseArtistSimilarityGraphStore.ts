@@ -1,9 +1,11 @@
 import type {
+  ArtistObservation,
   CanonicalArtistIdentity,
   PersistedSimilarityEdge,
   SimilarityGraphStore
 } from "./artistSimilarityGraphService.js";
 import { normalizeArtistName } from "./artistSimilarityGraphService.js";
+import { createHash } from "node:crypto";
 
 interface SupabaseGraphConfig {
   url: string;
@@ -37,17 +39,18 @@ export class SupabaseArtistSimilarityGraphStore implements SimilarityGraphStore 
     }
 
     const normalizedName = normalizeArtistName(identity.name);
-    const nameMatches = await this.request<Array<{ id: string }>>(
-      `/rest/v1/global_artists?normalized_name=eq.${encodeURIComponent(normalizedName)}&select=id&limit=2`
-    );
-    // A unique normalized-name match safely collapses punctuation/case
-    // variants. Ambiguous names remain separate until a stable provider ID
-    // can disambiguate them.
-    if (nameMatches.length === 1) {
-      const artistId = nameMatches[0]!.id;
-      await this.updateArtist(artistId, identity);
-      await this.upsertExternalIds(artistId, identity);
-      return artistId;
+    // Stable provider IDs are authoritative. Name matching is only safe when
+    // neither side has an external identity; otherwise homonymous artists
+    // could be silently collapsed.
+    if (externalIds(identity).length === 0) {
+      const nameMatches = await this.request<Array<{ id: string }>>(
+        `/rest/v1/global_artists?normalized_name=eq.${encodeURIComponent(normalizedName)}&select=id&limit=2`
+      );
+      if (nameMatches.length === 1) {
+        const artistId = nameMatches[0]!.id;
+        await this.updateArtist(artistId, identity);
+        return artistId;
+      }
     }
 
     const rows = await this.request<Array<{ id: string }>>(
@@ -84,10 +87,20 @@ export class SupabaseArtistSimilarityGraphStore implements SimilarityGraphStore 
     return [...forward, ...reverse].map((row) => mapEdge(row, artistId));
   }
 
-  async upsertEdge(edge: Omit<PersistedSimilarityEdge, "firstSeenAt">): Promise<"created" | "recomputed"> {
-    const existing = await this.request<Array<{ artist_id: string }>>(
-      `/rest/v1/artist_similarity_edges?artist_id=eq.${edge.artistId}&similar_artist_id=eq.${edge.similarArtistId}&score_version=eq.${encodeURIComponent(edge.scoreVersion)}&select=artist_id&limit=1`
+  async hasEdgesForOtherScoreVersion(artistId: string, scoreVersion: string): Promise<boolean> {
+    const rows = await this.request<Array<{ score_version: string }>>(
+      `/rest/v1/artist_similarity_edges?or=(artist_id.eq.${artistId},similar_artist_id.eq.${artistId})&score_version=neq.${encodeURIComponent(scoreVersion)}&select=score_version&limit=1`
     );
+    return rows.length > 0;
+  }
+
+  async upsertEdge(edge: Omit<PersistedSimilarityEdge, "firstSeenAt">): Promise<"created" | "recomputed"> {
+    const existing = await this.request<Array<{ artist_id: string; sources: unknown; evidence: unknown }>>(
+      `/rest/v1/artist_similarity_edges?artist_id=eq.${edge.artistId}&similar_artist_id=eq.${edge.similarArtistId}&score_version=eq.${encodeURIComponent(edge.scoreVersion)}&select=artist_id,sources,evidence&limit=1`
+    );
+    const previous = existing[0];
+    const sources = uniqueStrings(previous?.sources, edge.sources);
+    const evidence = mergeEvidence(previous?.evidence, edge, sources);
     await this.request("/rest/v1/artist_similarity_edges?on_conflict=artist_id,similar_artist_id,score_version", {
       method: "POST",
       headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
@@ -101,8 +114,8 @@ export class SupabaseArtistSimilarityGraphStore implements SimilarityGraphStore 
         geography_score: edge.geographyScore,
         provider_score: edge.providerScore,
         confidence: edge.confidence,
-        sources: edge.sources,
-        evidence: { result: edge.result, reverseResult: edge.reverseResult },
+        sources,
+        evidence,
         last_computed_at: edge.lastComputedAt,
         next_refresh_at: edge.nextRefreshAt
       })
@@ -118,12 +131,38 @@ export class SupabaseArtistSimilarityGraphStore implements SimilarityGraphStore 
     });
   }
 
+  async recordArtistObservation(artistId: string, observation: ArtistObservation): Promise<void> {
+    const observationKey = createHash("sha256").update([
+      artistId,
+      observation.role,
+      observation.sourceProvider,
+      observation.sourceUrl ?? "",
+      observation.eventExternalId ?? "",
+      observation.eventName ?? "",
+      observation.venueName ?? ""
+    ].join("|")).digest("hex");
+    await this.request("/rest/v1/global_artist_observations?on_conflict=observation_key", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify({
+        artist_id: artistId,
+        observation_key: observationKey,
+        role: observation.role,
+        source_provider: observation.sourceProvider,
+        source_url: observation.sourceUrl ?? null,
+        event_external_id: observation.eventExternalId ?? null,
+        event_name: observation.eventName ?? null,
+        venue_name: observation.venueName ?? null,
+        confidence: observation.confidence,
+        evidence: observation.evidence ?? {},
+        last_observed_at: observation.observedAt,
+        updated_at: observation.observedAt
+      })
+    });
+  }
+
   private async updateArtist(artistId: string, identity: CanonicalArtistIdentity): Promise<void> {
-    const row = artistRow(identity, normalizeArtistName(identity.name));
-    // identity_key is immutable once the canonical row exists. A later
-    // provider ID enriches global_artist_external_ids instead of renaming
-    // the canonical key and risking a uniqueness conflict.
-    delete row.identity_key;
+    const row = artistPatch(identity);
     await this.request(`/rest/v1/global_artists?id=eq.${artistId}`, {
       method: "PATCH",
       headers: { Prefer: "return=minimal" },
@@ -170,6 +209,20 @@ function artistRow(identity: CanonicalArtistIdentity, normalizedName: string): J
   };
 }
 
+function artistPatch(identity: CanonicalArtistIdentity): JsonRecord {
+  const row: JsonRecord = {
+    name: identity.name,
+    normalized_name: normalizeArtistName(identity.name),
+    metadata_refreshed_at: new Date().toISOString()
+  };
+  if (identity.genres?.length) row.genres = identity.genres;
+  if (identity.city) row.city = identity.city;
+  if (identity.country) row.country = identity.country;
+  if (identity.scaleBand) row.scale_band = identity.scaleBand;
+  if (identity.profileData && Object.keys(identity.profileData).length > 0) row.profile_data = identity.profileData;
+  return row;
+}
+
 function identityKey(identity: CanonicalArtistIdentity, normalizedName: string): string {
   const stable = externalIds(identity)[0];
   return stable ? `${stable[0]}:${stable[1]}` : `name:${normalizedName}`;
@@ -202,4 +255,38 @@ function mapEdge(row: JsonRecord, requestedArtistId: string): PersistedSimilarit
 
 function nullableNumber(value: unknown): number | null {
   return value === null || typeof value === "undefined" ? null : Number(value);
+}
+
+function uniqueStrings(previous: unknown, current: string[]): string[] {
+  const values = Array.isArray(previous) ? previous.map(String) : [];
+  return [...new Set([...values, ...current].filter(Boolean))];
+}
+
+function mergeEvidence(
+  previous: unknown,
+  edge: Omit<PersistedSimilarityEdge, "firstSeenAt">,
+  sources: string[]
+): JsonRecord {
+  const oldEvidence = isRecord(previous) ? previous : {};
+  const oldProviderEvidence = isRecord(oldEvidence.providerEvidence) ? oldEvidence.providerEvidence : {};
+  const providerEvidence: JsonRecord = { ...oldProviderEvidence };
+  for (const source of sources) {
+    if (edge.sources.includes(source)) {
+      providerEvidence[source] = {
+        observedAt: edge.lastComputedAt,
+        confidence: edge.confidence,
+        providerScore: edge.providerScore
+      };
+    }
+  }
+  return {
+    ...oldEvidence,
+    result: edge.result,
+    reverseResult: edge.reverseResult,
+    providerEvidence
+  };
+}
+
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

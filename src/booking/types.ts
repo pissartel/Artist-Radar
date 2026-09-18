@@ -65,6 +65,8 @@ export interface BookingTarget {
   sourceUrl: string | null;
   sourceType: BookingSourceType;
   sourceProvider?: string | null;
+  /** Stable event identifier from the source provider, when available. */
+  externalEventId?: string | null;
   genres: string[];
   estimatedCapacity?: number | null;
   estimatedArtistTier?: ArtistTier | null;

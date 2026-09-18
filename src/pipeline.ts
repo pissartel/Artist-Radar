@@ -45,6 +45,11 @@ import {
 } from "./modules/artistScaleEnrichment.js";
 import type { ArtistScale } from "./schemas.js";
 import type { SimilarityGraphStore } from "./services/artistSimilarityGraphService.js";
+import { createSupabaseArtistSimilarityGraphStore } from "./services/supabaseArtistSimilarityGraphStore.js";
+import {
+  ingestEncounteredArtists,
+  type EncounteredArtistIngestionInput
+} from "./services/encounteredArtistIngestionService.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
@@ -140,6 +145,9 @@ export async function runOpportunitySearch(
 
   try {
     const input = ArtistInputSchema.parse(rawInput);
+    const similarityGraphStore = options.similarityGraphStore === undefined
+      ? createSupabaseArtistSimilarityGraphStore()
+      : options.similarityGraphStore;
     debugLog("pipeline", "runOpportunitySearch start", {
       mode: input.mode,
       artistName: input.artist,
@@ -196,7 +204,7 @@ export async function runOpportunitySearch(
       lastfmSimilarArtists: options.lastfmSimilarArtists,
       musicBrainzSearch: options.musicBrainzSearch,
       seedCandidates: options.seedCandidates,
-      similarityGraphStore: options.similarityGraphStore
+      similarityGraphStore
     });
     // Chartmetric enrichment (issue #201) must never change which similar
     // artists the live-search pipeline (concert history, booking search,
@@ -254,6 +262,13 @@ export async function runOpportunitySearch(
         artistProfile: effectiveProfile,
         similarArtists: similarArtistsForLiveSearch
       }, options.bookingSearchOptions);
+      await ingestEncounteredArtistsSafely({
+        store: similarityGraphStore,
+        profile: effectiveProfile,
+        similarArtists: similarArtistsForLiveSearch,
+        concertHistory: similarArtistConcerts,
+        bookingTargets: bookingSearch.targets
+      });
       debugLog("pipeline", "runOpportunitySearch booking provider summary", {
         providerCount: bookingSearch.sourceMetadata.length,
         // Result count by provider (issue #201 follow-up diagnostics) —
@@ -308,6 +323,12 @@ export async function runOpportunitySearch(
     const result = await generator.generate(prompt);
     track("SCORING_RESULTS");
     const validated = OpportunitySearchResultSchema.parse(normalizeOpportunityUrls(result));
+    await ingestEncounteredArtistsSafely({
+      store: similarityGraphStore,
+      profile: effectiveProfile,
+      similarArtists: similarArtistsForLiveSearch,
+      concertHistory: similarArtistConcerts
+    });
     debugLog("pipeline", "runOpportunitySearch summary", {
       mode: input.mode,
       artistName: input.artist,
@@ -616,6 +637,18 @@ async function findSimilarArtistConcertsSafely(
   } catch (error) {
     warnLog("concert-history", `Similar-artist concert-history enrichment failed and was skipped: ${error instanceof Error ? error.message : String(error)}`);
     return [];
+  }
+}
+
+async function ingestEncounteredArtistsSafely(
+  input: Omit<EncounteredArtistIngestionInput, "store"> & { store: SimilarityGraphStore | null }
+): Promise<void> {
+  if (!input.store) return;
+  try {
+    const result = await ingestEncounteredArtists({ ...input, store: input.store });
+    debugLog("similar-artists", "encountered artist ingestion completed", result);
+  } catch (error) {
+    warnLog("similar-artists", `Encountered artist ingestion failed and was skipped: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

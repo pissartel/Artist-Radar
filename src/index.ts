@@ -190,6 +190,23 @@ export type {
   WebExtractResult
 } from "./providers/web/WebExtractProvider.js";
 export type { WebProviderEnv } from "./providers/web/providers.js";
+export {
+  findSimilarArtistsDbFirst,
+  normalizeArtistName,
+  SIMILARITY_SCORE_VERSION
+} from "./services/artistSimilarityGraphService.js";
+export type {
+  CanonicalArtistIdentity,
+  DbFirstSimilarityOptions,
+  DbFirstSimilarityResult,
+  PersistedSimilarityEdge,
+  SimilarityGraphMetrics,
+  SimilarityGraphStore
+} from "./services/artistSimilarityGraphService.js";
+export {
+  createSupabaseArtistSimilarityGraphStore,
+  SupabaseArtistSimilarityGraphStore
+} from "./services/supabaseArtistSimilarityGraphStore.js";
 export type {
   BookingOpportunity,
   BookingScore,

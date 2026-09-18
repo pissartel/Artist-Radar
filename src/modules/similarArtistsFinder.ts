@@ -53,6 +53,11 @@ import {
 } from "./similarArtistSeeds.js";
 import { estimateArtistSize } from "./sizeEstimator.js";
 import { buildLastFmSimilarArtistProvider } from "../providers/LastFmSimilarArtistProvider.js";
+import {
+  findSimilarArtistsDbFirst,
+  type SimilarityGraphStore
+} from "../services/artistSimilarityGraphService.js";
+import { createSupabaseArtistSimilarityGraphStore } from "../services/supabaseArtistSimilarityGraphStore.js";
 
 export interface SimilarArtistsFinderInput {
   profile: ArtistProfile;
@@ -72,6 +77,7 @@ export interface SimilarArtistsFinderInput {
   musicBrainzSearch?: (artistName: string) => Promise<MusicBrainzArtistMetadata | null>;
   webSearchProvider?: WebSearchProvider | null;
   youtubeChannelStats?: (youtubeUrl: string) => Promise<YouTubeChannelStats | null>;
+  similarityGraphStore?: SimilarityGraphStore | null;
   env?: {
     MOCK_AI?: string;
     DEBUG_SIMILAR_ARTISTS?: string;
@@ -110,6 +116,13 @@ export interface SimilarArtistsFinderInput {
     WEB_SEARCH_MAX_RESULTS_PER_QUERY?: string;
     WEB_EXTRACT_MAX_PAGES_PER_CANDIDATE?: string;
     WEB_PROVIDER_DAILY_BUDGET_GUARD?: string;
+    SIMILARITY_GRAPH_MIN_CANDIDATES?: string;
+    SIMILARITY_GRAPH_MIN_CONFIDENCE?: string;
+    SIMILARITY_GRAPH_EDGE_TTL_DAYS?: string;
+    SIMILARITY_GRAPH_DEEP_SEARCH?: string;
+    SUPABASE_URL?: string;
+    NEXT_PUBLIC_SUPABASE_URL?: string;
+    SUPABASE_SERVICE_ROLE_KEY?: string;
   };
 }
 
@@ -293,6 +306,40 @@ export async function findSimilarArtists(input: SimilarArtistsFinderInput): Prom
     return artists;
   }
 
+  const graphStore = input.similarityGraphStore === undefined
+    ? createSupabaseArtistSimilarityGraphStore(env as NodeJS.ProcessEnv)
+    : input.similarityGraphStore;
+  if (graphStore) {
+    try {
+      const graphResult = await findSimilarArtistsDbFirst({
+        store: graphStore,
+        profile: input.profile,
+        minimumCandidates: parseOutputLimit(env.SIMILARITY_GRAPH_MIN_CANDIDATES, 6),
+        minimumConfidence: parseConfidence(env.SIMILARITY_GRAPH_MIN_CONFIDENCE, 0.55),
+        edgeTtlDays: parseOutputLimit(env.SIMILARITY_GRAPH_EDGE_TTL_DAYS, 14),
+        // Explicit seed/link inputs are user-requested graph expansion and
+        // must not disappear merely because a generic DB neighborhood is
+        // already fresh.
+        deepSearch: isMockMode(env.SIMILARITY_GRAPH_DEEP_SEARCH) || userProvided.length > 0,
+        discover: () => discoverSimilarArtistsFromProviders(input, env)
+      });
+      debugTierCounts(graphResult.artists);
+      return graphResult.artists;
+    } catch (error) {
+      warnLog("similar-artists", "similarity graph unavailable; continuing with provider discovery", { error });
+    }
+  }
+
+  const artists = await discoverSimilarArtistsFromProviders(input, env);
+  debugTierCounts(artists);
+  return artists;
+}
+
+async function discoverSimilarArtistsFromProviders(
+  input: SimilarArtistsFinderInput,
+  env: SimilarArtistsFinderInput["env"] = process.env
+): Promise<SimilarArtist[]> {
+  const userProvided = normalizeUserProvidedArtists(input);
   const providers: SimilarArtistProvider[] = [
     buildManualSeedProvider(),
     buildLastFmSimilarArtistProvider(env),
@@ -312,8 +359,12 @@ export async function findSimilarArtists(input: SimilarArtistsFinderInput): Prom
   const verified = await verifySimilarArtistCandidates(consolidated, input, env);
   const artists = rankDiscoveryCandidates(verified, input, userProvided);
   const spotifyEnriched = await enrichSimilarArtistsWithSpotify(artists, input);
-  debugTierCounts(spotifyEnriched);
   return spotifyEnriched;
+}
+
+function parseConfidence(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : fallback;
 }
 
 // Caps the number of "search by exact name" lookups so a large similar-artist

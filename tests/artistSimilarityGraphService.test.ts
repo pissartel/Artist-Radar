@@ -95,6 +95,10 @@ class MemoryGraphStore implements SimilarityGraphStore {
     return this.edges.filter((item) => item.scoreVersion === scoreVersion);
   }
 
+  async hasEdgesForOtherScoreVersion(_artistId: string, scoreVersion: string): Promise<boolean> {
+    return this.edges.some((item) => item.scoreVersion !== scoreVersion);
+  }
+
   async upsertEdge(value: Omit<PersistedSimilarityEdge, "firstSeenAt">): Promise<"created" | "recomputed"> {
     this.upserts += 1;
     const existing = this.edges.find((item) => item.artistId === value.artistId && item.similarArtistId === value.similarArtistId && item.scoreVersion === value.scoreVersion);
@@ -141,6 +145,7 @@ describe("artist similarity graph DB-first orchestration", () => {
     expect(result.source).toBe("provider_refreshed");
     expect(result.metrics.newEdgesCreated).toBe(2);
     expect(store.upserts).toBe(2);
+    expect(store.enqueued).toEqual(["sparse"]);
   });
 
   it("expands through providers for a deep search even when the graph is fresh", async () => {
@@ -190,6 +195,7 @@ describe("artist similarity graph DB-first orchestration", () => {
     expect(discover).toHaveBeenCalledOnce();
     expect(result.metrics.scoreVersion).toBe("similarity-v1");
     expect(store.edges.some((item) => item.scoreVersion === "similarity-v1")).toBe(true);
+    expect(store.enqueued).toContain("score_version");
   });
 
   it("does not repeat provider discovery when persistence fails", async () => {
@@ -202,5 +208,20 @@ describe("artist similarity graph DB-first orchestration", () => {
     expect(discover).toHaveBeenCalledOnce();
     expect(result.source).toBe("provider_refreshed");
     expect(result.artists.map((item) => item.name)).toEqual(["Neighbor 1"]);
+  });
+
+  it("deduplicates provider results before persistence and reports the merge", async () => {
+    const store = new MemoryGraphStore();
+    const duplicate = { ...artist(1), name: "Neighbor One" };
+
+    const result = await findSimilarArtistsDbFirst({
+      store,
+      profile: PROFILE,
+      discover: async () => [artist(1), duplicate]
+    });
+
+    expect(store.upserts).toBe(1);
+    expect(result.metrics.newEdgesCreated).toBe(1);
+    expect(result.metrics.duplicateArtistsMerged).toBe(1);
   });
 });

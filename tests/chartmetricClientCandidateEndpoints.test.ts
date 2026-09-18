@@ -31,6 +31,25 @@ describe("ChartmetricClient.getArtistScoreAndSocial", () => {
     expect(outcome.data.youtubeSubscribers).toBeUndefined();
   });
 
+  it("parses primary and secondary human-readable genres", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(jsonResponse({
+        obj: {
+          genres: {
+            primary: { id: 501460, name: "emo", type: "genre_v2" },
+            secondary: [{ id: 501706, name: "pop punk", type: "genre_v2" }]
+          }
+        }
+      }));
+    const client = buildClient(fetchImpl as unknown as typeof fetch);
+
+    const outcome = await client.getArtistScoreAndSocial("13176332");
+    expect(outcome.data.primaryGenre).toBe("emo");
+    expect(outcome.data.secondaryGenres).toEqual(["pop punk"]);
+  });
+
   it("returns an empty object rather than throwing on a malformed payload shape", async () => {
     const fetchImpl = vi.fn().mockResolvedValueOnce(tokenResponse()).mockResolvedValueOnce(jsonResponse({ obj: null }));
     const client = buildClient(fetchImpl as unknown as typeof fetch);

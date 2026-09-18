@@ -155,15 +155,19 @@ export async function runOpportunitySearch(
       options.chartmetricProvider,
       options.features?.chartmetricArtistEnrichment
     );
-    const effectiveGenre = resolveEffectiveGenre(input.genre, profile.genres);
+    const chartmetricGenres = chartmetric.metrics
+      ? [chartmetric.metrics.primaryGenre, ...(chartmetric.metrics.secondaryGenres ?? [])].filter((genre): genre is string => Boolean(genre?.trim()))
+      : [];
+    const enrichedGenres = uniqueGenres([...chartmetricGenres, ...profile.genres]);
+    const effectiveGenre = resolveEffectiveGenre(input.genre, enrichedGenres);
     const effectiveCity = profile.city?.trim() || profile.country?.trim() || input.city;
     const effectiveTarget = input.target?.trim() || profile.country?.trim() || null;
     const effectiveProfile = {
       ...profile,
       city: effectiveCity,
       genres: effectiveGenre === input.genre
-        ? profile.genres
-        : [effectiveGenre, ...profile.genres.filter((genre) => genre.toLowerCase() !== effectiveGenre.toLowerCase())]
+        ? enrichedGenres
+        : [effectiveGenre, ...enrichedGenres.filter((genre) => genre.toLowerCase() !== effectiveGenre.toLowerCase())]
     };
     debugLog("pipeline", "resolved search context", {
       requestedGenre: input.genre,
@@ -294,7 +298,7 @@ export async function runOpportunitySearch(
     }
 
     const generator = options.generator ?? new OpenAIOpportunityGenerator();
-    const prompt = buildOpportunityPrompt(input, profile);
+    const prompt = buildOpportunityPrompt(input, effectiveProfile);
     const result = await generator.generate(prompt);
     track("SCORING_RESULTS");
     const validated = OpportunitySearchResultSchema.parse(normalizeOpportunityUrls(result));
@@ -317,7 +321,7 @@ export async function runOpportunitySearch(
     track("PREPARING_OVERVIEW");
 
     const promoResult: OpportunitySearchRunResult = {
-      artistProfile: profile,
+      artistProfile: effectiveProfile,
       similarArtists: scaledSimilarArtists,
       venueCandidates,
       eventCandidates,
@@ -337,6 +341,12 @@ export async function runOpportunitySearch(
     }
     throw error;
   }
+}
+
+function uniqueGenres(genres: string[]): string[] {
+  const unique = [...new Map(genres.map((genre) => [genre.trim().toLowerCase(), genre.trim()])).values()].filter(Boolean);
+  const concrete = unique.filter((genre) => !GENERIC_SEARCH_GENRES.has(genre.toLowerCase()));
+  return concrete.length > 0 ? concrete : unique;
 }
 
 const GENERIC_SEARCH_GENRES = new Set(["music", "unknown", "other", "various"]);

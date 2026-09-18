@@ -71,6 +71,11 @@ export interface ChartmetricAudienceMetrics {
   // Chartmetric proprietary genre taxonomy ID. Keep as an ID until a label
   // mapping is available; never display it as a genre name.
   primaryGenreSmart?: number;
+  // Human-readable Chartmetric genre taxonomy values from the artist detail
+  // endpoint. These are safe to merge into the analyzed artist profile only
+  // after an exact/high-confidence identity match.
+  primaryGenre?: string;
+  secondaryGenres?: string[];
   // ISO 8601 timestamp of when Chartmetric measured these values, when the
   // API reports one distinctly from when we fetched them.
   measuredAt?: string;

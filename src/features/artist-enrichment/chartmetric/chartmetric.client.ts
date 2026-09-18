@@ -65,6 +65,8 @@ export interface ChartmetricArtistStatsRaw {
 // wrong number to an artist.
 export interface ChartmetricArtistScoreAndSocialRaw {
   chartmetricArtistScore?: number;
+  primaryGenre?: string;
+  secondaryGenres?: string[];
   instagramFollowers?: number;
   tiktokFollowers?: number;
   youtubeSubscribers?: number;
@@ -398,14 +400,36 @@ function parseArtistScoreAndSocial(payload: unknown): ChartmetricArtistScoreAndS
   if (!obj) {
     return {};
   }
+  const genres = parseArtistGenres(obj.genres);
   return {
     chartmetricArtistScore: firstFiniteField(obj, ["cm_artist_score", "cmArtistScore", "chartmetric_score"]),
+    ...(genres.primaryGenre ? { primaryGenre: genres.primaryGenre } : {}),
+    ...(genres.secondaryGenres.length > 0 ? { secondaryGenres: genres.secondaryGenres } : {}),
     instagramFollowers: firstFiniteField(obj, ["ins_followers", "instagram_followers", "instagramFollowers"]),
     tiktokFollowers: firstFiniteField(obj, ["tiktok_followers", "tiktokFollowers"]),
     youtubeSubscribers: firstFiniteField(obj, ["youtube_subscribers", "youtubeSubscribers"]),
     facebookFollowers: firstFiniteField(obj, ["facebook_followers", "facebookFollowers"]),
     twitterFollowers: firstFiniteField(obj, ["twitter_followers", "twitterFollowers"])
   };
+}
+
+function parseArtistGenres(value: unknown): { primaryGenre?: string; secondaryGenres: string[] } {
+  if (typeof value !== "object" || value === null) {
+    return { secondaryGenres: [] };
+  }
+  const genres = value as Record<string, unknown>;
+  const primary = genres.primary;
+  const primaryGenre = typeof primary === "object" && primary !== null && typeof (primary as Record<string, unknown>).name === "string"
+    ? (primary as Record<string, unknown>).name as string
+    : undefined;
+  const secondaryGenres = Array.isArray(genres.secondary)
+    ? uniqueStrings(genres.secondary.flatMap((entry) => {
+        if (typeof entry !== "object" || entry === null) return [];
+        const name = (entry as Record<string, unknown>).name;
+        return typeof name === "string" ? [name] : [];
+      }))
+    : [];
+  return { ...(primaryGenre ? { primaryGenre } : {}), secondaryGenres };
 }
 
 function parsePlaylistReach(payload: unknown): ChartmetricPlaylistReachRaw {

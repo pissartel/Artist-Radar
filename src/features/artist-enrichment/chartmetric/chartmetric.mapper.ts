@@ -20,6 +20,8 @@ export interface ChartmetricAudienceMetricFallbacks {
   spotifyFollowers?: number;
   chartmetricArtistScore?: number;
   primaryGenreSmart?: number;
+  primaryGenre?: string;
+  secondaryGenres?: string[];
 }
 
 export function mapToAudienceMetrics(
@@ -45,6 +47,8 @@ export function mapToAudienceMetrics(
         : {}),
     ...(fallbacks.chartmetricArtistScore !== undefined ? { chartmetricArtistScore: fallbacks.chartmetricArtistScore } : {}),
     ...(fallbacks.primaryGenreSmart !== undefined ? { primaryGenreSmart: fallbacks.primaryGenreSmart } : {}),
+    ...(fallbacks.primaryGenre ? { primaryGenre: fallbacks.primaryGenre } : {}),
+    ...(fallbacks.secondaryGenres && fallbacks.secondaryGenres.length > 0 ? { secondaryGenres: fallbacks.secondaryGenres } : {}),
     ...(stats.latest?.date ? { measuredAt: stats.latest.date } : {}),
     fetchedAt,
     matchConfidence,
@@ -99,6 +103,8 @@ export function mapToCandidateMetrics(
   return {
     ...base,
     ...(scoreAndSocial?.chartmetricArtistScore !== undefined ? { chartmetricArtistScore: scoreAndSocial.chartmetricArtistScore } : {}),
+    ...(scoreAndSocial?.primaryGenre ? { primaryGenre: scoreAndSocial.primaryGenre } : {}),
+    ...(scoreAndSocial?.secondaryGenres && scoreAndSocial.secondaryGenres.length > 0 ? { secondaryGenres: scoreAndSocial.secondaryGenres } : {}),
     ...(growth.listenerGrowthPercent !== undefined ? { listenerGrowthPercent: growth.listenerGrowthPercent } : {}),
     ...(growth.followerGrowthPercent !== undefined ? { followerGrowthPercent: growth.followerGrowthPercent } : {}),
     ...(hasSocialAudience ? { socialAudience } : {}),

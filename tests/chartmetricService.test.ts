@@ -19,6 +19,7 @@ function fakeClient(overrides: Partial<ChartmetricClient> = {}): ChartmetricClie
     getArtistStats: vi
       .fn()
       .mockResolvedValue({ data: { latest: { date: "2026-01-01", spotifyMonthlyListeners: 500, spotifyFollowers: 300 }, history: [] }, retryCount: 0, durationMs: 5 }),
+    getArtistScoreAndSocial: vi.fn().mockResolvedValue({ data: {}, retryCount: 0, durationMs: 5 }),
     ...overrides
   } as unknown as ChartmetricClient;
 }
@@ -101,6 +102,21 @@ describe("ChartmetricArtistEnrichmentProvider.enrichArtist", () => {
     expect(result.metrics?.spotifyFollowers).toBe(98);
     expect(result.metrics?.chartmetricArtistScore).toBe(0.7787992911203467);
     expect(result.metrics?.primaryGenreSmart).toBe(501460);
+  });
+
+  it("returns human-readable primary and secondary genres from artist detail", async () => {
+    const client = fakeClient({
+      getArtistScoreAndSocial: vi.fn().mockResolvedValue({
+        data: { primaryGenre: "emo", secondaryGenres: ["pop punk"] },
+        retryCount: 0,
+        durationMs: 5
+      })
+    });
+    const provider = buildProvider({ client });
+
+    const result = await provider.enrichArtist(BASE_INPUT);
+    expect(result.metrics?.primaryGenre).toBe("emo");
+    expect(result.metrics?.secondaryGenres).toEqual(["pop punk"]);
   });
 
   it("is skipped when the preview/dev request toggle is off", async () => {

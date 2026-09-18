@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  ANALYSIS_CACHE_CLEARED_EVENT,
   clearArtistRadarResponse,
   readArtistRadarResponse,
   writeArtistRadarResponse,
@@ -28,8 +29,14 @@ function createFakeSessionStorage() {
 }
 
 describe("Artist Radar response cache", () => {
+  const dispatchEvent = vi.fn();
+
   beforeEach(() => {
-    vi.stubGlobal("window", { sessionStorage: createFakeSessionStorage() });
+    dispatchEvent.mockReset();
+    vi.stubGlobal("window", {
+      sessionStorage: createFakeSessionStorage(),
+      dispatchEvent,
+    });
   });
 
   afterEach(() => {
@@ -48,6 +55,14 @@ describe("Artist Radar response cache", () => {
     expect(readArtistRadarResponse({ ...REQUEST, artistName: "Another Artist" })).toBeUndefined();
   });
 
+  it("does not restore data for a different reference country", () => {
+    writeArtistRadarResponse({ ...REQUEST, referenceCountry: "France" }, RESPONSE);
+
+    expect(
+      readArtistRadarResponse({ ...REQUEST, referenceCountry: "Belgium" })
+    ).toBeUndefined();
+  });
+
   it("ignores malformed stored data", () => {
     window.sessionStorage.setItem("artistRadarResponse:v1", "{not-json");
 
@@ -59,5 +74,9 @@ describe("Artist Radar response cache", () => {
     clearArtistRadarResponse();
 
     expect(readArtistRadarResponse(REQUEST)).toBeUndefined();
+    expect(dispatchEvent).toHaveBeenCalledOnce();
+    expect(dispatchEvent.mock.calls[0]?.[0]).toMatchObject({
+      type: ANALYSIS_CACHE_CLEARED_EVENT,
+    });
   });
 });

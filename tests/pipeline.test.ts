@@ -64,6 +64,19 @@ describe("runOpportunitySearch", () => {
     expect(result).not.toHaveProperty("similarArtistsByTier");
   });
 
+  it("does not expose a country-wide target as the artist city", async () => {
+    const result = await runOpportunitySearch(
+      {
+        ...promoInput,
+        city: "France",
+        target: "France",
+      },
+      { generator: generatorReturning(validResult), seedCandidates: [] }
+    );
+
+    expect(result.artistProfile.city).toBeNull();
+  });
+
   it("includes the normalized artist profile in the generator prompt", async () => {
     vi.stubEnv("MOCK_AI", "false");
     vi.stubEnv("SPOTIFY_CLIENT_ID", "");
@@ -492,7 +505,7 @@ describe("runOpportunitySearch", () => {
     const result = await runOpportunitySearch(input, {
       generator: generatorReturning(validResult),
       seedCandidates: [],
-      bookingSearchOptions: { providers: [provider] }
+      bookingSearchOptions: { providers: [provider], now: new Date("2026-08-01T00:00:00Z") }
     });
 
     const opportunity = result.opportunities.find((o) => o.source_url === "https://example.test/the-slugz-maroquinerie");

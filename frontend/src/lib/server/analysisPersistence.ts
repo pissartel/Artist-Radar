@@ -6,6 +6,7 @@ import type { ArtistRadarRequest, ArtistRadarResponse } from "@/types/artistRada
 
 const ANONYMOUS_SESSION_COOKIE = "artist_radar_anonymous_analysis";
 const RETENTION_SECONDS = 30 * 24 * 60 * 60;
+const ANALYSIS_CACHE_VERSION = "booking-v3";
 
 interface AnonymousSession {
   id: string;
@@ -18,11 +19,17 @@ function hash(value: string): string {
 
 export function analysisFingerprint(request: ArtistRadarRequest): string {
   return hash(JSON.stringify({
+    analysisCacheVersion: ANALYSIS_CACHE_VERSION,
     artistName: request.artistName.trim().toLowerCase(),
     genre: request.genre.trim().toLowerCase(),
     location: request.location.trim().toLowerCase(),
+    referenceCountry: request.referenceCountry?.trim().toLowerCase() ?? null,
     enableBooking: request.enableBooking ?? true,
     spotifyUrl: request.spotifyUrl?.trim() ?? null,
+    features: {
+      chartmetricArtistEnrichment:
+        request.features?.chartmetricArtistEnrichment === true,
+    },
   }));
 }
 

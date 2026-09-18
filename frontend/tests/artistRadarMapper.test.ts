@@ -1175,7 +1175,7 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     expect(response.bookingOpportunities[0]?.location).toBe("France");
   });
 
-  it("maps event venues to a canonical venue page and preserves the source provider label", () => {
+  it("maps event venues to a canonical venue page without exposing the technical source provider", () => {
     const result = buildResult({
       opportunities: [
         {
@@ -1204,7 +1204,6 @@ describe("mapPipelineResultToArtistRadarResponse", () => {
     expect(opportunity?.sourceEvidence?.[0]).toEqual({
       url: "https://example.test/events/punk-night",
       title: "Punk Night",
-      retrievedInfo: "Source provider: openagenda",
     });
   });
 

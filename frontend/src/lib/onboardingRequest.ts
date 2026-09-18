@@ -2,7 +2,7 @@ import type { ArtistRadarRequest } from "@/types/artistRadar";
 import type { OnboardingFormData } from "@/types";
 
 const ONBOARDING_STORAGE_KEY = "artistRadarOnboardingData";
-const DEFAULT_GENRE = "music";
+const DEFAULT_GENRE = "unknown";
 const DEFAULT_LOCATION = "Worldwide";
 
 export function readOnboardingRequest(): ArtistRadarRequest | null {
@@ -25,19 +25,23 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
   }
 
   const artistName = onboarding.artistName?.trim();
-  const genre = onboarding.mainGenre?.trim() || DEFAULT_GENRE;
+  const genre =
+    onboarding.mainGenre?.trim() ||
+    onboarding.secondaryGenres?.split(",").map((value) => value.trim()).find(Boolean) ||
+    DEFAULT_GENRE;
   const location =
     onboarding.city?.trim() ||
     onboarding.countryOfOrigin?.trim() ||
     onboarding.targetLocation?.trim() ||
     DEFAULT_LOCATION;
-  const referenceCountry = onboarding.countryOfOrigin?.trim();
+  const referenceCountry = onboarding.targetLocation?.trim() || onboarding.countryOfOrigin?.trim();
 
   if (!artistName) {
     return null;
   }
 
   const spotifyUrl = onboarding.spotifyUrl?.trim();
+  const deezerUrl = onboarding.deezerUrl?.trim();
   // Only ever sent when the checkbox was both server-verified visible for
   // this request AND checked (issue #142 follow-up). `chartmetricToggleVisible`
   // is a snapshot of the server-derived `showChartmetricToggle` prop
@@ -55,6 +59,7 @@ export function readOnboardingRequest(): ArtistRadarRequest | null {
     location,
     enableBooking: onboarding.mainGoal !== "similar_artists",
     ...(spotifyUrl ? { spotifyUrl } : {}),
+    ...(deezerUrl ? { deezerUrl } : {}),
     ...(chartmetricArtistEnrichment ? { features: { chartmetricArtistEnrichment: true } } : {}),
     ...(previewData ? { previewData: true } : {}),
     ...(referenceCountry ? { referenceCountry } : {}),

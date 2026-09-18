@@ -362,6 +362,8 @@ export const ChartmetricCandidateMetricsSchema = z.object({
   spotifyFollowers: z.number().nonnegative().optional(),
   chartmetricArtistScore: z.number().optional(),
   primaryGenreSmart: z.number().optional(),
+  primaryGenre: z.string().trim().min(1).optional(),
+  secondaryGenres: z.array(z.string().trim().min(1)).optional(),
   measuredAt: z.string().trim().min(1).optional(),
   fetchedAt: z.string().trim().min(1),
   matchConfidence: ChartmetricMatchConfidenceSchema,

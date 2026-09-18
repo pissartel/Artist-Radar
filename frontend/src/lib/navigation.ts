@@ -5,6 +5,8 @@ export interface NavItem {
   href: string;
 }
 
+export const DEBUG_NAV_ITEM: NavItem = { label: "Logs", href: "/logs" };
+
 const BASE_NAV_ITEMS: NavItem[] = [
   { label: "Overview", href: "/overview" },
   { label: "Similar Artists", href: "/similar-artists" },

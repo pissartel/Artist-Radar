@@ -27,6 +27,7 @@ export interface BackendArtistInput {
   artist: string;
   city: string;
   genre: string;
+  target: string | null;
 }
 
 export interface BackendRunOpportunitySearchOptions {
@@ -409,6 +410,7 @@ export interface BackendBookingSourceMetadata {
   providerName: string;
   sourceProvider: string;
   targetCount: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface BackendBookingDiagnostics {

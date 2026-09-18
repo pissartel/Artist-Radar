@@ -2,17 +2,19 @@
 import "dotenv/config";
 import { Command } from "commander";
 import { runOpportunitySearch } from "./pipeline.js";
-import { ArtistInputSchema, type Mode } from "./schemas.js";
+import { type Mode } from "./schemas.js";
+import { buildCliArtistInput } from "./artistInputBuilders.js";
 import { BookingOutputWriteError, exportOpportunities, formatBookingOutputLog } from "./services/exportService.js";
 
 interface CliOptions {
   artist: string;
-  city: string;
-  genre: string;
+  city?: string;
+  genre?: string;
   target?: string;
   links?: string;
   limit?: string;
   spotifyUrl?: string;
+  deezerUrl?: string;
   youtubeUrl?: string;
   instagramUrl?: string;
   chartmetric?: boolean;
@@ -49,27 +51,28 @@ function addOpportunityCommand(mode: Mode, description: string): void {
     .command(mode)
     .description(description)
     .requiredOption("--artist <artist>", "artist name")
-    .requiredOption("--city <city>", "artist city")
-    .requiredOption("--genre <genre>", "artist genre")
+    .option("--city <city>", "artist city (auto-detected when omitted)")
+    .option("--genre <genre>", "artist genre (auto-detected when omitted)")
     .option("--target <target>", "target region or country")
     .option("--links <links>", "comma-separated artist links")
     .option("--limit <limit>", "maximum number of opportunities", "10")
     .option("--spotify-url <url>", "Spotify artist URL")
+    .option("--deezer-url <url>", "Deezer artist URL")
     .option("--youtube-url <url>", "YouTube channel or artist URL")
     .option("--instagram-url <url>", "Instagram profile URL")
     .option("--chartmetric", "enable Chartmetric enrichment for this run")
     .action(async (options: CliOptions) => {
-      const input = ArtistInputSchema.parse({
-        mode,
+      const input = buildCliArtistInput(mode, {
         artist: options.artist,
         city: options.city,
         genre: options.genre,
-        target: options.target ?? null,
+        target: options.target,
         links: parseLinks(options.links),
         limit: options.limit,
-        spotifyUrl: options.spotifyUrl ?? null,
-        youtubeUrl: options.youtubeUrl ?? null,
-        instagramUrl: options.instagramUrl ?? null
+        spotifyUrl: options.spotifyUrl,
+        deezerUrl: options.deezerUrl,
+        youtubeUrl: options.youtubeUrl,
+        instagramUrl: options.instagramUrl
       });
 
       const result = await runOpportunitySearch(input, {

@@ -53,6 +53,34 @@ describe("runOpportunitySearch Chartmetric integration (issue #142)", () => {
     expect(chartmetricProvider.enrichArtist).toHaveBeenCalledTimes(1);
   });
 
+  it("merges Chartmetric genre labels into the effective artist profile", async () => {
+    const chartmetricProvider: ArtistEnrichmentProvider = {
+      enrichArtist: vi.fn().mockResolvedValue({
+        provider: "chartmetric",
+        status: "success",
+        matchMethod: "spotify_id",
+        matchConfidence: "exact",
+        metrics: {
+          chartmetricArtistId: "13176332",
+          primaryGenre: "emo",
+          secondaryGenres: ["pop punk"],
+          spotifyMonthlyListeners: 145,
+          fetchedAt: "2026-09-18T00:00:00.000Z",
+          matchConfidence: "exact",
+          source: "chartmetric"
+        }
+      })
+    };
+
+    const result = await runOpportunitySearch({ ...promoInput, genre: "unknown" }, {
+      generator: generatorReturning(validResult),
+      seedCandidates: [],
+      chartmetricProvider
+    });
+
+    expect(result.artistProfile.genres).toEqual(["emo", "pop punk"]);
+  });
+
   it("completes the analysis normally when the Chartmetric provider throws (safe fallback)", async () => {
     const throwingProvider: ArtistEnrichmentProvider = {
       enrichArtist: vi.fn().mockRejectedValue(new Error("provider exploded"))

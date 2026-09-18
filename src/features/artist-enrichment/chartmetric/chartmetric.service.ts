@@ -68,6 +68,7 @@ export interface ChartmetricServiceOptions {
 const ESTIMATED_CREDITS_PER_ENDPOINT = {
   identity: 1,
   stats: 1,
+  artistDetail: 1,
   history: 1
 } as const;
 
@@ -237,14 +238,25 @@ export class ChartmetricArtistEnrichmentProvider implements ArtistEnrichmentProv
       } else {
         metricsCacheHit = false;
         metrics = await this.metricsCache.getOrCreate(identity.chartmetricArtistId, async () => {
-          const outcome = await this.client.getArtistStats(identity.chartmetricArtistId);
-          retryCount = outcome.retryCount;
-          reportedCredits = outcome.reportedCredits;
+          const [outcome, detailOutcome] = await Promise.all([
+            this.client.getArtistStats(identity.chartmetricArtistId),
+            this.client.getArtistScoreAndSocial(identity.chartmetricArtistId).catch((error) => {
+              warnLog("chartmetric", "artist detail fetch failed, keeping audience metrics without genre labels", {
+                message: error instanceof Error ? error.message : String(error)
+              });
+              return null;
+            })
+          ]);
+          retryCount = outcome.retryCount + (detailOutcome?.retryCount ?? 0);
+          reportedCredits = (outcome.reportedCredits ?? ESTIMATED_CREDITS_PER_ENDPOINT.stats)
+            + (detailOutcome?.reportedCredits ?? ESTIMATED_CREDITS_PER_ENDPOINT.artistDetail);
           return mapToAudienceMetrics(identity.chartmetricArtistId, input.spotifyArtistId ?? null, outcome.data, identity.matchConfidence, undefined, {
             spotifyMonthlyListeners: identity.spotifyMonthlyListeners,
             spotifyFollowers: identity.spotifyFollowers,
             chartmetricArtistScore: identity.chartmetricArtistScore,
-            primaryGenreSmart: identity.primaryGenreSmart
+            primaryGenreSmart: identity.primaryGenreSmart,
+            primaryGenre: detailOutcome?.data.primaryGenre,
+            secondaryGenres: detailOutcome?.data.secondaryGenres
           });
         });
       }
@@ -255,7 +267,7 @@ export class ChartmetricArtistEnrichmentProvider implements ArtistEnrichmentProv
     }
 
     debugLog("chartmetric", "endpoint call", {
-      endpoint: "artist/stat/spotify",
+      endpoint: "artist/stat/spotify + artist detail",
       cacheHit: metricsCacheHit,
       retryCount,
       creditsConsumed: reportedCredits ?? ESTIMATED_CREDITS_PER_ENDPOINT.stats,

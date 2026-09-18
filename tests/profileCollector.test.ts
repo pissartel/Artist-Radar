@@ -39,6 +39,40 @@ describe("profileCollector", () => {
     expect(socialLinks.deezerUrl).toBe("https://www.deezer.com/artist/456");
   });
 
+  it("derives genre and geography when the CLI omits them", async () => {
+    vi.stubEnv("MOCK_AI", "false");
+    vi.stubEnv("SPOTIFY_CLIENT_ID", "");
+    vi.stubEnv("SPOTIFY_CLIENT_SECRET", "");
+    vi.stubEnv("ENABLE_DEEZER_ARTIST_SEARCH", "false");
+
+    const profile = await collectArtistProfile(
+      { ...baseInput, artist: "Tuesday Fall", city: "unknown", genre: "unknown" },
+      {
+        lastFmArtistInfo: async () => ({
+          name: "Tuesday Fall",
+          url: null,
+          tags: ["pop punk", "emo"],
+          listeners: 1000,
+          playcount: 5000,
+        }),
+        musicBrainzArtistInfo: async () => ({
+          musicBrainzId: "mbid",
+          name: "Tuesday Fall",
+          country: "FR",
+          area: "Île-de-France",
+          beginArea: "Paris",
+          tags: ["punk rock"],
+          sourceUrl: null,
+          score: 100,
+        }),
+      }
+    );
+
+    expect(profile.genres).toEqual(["pop punk", "emo", "punk rock"]);
+    expect(profile.city).toBe("Paris");
+    expect(profile.country).toBe("FR");
+  });
+
   it("prefers dedicated social URL flags over generic links", () => {
     const socialLinks = extractSocialLinks({
       links: ["https://open.spotify.com/artist/from-links"],

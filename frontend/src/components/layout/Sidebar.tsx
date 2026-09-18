@@ -3,15 +3,17 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { LANDING_ROUTE, NAV_ITEMS } from "@/lib/navigation";
+import { DEBUG_NAV_ITEM, LANDING_ROUTE, NAV_ITEMS } from "@/lib/navigation";
 import AuthLinks from "@/components/auth/AuthLinks";
 import { useAuth } from "@/components/auth/AuthProvider";
 import Logo from "@/components/brand/Logo";
 import { buttonClassName } from "@/components/ui/Button";
+import { useProductFeatures } from "@/components/providers/ProductFeaturesProvider";
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, loading } = useAuth();
+  const { debugUIVisible } = useProductFeatures();
   const [artistName, setArtistName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export default function Sidebar() {
         </div>
       )}
       <nav className="flex flex-col gap-0.5">
-        {NAV_ITEMS.map((item) => {
+        {(debugUIVisible ? [...NAV_ITEMS, DEBUG_NAV_ITEM] : NAV_ITEMS).map((item) => {
           const isActive = pathname === item.href;
 
           return (

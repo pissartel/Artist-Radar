@@ -10,6 +10,8 @@ import {
 import { getSpotifyArtistProfile, searchSpotifyArtistByName, type SpotifyArtistProfile } from "../services/spotifyService.js";
 import { getYouTubeChannelStats, type YouTubeChannelStats } from "../services/youtubeService.js";
 import { getDeezerArtistProfile, searchDeezerArtistByName, type DeezerArtistProfile } from "../services/deezerService.js";
+import { getLastFmArtistInfo, type LastFmArtistInfo } from "../services/lastfmService.js";
+import { enrichArtistWithMusicBrainz, type MusicBrainzArtistMetadata } from "../services/musicBrainzService.js";
 import { resolveArtistImage } from "../services/artistImageResolver.js";
 import { debugLog } from "../utils/logger.js";
 import { estimateArtistSize } from "./sizeEstimator.js";
@@ -35,7 +37,15 @@ export const DEFAULT_ARTIST_LEVEL_THRESHOLDS: ArtistLevelThresholds = {
   strongEstablishedFollowers: 100000
 };
 
-export async function collectArtistProfile(rawInput: ArtistInput): Promise<ArtistProfile> {
+export interface ProfileCollectorOptions {
+  lastFmArtistInfo?: (artistName: string) => Promise<LastFmArtistInfo | null>;
+  musicBrainzArtistInfo?: (artistName: string) => Promise<MusicBrainzArtistMetadata | null>;
+}
+
+export async function collectArtistProfile(
+  rawInput: ArtistInput,
+  options: ProfileCollectorOptions = {}
+): Promise<ArtistProfile> {
   const input = ArtistInputSchema.parse(rawInput);
   const socialLinks = extractSocialLinks(input);
   debugLog("profile", "normalized profile inputs", {
@@ -50,6 +60,14 @@ export async function collectArtistProfile(rawInput: ArtistInput): Promise<Artis
   const spotifyProfile = await resolveSpotifyProfile(input.artist, socialLinks.spotifyUrl);
   const youtubeStats = await getYouTubeChannelStats(socialLinks.youtubeUrl);
   const deezerProfile = await resolveDeezerProfile(input.artist, socialLinks.deezerUrl);
+  const needsGenreEnrichment = isGenericGenre(input.genre) && (spotifyProfile?.genres.length ?? 0) === 0;
+  const needsLocationEnrichment = isGenericLocation(input.city);
+  const lastFmInfo = needsGenreEnrichment
+    ? await (options.lastFmArtistInfo ?? getLastFmArtistInfo)(input.artist)
+    : null;
+  const musicBrainzInfo = needsGenreEnrichment || needsLocationEnrichment
+    ? await (options.musicBrainzArtistInfo ?? enrichArtistWithMusicBrainz)(input.artist)
+    : null;
   const resolvedSocialLinks: SocialLinks = {
     ...socialLinks,
     spotifyUrl: socialLinks.spotifyUrl ?? spotifyProfile?.spotifyUrl ?? null,
@@ -57,7 +75,13 @@ export async function collectArtistProfile(rawInput: ArtistInput): Promise<Artis
   };
   const platformStats = mergePlatformStats(input.platformStats ?? {}, spotifyProfile, youtubeStats, deezerProfile);
   const spotifyGenres = spotifyProfile?.genres ?? [];
-  const genres = mergeGenres([input.genre], spotifyGenres);
+  const genres = mergeGenres(
+    [input.genre],
+    [...spotifyGenres, ...(lastFmInfo?.tags ?? []), ...(musicBrainzInfo?.tags ?? [])]
+  );
+  const resolvedCity = isGenericLocation(input.city)
+    ? musicBrainzInfo?.beginArea ?? musicBrainzInfo?.area ?? null
+    : input.city;
   const sizeEstimate = estimateArtistSize({
     spotifyFollowers: platformStats.spotifyFollowers ?? null,
     spotifyArtistPopularity: platformStats.spotifyPopularity ?? null,
@@ -87,8 +111,8 @@ export async function collectArtistProfile(rawInput: ArtistInput): Promise<Artis
 
   return ArtistProfileSchema.parse({
     artistName: input.artist,
-    city: input.city,
-    country: null,
+    city: resolvedCity,
+    country: musicBrainzInfo?.country ?? null,
     genres,
     spotifyArtistName: spotifyProfile?.name ?? null,
     spotifyGenres,
@@ -231,7 +255,11 @@ function mergePlatformStats(
 
 function mergeGenres(userGenres: string[], spotifyGenres: string[]): string[] {
   const seen = new Set<string>();
-  return [...userGenres, ...spotifyGenres].filter((genre) => {
+  const specificSpotifyGenres = spotifyGenres.filter((genre) => !isGenericGenre(genre));
+  const orderedGenres = specificSpotifyGenres.length > 0
+    ? [...specificSpotifyGenres, ...userGenres.filter((genre) => !isGenericGenre(genre))]
+    : [...userGenres, ...spotifyGenres];
+  return orderedGenres.filter((genre) => {
     const normalized = genre.trim().toLowerCase();
     if (!normalized || seen.has(normalized)) {
       return false;
@@ -240,6 +268,14 @@ function mergeGenres(userGenres: string[], spotifyGenres: string[]): string[] {
     seen.add(normalized);
     return true;
   });
+}
+
+function isGenericGenre(genre: string): boolean {
+  return /^(music|unknown|other|various)$/i.test(genre.trim());
+}
+
+function isGenericLocation(location: string): boolean {
+  return /^(unknown|worldwide|global)$/i.test(location.trim());
 }
 
 function calculateConfidence(

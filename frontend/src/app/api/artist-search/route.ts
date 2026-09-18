@@ -1,4 +1,5 @@
 import * as deezerRuntime from "../../../../../dist/services/deezerService.js";
+import * as lastFmRuntime from "../../../../../dist/services/lastfmService.js";
 import * as musicBrainzRuntime from "../../../../../dist/services/musicBrainzService.js";
 import * as spotifyRuntime from "../../../../../dist/services/spotifyService.js";
 
@@ -30,6 +31,11 @@ interface MusicBrainzArtist {
   score: number | null;
 }
 
+interface LastFmArtist {
+  name: string;
+  tags: string[];
+}
+
 interface ArtistSearchCandidate {
   id: string;
   name: string;
@@ -54,20 +60,25 @@ export async function GET(request: Request) {
     return Response.json({ error: "Enter an artist name." }, { status: 400 });
   }
 
-  const [spotify, deezer, musicBrainz] = await Promise.all([
+  const [spotify, deezer, musicBrainz, lastFm] = await Promise.all([
     (spotifyRuntime.searchSpotifyArtists as (
       query: string,
       limit: number,
       env: NodeJS.ProcessEnv
     ) => Promise<SpotifyArtist[]>)(query, 5, process.env).catch(() => []),
-    (deezerRuntime.searchDeezerArtistByName as (
+    (deezerRuntime.searchDeezerArtistsByName as (
       query: string,
+      limit: number,
       env: NodeJS.ProcessEnv
-    ) => Promise<DeezerArtist | null>)(query, process.env).catch(() => null),
+    ) => Promise<DeezerArtist[]>)(query, 5, { ...process.env, ENABLE_DEEZER_ARTIST_SEARCH: "true" }).catch(() => []),
     (musicBrainzRuntime.enrichArtistWithMusicBrainz as (
       query: string,
       env: NodeJS.ProcessEnv
     ) => Promise<MusicBrainzArtist | null>)(query, process.env).catch(() => null),
+    (lastFmRuntime.getLastFmArtistInfo as (
+      query: string,
+      env: NodeJS.ProcessEnv
+    ) => Promise<LastFmArtist | null>)(query, process.env).catch(() => null),
   ]);
 
   const candidates: ArtistSearchCandidate[] = spotify.map((artist, index) => ({
@@ -84,30 +95,26 @@ export async function GET(request: Request) {
     bestMatch: index === 0,
   }));
 
-  const exactCandidate = candidates.find(
-    (candidate) => normalize(candidate.name) === normalize(query)
-  );
-
-  if (deezer) {
+  for (const deezerArtist of deezer) {
     const candidate = candidates.find(
-      (item) => normalize(item.name) === normalize(deezer.name)
+      (item) => normalize(item.name) === normalize(deezerArtist.name)
     );
     if (candidate) {
       candidate.sources.push("deezer");
-      candidate.deezerUrl = deezer.deezerUrl;
-      candidate.imageUrl ??= deezer.imageUrl;
-      candidate.followers ??= deezer.fans;
+      candidate.deezerUrl = deezerArtist.deezerUrl;
+      candidate.imageUrl ??= deezerArtist.imageUrl;
+      candidate.followers ??= deezerArtist.fans;
     } else {
       candidates.push({
-        id: `deezer:${deezer.id}`,
-        name: deezer.name,
+        id: `deezer:${deezerArtist.id}`,
+        name: deezerArtist.name,
         genres: [],
         city: null,
         country: null,
-        followers: deezer.fans,
-        imageUrl: deezer.imageUrl,
+        followers: deezerArtist.fans,
+        imageUrl: deezerArtist.imageUrl,
         spotifyUrl: null,
-        deezerUrl: deezer.deezerUrl,
+        deezerUrl: deezerArtist.deezerUrl,
         sources: ["deezer"],
         bestMatch: candidates.length === 0,
       });
@@ -140,6 +147,31 @@ export async function GET(request: Request) {
     }
   }
 
+  if (lastFm) {
+    const candidate = candidates.find(
+      (item) => normalize(item.name) === normalize(lastFm.name) || normalize(item.name) === normalize(query)
+    );
+    if (candidate && candidate.genres.length === 0) {
+      candidate.genres = lastFm.tags;
+    }
+  }
+
+  const exactCandidate = candidates.find(
+    (candidate) => normalize(candidate.name) === normalize(query)
+  );
   if (exactCandidate) exactCandidate.bestMatch = true;
-  return Response.json({ candidates });
+  return Response.json({
+    candidates: candidates.slice(0, 8),
+    detectedCountry: countryNameFromRequest(request),
+  });
+}
+
+function countryNameFromRequest(request: Request): string | null {
+  const code = request.headers.get("x-vercel-ip-country")?.trim().toUpperCase();
+  if (!code || !/^[A-Z]{2}$/.test(code)) return null;
+  try {
+    return new Intl.DisplayNames(["en"], { type: "region" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
 }

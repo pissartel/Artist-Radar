@@ -560,6 +560,7 @@ export type MainGoal =
 export interface OnboardingFormData {
   artistName: string;
   spotifyUrl: string;
+  deezerUrl?: string;
   youtubeUrl: string;
   instagramUrl: string;
   websiteUrl: string;
@@ -595,6 +596,23 @@ export interface DashboardData {
   topCities: CityOpportunityStat[];
   sources: BookingSource[];
   bookingDiagnostics?: {
+    analysis: {
+      cacheVersion: string;
+      pipelineExecuted: boolean;
+      effectiveInput: {
+        artist: string;
+        city: string;
+        genre: string;
+        target: string | null;
+      };
+      providers: Array<{
+        provider: string;
+        targetCount: number;
+        venueOpportunitiesCreated: unknown;
+        locationMode: unknown;
+        resolvedLocations: unknown;
+      }>;
+    };
     backendOpportunityCount: number;
     frontendMappedOpportunityCount: number;
     droppedDuringFrontendMapping: Array<{

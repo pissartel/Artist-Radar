@@ -33,5 +33,8 @@ describe("analysis persistence", () => {
     expect(analysisFingerprint(base)).not.toBe(
       analysisFingerprint({ ...base, location: "Paris" })
     );
+    expect(analysisFingerprint({ ...base, referenceCountry: "France" })).not.toBe(
+      analysisFingerprint({ ...base, referenceCountry: "Belgium" })
+    );
   });
 });

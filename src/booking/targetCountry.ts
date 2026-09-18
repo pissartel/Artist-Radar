@@ -80,7 +80,13 @@ export function isInTargetMarket(input: BookingSearchInput, target: BookingTarge
   if (normalizeCountryName(target.country)) return false;
   const targetCity = normalizeCity(target.city);
   const inputCity = normalizeCity(input.city);
-  return Boolean(targetCity && inputCity && targetCity === inputCity);
+  if (targetCity && inputCity && targetCity === inputCity) return true;
+
+  // A country-wide request has no meaningful city to compare with. Providers
+  // queried for that market often return a verified city but omit the country.
+  // Keep that location explicitly uncertain instead of misclassifying it as
+  // foreign; any explicitly different country was rejected above.
+  return Boolean(targetCity && inputCity && inputCity === targetCountry);
 }
 
 export function normalizeTargetMarketCountry(input: BookingSearchInput, target: BookingTarget, targetCountry: string | null): BookingTarget {

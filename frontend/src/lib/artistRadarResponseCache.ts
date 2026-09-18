@@ -1,6 +1,8 @@
 import type { ArtistRadarRequest, ArtistRadarResponse } from "@/types/artistRadar";
 
 const STORAGE_KEY = "artistRadarResponse:v1";
+export const ANALYSIS_CACHE_VERSION = "booking-v4";
+export const ANALYSIS_CACHE_CLEARED_EVENT = "artist-radar-analysis-cache-cleared";
 
 interface CachedArtistRadarResponse {
   requestKey: string;
@@ -9,12 +11,15 @@ interface CachedArtistRadarResponse {
 
 function buildRequestKey(request: ArtistRadarRequest): string {
   return JSON.stringify({
+    analysisCacheVersion: ANALYSIS_CACHE_VERSION,
     artistName: request.artistName,
     genre: request.genre,
     location: request.location,
+    referenceCountry: request.referenceCountry ?? null,
     enableBooking: request.enableBooking,
     spotifyUrl: request.spotifyUrl,
     features: request.features,
+    previewData: request.previewData === true,
   });
 }
 
@@ -71,4 +76,8 @@ export function clearArtistRadarResponse(): void {
   } catch {
     // A fresh analysis can still run when storage is unavailable.
   }
+
+  // sessionStorage and React Query are two independent caches. Notify the
+  // provider so starting a new analysis cannot reuse an old in-memory result.
+  window.dispatchEvent(new Event(ANALYSIS_CACHE_CLEARED_EVENT));
 }

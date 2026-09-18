@@ -41,13 +41,22 @@ describe("mapToAudienceMetrics", () => {
       { latest: null, history: [] },
       "high",
       "2026-01-02T00:00:00.000Z",
-      { spotifyMonthlyListeners: 169, spotifyFollowers: 98, chartmetricArtistScore: 0.7787992911203467, primaryGenreSmart: 501460 }
+      {
+        spotifyMonthlyListeners: 169,
+        spotifyFollowers: 98,
+        chartmetricArtistScore: 0.7787992911203467,
+        primaryGenreSmart: 501460,
+        primaryGenre: "emo",
+        secondaryGenres: ["pop punk"]
+      }
     );
 
     expect(metrics.spotifyMonthlyListeners).toBe(169);
     expect(metrics.spotifyFollowers).toBe(98);
     expect(metrics.chartmetricArtistScore).toBe(0.7787992911203467);
     expect(metrics.primaryGenreSmart).toBe(501460);
+    expect(metrics.primaryGenre).toBe("emo");
+    expect(metrics.secondaryGenres).toEqual(["pop punk"]);
     expect(metrics.measuredAt).toBeUndefined();
     expect(hasUsableMetrics(metrics)).toBe(true);
   });

@@ -141,6 +141,18 @@ describe("POST /api/artist-radar", () => {
       },
       similarArtists: {},
       opportunities: [],
+      bookingSearch: {
+        sourcesUsed: ["Ticketmaster"],
+        warnings: [],
+        sourceMetadata: [
+          {
+            providerName: "Ticketmaster",
+            sourceProvider: "ticketmaster",
+            targetCount: 13,
+            metadata: { venueOpportunitiesCreated: 5 },
+          },
+        ],
+      },
     });
     const { POST } = await import("@/app/api/artist-radar/route");
 
@@ -149,21 +161,101 @@ describe("POST /api/artist-radar", () => {
 
     expect(response.status).toBe(200);
     expect(payload.artist.name).toBe("Tuesday Fall");
+    expect(payload.bookingDiagnostics.analysis.effectiveInput).toEqual({
+      artist: "Tuesday Fall",
+      city: "Bordeaux",
+      genre: "pop punk",
+      target: "France",
+    });
     expect(runOpportunitySearch).toHaveBeenCalledOnce();
+    expect(runOpportunitySearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "booking",
+        artist: "Tuesday Fall",
+        city: "Bordeaux",
+        genre: "pop punk",
+        target: "France",
+      }),
+      undefined,
+    );
     expect(persistAnalysis).toHaveBeenCalledWith(VALID_BODY, payload);
+    expect(warnLog).toHaveBeenCalledWith(
+      "artist-radar-api",
+      "Effective booking input",
+      { artist: "Tuesday Fall", city: "Bordeaux", genre: "pop punk", target: "France" },
+    );
+    expect(warnLog).toHaveBeenCalledWith(
+      "artist-radar-api",
+      "Booking provider target counts",
+      {
+        providers: [{
+          provider: "ticketmaster",
+          targetCount: 13,
+          venueOpportunitiesCreated: 5,
+          locationMode: null,
+          resolvedLocations: null,
+        }],
+      },
+    );
   });
 
-  it("returns a matching persisted analysis without rerunning the pipeline", async () => {
+  it("maps Paris and reference country France to the CLI-equivalent booking fields", async () => {
+    runOpportunitySearch.mockResolvedValueOnce({
+      artistProfile: {
+        artistName: "Tuesday Fall",
+        city: "Paris",
+        country: "France",
+        genres: ["pop punk"],
+        socialLinks: {},
+        platformStats: {},
+      },
+      similarArtists: {},
+      opportunities: [],
+    });
+    const { POST } = await import("@/app/api/artist-radar/route");
+
+    await POST(jsonRequest({ ...VALID_BODY, location: "Paris" }));
+
+    expect(runOpportunitySearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "booking",
+        artist: "Tuesday Fall",
+        city: "Paris",
+        genre: "pop punk",
+        target: "France",
+      }),
+      undefined,
+    );
+  });
+
+  it("bypasses a stale persisted analysis and runs the current pipeline", async () => {
     const persisted = { artist: { name: "Tuesday Fall" }, bookingOpportunities: [] };
     readPersistedAnalysis.mockResolvedValueOnce(persisted);
+    runOpportunitySearch.mockResolvedValueOnce({
+      artistProfile: {
+        artistName: "Tuesday Fall",
+        city: "Bordeaux",
+        country: "France",
+        genres: ["pop punk"],
+        socialLinks: {},
+        platformStats: {},
+      },
+      similarArtists: {},
+      opportunities: [],
+    });
     const { POST } = await import("@/app/api/artist-radar/route");
 
     const response = await POST(jsonRequest(VALID_BODY));
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual(persisted);
-    expect(runOpportunitySearch).not.toHaveBeenCalled();
-    expect(persistAnalysis).not.toHaveBeenCalled();
+    expect(readPersistedAnalysis).not.toHaveBeenCalled();
+    expect(runOpportunitySearch).toHaveBeenCalledOnce();
+    expect(persistAnalysis).toHaveBeenCalledOnce();
+    expect(warnLog).toHaveBeenCalledWith(
+      "analysis-persistence",
+      "Persisted analysis read bypassed",
+      { pipelineExecuted: true },
+    );
   });
 
   it("passes a provided executionId through to the pipeline so its status can be polled", async () => {

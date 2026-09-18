@@ -5,7 +5,7 @@ import type { Opportunity, SimilarArtist } from "@/types";
 import { PLATFORM_LABELS } from "./SimilarArtistCard";
 import MatchReasonsList from "./MatchReasonsList";
 import MatchScoreBadge from "@/components/common/MatchScoreBadge";
-import { formatOpportunityDate, getUrlHostname } from "@/lib/opportunity";
+import { formatOpportunityDate } from "@/lib/opportunity";
 import {
   formatMonthlyListeners,
   getCommercialExplanation,
@@ -204,7 +204,6 @@ export default function SimilarArtistDetail({
             <DataSignal label="Audience" value={listeners ? `${listeners} followers/listeners` : null} />
             <DataSignal label="Scene relevance" value={artist.sceneRelevance !== undefined ? `${artist.sceneRelevance}%` : null} />
             <DataSignal label="Size relevance" value={artist.sizeRelevance !== undefined ? `${artist.sizeRelevance}%` : null} />
-            <DataSignal label="Sources" value={artist.sourceUrls?.length ? artist.sourceUrls.length : null} />
           </div>
         </div>
 
@@ -237,26 +236,6 @@ export default function SimilarArtistDetail({
             <p className="text-xs text-foreground-disabled">No platform links yet.</p>
           )}
         </div>
-
-        {artist.sourceUrls && artist.sourceUrls.length > 0 && (
-          <div className={cardClassName}>
-            <SectionTitle>Sources</SectionTitle>
-            <ul className="flex flex-col gap-1.5">
-              {artist.sourceUrls.map((url) => (
-                <li key={url}>
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-accent-text hover:text-foreground transition-colors break-all"
-                  >
-                    {getUrlHostname(url) ?? url}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
 
         {relatedOpportunities.length > 0 && (
           <div className={cardClassName}>

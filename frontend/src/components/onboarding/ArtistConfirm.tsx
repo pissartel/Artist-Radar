@@ -36,6 +36,7 @@ export default function ArtistConfirm() {
       setGenre(value.genres[0] ?? "");
       setCity(value.city ?? "");
       setCountry(value.country ?? "");
+      setTarget(value.defaultTargetCountry ?? "");
     } catch {
       router.replace("/");
     }
@@ -51,6 +52,7 @@ export default function ArtistConfirm() {
         JSON.stringify({
           artistName: artist.name,
           spotifyUrl: artist.spotifyUrl ?? "",
+          deezerUrl: artist.deezerUrl ?? "",
           youtubeUrl: "",
           instagramUrl: "",
           websiteUrl: "",

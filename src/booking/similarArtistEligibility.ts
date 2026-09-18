@@ -26,6 +26,13 @@ export function isEligibleSimilarArtistForBookingVenueDiscovery(artist: SimilarA
     return true;
   }
 
+  if (artist.verificationStatus === "verified" &&
+      artist.bookingCategory === "to_verify" &&
+      artist.genreRelevance >= LASTFM_RESEARCH_MIN_GENRE_RELEVANCE &&
+      (artist.artistTier === "small" || artist.artistTier === "medium")) {
+    return true;
+  }
+
   return isChartmetricBackedResearchCandidate(artist) || isStrongLastFmResearchCandidate(artist);
 }
 

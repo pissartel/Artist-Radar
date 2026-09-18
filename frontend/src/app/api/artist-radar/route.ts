@@ -2,7 +2,8 @@ import { mapPipelineResultToArtistRadarResponse } from "@/lib/server/artistRadar
 import { ArtistInputSchema, runOpportunitySearch, warnLog } from "@/lib/server/backendPipeline";
 import type { ArtistRadarRequest } from "@/types/artistRadar";
 import { geocodeOpportunities } from "@/lib/server/geocodeOpportunities";
-import { persistAnalysis, readPersistedAnalysis } from "@/lib/server/analysisPersistence";
+import { persistAnalysis } from "@/lib/server/analysisPersistence";
+import { ANALYSIS_CACHE_VERSION } from "@/lib/artistRadarResponseCache";
 
 interface RawRequestBody {
   artistName?: unknown;
@@ -11,6 +12,7 @@ interface RawRequestBody {
   referenceCountry?: unknown;
   enableBooking?: unknown;
   spotifyUrl?: unknown;
+  deezerUrl?: unknown;
   executionId?: unknown;
   features?: unknown;
 }
@@ -32,7 +34,7 @@ function errorResponse(status: number, code: ErrorCode, message: string): Respon
 }
 
 function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | null {
-  const { artistName, genre, location, referenceCountry, enableBooking, spotifyUrl, executionId, features } = body;
+  const { artistName, genre, location, referenceCountry, enableBooking, spotifyUrl, deezerUrl, executionId, features } = body;
 
   if (
     typeof artistName !== "string" || !artistName.trim() ||
@@ -47,6 +49,10 @@ function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | nul
   }
 
   if (spotifyUrl !== undefined && typeof spotifyUrl !== "string") {
+    return null;
+  }
+
+  if (deezerUrl !== undefined && typeof deezerUrl !== "string") {
     return null;
   }
 
@@ -73,6 +79,7 @@ function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | nul
     ...(typeof referenceCountry === "string" ? { referenceCountry: referenceCountry.trim() } : {}),
     enableBooking,
     ...(spotifyUrl?.trim() ? { spotifyUrl: spotifyUrl.trim() } : {}),
+    ...(typeof deezerUrl === "string" && deezerUrl.trim() ? { deezerUrl: deezerUrl.trim() } : {}),
     ...(executionId?.trim() ? { executionId: executionId.trim() } : {}),
     ...(chartmetricArtistEnrichment !== undefined ? { features: { chartmetricArtistEnrichment } } : {}),
   };
@@ -119,6 +126,8 @@ function logBookingProviderDiagnostics(): void {
   warnLog("artist-radar-api", "Booking provider diagnostics", {
     enableOpenAgenda: process.env.ENABLE_OPENAGENDA === "true",
     openAgendaApiKeyPresent: Boolean(process.env.OPENAGENDA_API_KEY),
+    enableTicketmaster: process.env.ENABLE_TICKETMASTER_CONCERTS === "true",
+    ticketmasterApiKeyPresent: Boolean(process.env.TICKETMASTER_API_KEY),
     enableFirecrawlBooking: process.env.ENABLE_FIRECRAWL_BOOKING === "true",
     firecrawlApiKeyPresent: Boolean(process.env.FIRECRAWL_API_KEY),
   });
@@ -153,13 +162,12 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const persistedAnalysis = await readPersistedAnalysis(artistRadarRequest).catch((error) => {
-    warnLog("analysis-persistence", "Failed to read a persisted analysis", { error });
-    return null;
+  // P0: booking opportunities are time-sensitive and older persisted runs
+  // were generated with different provider/input semantics. Always execute
+  // the current pipeline; persistence remains write-only for account history.
+  warnLog("analysis-persistence", "Persisted analysis read bypassed", {
+    pipelineExecuted: true,
   });
-  if (persistedAnalysis) {
-    return Response.json(persistedAnalysis, { status: 200 });
-  }
 
   const missingEnvVars = getMissingRequiredEnvVars();
   if (missingEnvVars.length > 0) {
@@ -181,7 +189,19 @@ export async function POST(request: Request): Promise<Response> {
       artist: artistRadarRequest.artistName,
       city: artistRadarRequest.location,
       genre: artistRadarRequest.genre,
-      spotifyUrl: isValidHttpUrl(artistRadarRequest.spotifyUrl) ? artistRadarRequest.spotifyUrl : undefined,
+      target: artistRadarRequest.referenceCountry ?? null,
+      spotifyUrl: isValidHttpUrl(artistRadarRequest.spotifyUrl)
+        ? artistRadarRequest.spotifyUrl
+        : undefined,
+      deezerUrl: isValidHttpUrl(artistRadarRequest.deezerUrl)
+        ? artistRadarRequest.deezerUrl
+        : undefined,
+    });
+    warnLog("artist-radar-api", "Effective booking input", {
+      artist: input.artist,
+      city: input.city,
+      genre: input.genre,
+      target: input.target,
     });
 
     const searchOptions = {
@@ -192,7 +212,41 @@ export async function POST(request: Request): Promise<Response> {
       input,
       Object.keys(searchOptions).length > 0 ? searchOptions : undefined
     );
+    warnLog("artist-radar-api", "Booking provider target counts", {
+      providers: (result.bookingSearch?.sourceMetadata ?? []).map((source) => {
+        const metadata = source.metadata ?? {};
+        return {
+          provider: source.sourceProvider,
+          targetCount: source.targetCount,
+          venueOpportunitiesCreated: metadata.venueOpportunitiesCreated ?? null,
+          locationMode: metadata.locationMode ?? null,
+          resolvedLocations: metadata.resolvedLocations ?? null,
+        };
+      }),
+    });
     const response = mapPipelineResultToArtistRadarResponse(result, artistRadarRequest);
+    if (response.bookingDiagnostics) {
+      response.bookingDiagnostics.analysis = {
+        cacheVersion: ANALYSIS_CACHE_VERSION,
+        pipelineExecuted: true,
+        effectiveInput: {
+          artist: input.artist,
+          city: result.artistProfile.city ?? "unknown",
+          genre: result.artistProfile.genres[0] ?? input.genre,
+          target: input.target,
+        },
+        providers: (result.bookingSearch?.sourceMetadata ?? []).map((source) => {
+          const metadata = source.metadata ?? {};
+          return {
+            provider: source.sourceProvider,
+            targetCount: source.targetCount,
+            venueOpportunitiesCreated: metadata.venueOpportunitiesCreated ?? null,
+            locationMode: metadata.locationMode ?? null,
+            resolvedLocations: metadata.resolvedLocations ?? null,
+          };
+        }),
+      };
+    }
     response.bookingOpportunities = await geocodeOpportunities(response.bookingOpportunities);
 
     await persistAnalysis(artistRadarRequest, response).catch((error) => {

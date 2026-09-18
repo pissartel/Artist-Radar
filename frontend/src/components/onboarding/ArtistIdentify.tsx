@@ -16,6 +16,7 @@ export interface ArtistCandidate {
   deezerUrl?: string | null;
   sources: string[];
   bestMatch: boolean;
+  defaultTargetCountry?: string | null;
 }
 
 function initials(name: string): string {
@@ -61,7 +62,12 @@ export default function ArtistIdentify() {
     setError(false);
     fetch(`/api/artist-search?q=${encodeURIComponent(query)}`, { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then((value: { candidates: ArtistCandidate[] }) => setItems(value.candidates))
+      .then((value: { candidates: ArtistCandidate[]; detectedCountry?: string | null }) =>
+        setItems(value.candidates.map((candidate) => ({
+          ...candidate,
+          defaultTargetCountry: value.detectedCountry ?? null,
+        })))
+      )
       .catch((cause) => {
         if (cause instanceof DOMException && cause.name === "AbortError") return;
         setError(true);
@@ -147,7 +153,6 @@ export default function ArtistIdentify() {
                 <span className="block text-[13px] font-semibold text-foreground-muted">
                   {[item.genres.slice(0, 2).join(" · "), item.city, item.country, item.followers && `${item.followers.toLocaleString()} followers`].filter(Boolean).join(" · ") || "Profile details available after selection"}
                 </span>
-                <span className="font-mono text-xs text-muted">{item.sources.join(" · ")}</span>
               </span>
               <span className="text-[13px] font-bold text-accent-text">Select</span>
             </button>

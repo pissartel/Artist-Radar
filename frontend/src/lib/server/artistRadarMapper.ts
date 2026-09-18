@@ -345,7 +345,6 @@ function mapOpportunity(opportunity: BackendOpportunity): Opportunity {
       ? [{
           url: opportunity.source_url,
           title: opportunity.displayTitle || opportunity.name,
-          retrievedInfo: opportunity.sourceProvider ? `Source provider: ${opportunity.sourceProvider}` : undefined,
         }]
       : undefined;
 
@@ -517,6 +516,17 @@ export function mapPipelineResultToArtistRadarResponse(
     sources: includeBooking ? buildSources(result) : [],
     bookingDiagnostics: includeBooking
       ? {
+          analysis: {
+            cacheVersion: "unavailable",
+            pipelineExecuted: true,
+            effectiveInput: {
+              artist: request.artistName,
+              city: request.location,
+              genre: request.genre,
+              target: request.referenceCountry ?? null,
+            },
+            providers: [],
+          },
           backendOpportunityCount: backendOpportunities.length,
           frontendMappedOpportunityCount: bookingOpportunities.length,
           droppedDuringFrontendMapping,

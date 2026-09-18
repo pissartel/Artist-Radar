@@ -44,6 +44,7 @@ import {
   type ComputeArtistScaleForAnalysisResult
 } from "./modules/artistScaleEnrichment.js";
 import type { ArtistScale } from "./schemas.js";
+import type { SimilarityGraphStore } from "./services/artistSimilarityGraphService.js";
 
 export interface RunOpportunitySearchOptions {
   generator?: OpportunityGenerator;
@@ -80,6 +81,9 @@ export interface RunOpportunitySearchOptions {
   // enrichment (issue #201); defaults to a real
   // ChartmetricSimilarArtistEnrichmentService bound to the same toggle.
   chartmetricSimilarArtistProvider?: SimilarArtistCandidateEnrichmentProvider;
+  // Shared global similarity graph. Undefined auto-configures Supabase from
+  // server env; null explicitly disables persistence (useful in tests).
+  similarityGraphStore?: SimilarityGraphStore | null;
 }
 
 export interface OpportunitySearchRunResult {
@@ -191,7 +195,8 @@ export async function runOpportunitySearch(
       spotifySeveralArtistsByIds: options.spotifySeveralArtistsByIds,
       lastfmSimilarArtists: options.lastfmSimilarArtists,
       musicBrainzSearch: options.musicBrainzSearch,
-      seedCandidates: options.seedCandidates
+      seedCandidates: options.seedCandidates,
+      similarityGraphStore: options.similarityGraphStore
     });
     // Chartmetric enrichment (issue #201) must never change which similar
     // artists the live-search pipeline (concert history, booking search,

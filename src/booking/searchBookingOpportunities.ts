@@ -5,6 +5,7 @@ import { normalizeOpportunityTitle } from "./titleNormalization.js";
 import { scoreDateProximity } from "./dateProximity.js";
 import { buildMatchFactors } from "./matchFactors.js";
 import { analyzeSupportSlotPotential } from "./supportSlotPotential.js";
+import { processSupportSlotCandidates } from "./supportSlotDiscovery.js";
 import type {
   BookingOpportunity,
   BookingRejectedByReason,
@@ -87,9 +88,15 @@ export async function searchBookingOpportunities(
     qualityFloor: 0
   };
   logBookingRelevanceSummary(relevance.summary, rejectedByReason);
-  const targets = relevance.targets;
   const now = options.now ?? new Date();
+  // Expensive source resolution happens inside providers. Only candidates that
+  // survived the shared country/genre/date relevance gate reach lineup analysis.
+  const supportSlotDiscovery = processSupportSlotCandidates(relevance.targets, now);
+  const targets = supportSlotDiscovery.targets;
   const rankedOpportunities = targets
+    // A closed support lead may still be a valid concert/venue opportunity;
+    // lifecycle state prevents a support-slot recommendation, not the event
+    // itself from appearing in the existing opportunity model.
     .filter((target) => target.opportunityKind !== "historical_signal")
     .map((target) => buildOpportunity(input, target, now))
     .sort((left, right) => right.score - left.score);
@@ -127,7 +134,8 @@ export async function searchBookingOpportunities(
     venueLoss,
     similarArtistEligibility,
     qualityFloorRejectedCandidates,
-    openAiOpportunityDiscovery: buildOpenAiOpportunityDiscoveryDiagnostics(providerResults, deduped.duplicateCount)
+    openAiOpportunityDiscovery: buildOpenAiOpportunityDiscoveryDiagnostics(providerResults, deduped.duplicateCount),
+    supportSlotDiscovery: supportSlotDiscovery.diagnostics
   };
 
   return {
@@ -621,6 +629,7 @@ function buildOpportunity(input: BookingSearchInput, target: BookingTarget, now:
     bookingScore,
     matchBreakdown,
     supportSlotPotential,
+    lineupAnalysis: target.lineupAnalysis ?? null,
     internalReview: buildInternalReview(target, bestContact, titleResult.wasRewritten)
   };
 }
@@ -778,6 +787,9 @@ function isVenueDedupeEligible(target: BookingTarget): boolean {
 }
 
 function isSameVenueEvent(left: BookingTarget, right: BookingTarget): boolean {
+  if (left.externalEventId && right.externalEventId && left.sourceProvider === right.sourceProvider) {
+    return left.externalEventId === right.externalEventId;
+  }
   if (isSameFestivalEdition(left, right)) {
     return true;
   }

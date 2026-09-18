@@ -37,6 +37,27 @@ export type ContactCandidateType = "email" | "contact_form" | "social" | "phone"
 export type DateConfidence = "verified" | "unclear";
 export type OpportunityKind = "actionable" | "historical_signal" | "prospecting_target" | "monitor";
 
+export type SupportStatus =
+  | "OPENING_ACT_CONFIRMED"
+  | "OPENING_ACT_TBA"
+  | "LINEUP_INCOMPLETE"
+  | "NO_SUPPORT_ANNOUNCED"
+  | "NO_SUPPORT_EXPECTED"
+  | "UNKNOWN";
+
+export type LineupSourceType = "venue" | "promoter" | "artist" | "ticketing" | "other";
+
+export interface LineupSourceAnalysis {
+  supportStatus: SupportStatus;
+  supportArtists: string[];
+  lineupComplete: boolean | null;
+  confidence: number;
+  evidence: string;
+  sourceUrl: string | null;
+  sourceType: LineupSourceType;
+  checkedAt: string;
+}
+
 export interface BookingSearchInput {
   artist: string;
   city: string;
@@ -65,6 +86,8 @@ export interface BookingTarget {
   sourceUrl: string | null;
   sourceType: BookingSourceType;
   sourceProvider?: string | null;
+  /** Stable provider id used to deduplicate the same concert across sources. */
+  externalEventId?: string | null;
   genres: string[];
   estimatedCapacity?: number | null;
   estimatedArtistTier?: ArtistTier | null;
@@ -75,6 +98,8 @@ export interface BookingTarget {
   venueOpportunityId?: string | null;
   /** Full announced lineup (headliner + support), when a source lists it. Never guessed. */
   lineup?: string[];
+  lineupAnalysis?: LineupSourceAnalysis | null;
+  eventStatus?: "upcoming" | "cancelled" | "postponed" | "rescheduled" | "unknown" | null;
   /** Poster/event image URL, extracted from source page metadata. Never guessed. */
   imageUrl?: string | null;
   /** Where imageUrl came from, when known — never used to prefer an event poster as a venue's own image. */
@@ -244,6 +269,7 @@ export interface BookingOpportunity {
   // Structured support-slot-potential analysis (issue #158), null for
   // opportunity types this analysis doesn't apply to (e.g. festivals).
   supportSlotPotential: SupportSlotPotentialResult | null;
+  lineupAnalysis: LineupSourceAnalysis | null;
 }
 
 export interface BookingRejectedByReason {
@@ -270,6 +296,21 @@ export interface BookingStageDiagnostics {
   deduplicatedTargets: number;
   rankedTargets: number;
   finalApiOpportunities: number;
+}
+
+export interface SupportSlotDiscoveryDiagnostics {
+  eventsDiscovered: number;
+  eventsReused: number;
+  candidateEvents: number;
+  authoritativePagesResolved: number;
+  pagesFetched: number;
+  statusCounts: Record<SupportStatus, number>;
+  opportunitiesCreated: number;
+  opportunitiesInvalidated: number;
+  deterministicExtractionHits: number;
+  llmFallbacks: number;
+  fetchFailures: number;
+  sourceConfidence: { low: number; medium: number; high: number };
 }
 
 export interface BookingProviderDiagnostics {
@@ -384,6 +425,7 @@ export interface BookingDiagnostics {
       rejectionReason: string;
     }>;
   };
+  supportSlotDiscovery: SupportSlotDiscoveryDiagnostics;
 }
 
 export interface BookingSearchResult {

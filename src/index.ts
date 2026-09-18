@@ -76,6 +76,14 @@ export { normalizeBookingSource } from "./booking/normalizeBookingTarget.js";
 export { recommendBookingAction, scoreBookingCompatibility } from "./booking/scoring.js";
 export { searchBookingOpportunities } from "./booking/searchBookingOpportunities.js";
 export {
+  analyzeLineupSource,
+  applyLineupAnalysis,
+  getNextLineupRefreshAt,
+  processSupportSlotCandidates,
+  reconcileLineupSources,
+  supportOpportunityWording
+} from "./booking/supportSlotDiscovery.js";
+export {
   BookingOutputWriteError,
   formatBookingOutputLog,
   writeBookingRequestOutputs
@@ -168,6 +176,16 @@ export type {
   SizeEvidence,
   VenueCandidate
 } from "./schemas.js";
+export type {
+  LineupRefreshPolicy,
+  SupportSlotProcessingResult
+} from "./booking/supportSlotDiscovery.js";
+export type {
+  LineupSourceAnalysis,
+  LineupSourceType,
+  SupportSlotDiscoveryDiagnostics,
+  SupportStatus
+} from "./booking/types.js";
 export type {
   ArtistConsolidationCandidate,
   ArtistConsolidationContext,

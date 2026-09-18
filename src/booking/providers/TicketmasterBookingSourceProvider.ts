@@ -677,6 +677,7 @@ function toBookingTarget(
     sourceUrl: concert.url ?? null,
     sourceType: "event_page",
     sourceProvider: "ticketmaster",
+    externalEventId: concert.eventId,
     genres: (concert.classifications ?? []).flatMap((classification) => [classification.genre, classification.subGenre].filter((value): value is string => Boolean(value))),
     venueName: concert.venue?.name ?? null,
     venueOpportunityId: concert.venue?.name ? buildVenueOpportunityId(concert.venue.name, concert.venue.city ?? null, concert.venue.country ?? null) : null,
@@ -693,6 +694,7 @@ function toBookingTarget(
     isPastEvent: concert.status === "past",
     dateConfidence: "verified",
     opportunityKind: concert.status === "upcoming" ? "actionable" : "historical_signal",
+    eventStatus: concert.status === "past" ? "unknown" : concert.status,
     derivedFromSimilarArtist: similarArtist
       ? {
           name: similarArtist.name,

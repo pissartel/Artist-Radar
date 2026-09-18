@@ -52,6 +52,20 @@ export function analyzeSupportSlotPotential(
     return null;
   }
 
+  if (target.lineupAnalysis) {
+    const normalized = target.lineupAnalysis;
+    if (normalized.supportStatus === "OPENING_ACT_TBA" || normalized.supportStatus === "LINEUP_INCOMPLETE") {
+      return { status: "likely", confidenceScore: Math.round(normalized.confidence * 100), reasons: [normalized.evidence, "Potential availability must be verified with the organizer."] };
+    }
+    if (normalized.supportStatus === "NO_SUPPORT_ANNOUNCED") {
+      return { status: "possible", confidenceScore: Math.round(normalized.confidence * 100), reasons: [normalized.evidence, "No announced opening act does not confirm a slot is available; verify directly with the organizer."] };
+    }
+    if (normalized.supportStatus === "OPENING_ACT_CONFIRMED" || normalized.supportStatus === "NO_SUPPORT_EXPECTED") {
+      return { status: "unlikely", confidenceScore: Math.round(normalized.confidence * 100), reasons: [normalized.evidence] };
+    }
+    return { status: "unknown", confidenceScore: Math.round(normalized.confidence * 100), reasons: [normalized.evidence] };
+  }
+
   const text = buildEvidenceText(target);
   const lineup = target.lineup ?? [];
   const reasons: string[] = [];

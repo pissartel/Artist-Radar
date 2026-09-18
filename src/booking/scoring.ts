@@ -75,6 +75,9 @@ export function scoreBookingCompatibility(input: BookingSearchInput, target: Boo
 }
 
 export function recommendBookingAction(input: BookingSearchInput, target: BookingTarget, score: BookingScore): BookingSuggestedAction {
+  if (target.lineupAnalysis?.supportStatus === "OPENING_ACT_CONFIRMED" || target.lineupAnalysis?.supportStatus === "NO_SUPPORT_EXPECTED") {
+    return target.contacts.length > 0 ? "booking_contact" : "research";
+  }
   if (target.derivedFromSimilarArtist?.popularityComparison === "bigger_support_slot" || target.derivedFromSimilarArtist?.popularityComparison === "massively_bigger") {
     return "support_slot";
   }

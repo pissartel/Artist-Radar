@@ -64,6 +64,19 @@ describe("runOpportunitySearch", () => {
     expect(result).not.toHaveProperty("similarArtistsByTier");
   });
 
+  it("does not expose a country-wide target as the artist city", async () => {
+    const result = await runOpportunitySearch(
+      {
+        ...promoInput,
+        city: "France",
+        target: "France",
+      },
+      { generator: generatorReturning(validResult), seedCandidates: [] }
+    );
+
+    expect(result.artistProfile.city).toBeNull();
+  });
+
   it("includes the normalized artist profile in the generator prompt", async () => {
     vi.stubEnv("MOCK_AI", "false");
     vi.stubEnv("SPOTIFY_CLIENT_ID", "");

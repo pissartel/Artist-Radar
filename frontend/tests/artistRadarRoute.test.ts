@@ -161,6 +161,12 @@ describe("POST /api/artist-radar", () => {
 
     expect(response.status).toBe(200);
     expect(payload.artist.name).toBe("Tuesday Fall");
+    expect(payload.bookingDiagnostics.analysis.effectiveInput).toEqual({
+      artist: "Tuesday Fall",
+      city: "Bordeaux",
+      genre: "pop punk",
+      target: "France",
+    });
     expect(runOpportunitySearch).toHaveBeenCalledOnce();
     expect(runOpportunitySearch).toHaveBeenCalledWith(
       expect.objectContaining({

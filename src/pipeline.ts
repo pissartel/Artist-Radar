@@ -160,11 +160,12 @@ export async function runOpportunitySearch(
       : [];
     const enrichedGenres = uniqueGenres([...chartmetricGenres, ...profile.genres]);
     const effectiveGenre = resolveEffectiveGenre(input.genre, enrichedGenres);
-    const effectiveCity = profile.city?.trim() || profile.country?.trim() || input.city;
     const effectiveTarget = input.target?.trim() || profile.country?.trim() || null;
+    const resolvedCity = resolveEffectiveCity(profile.city, profile.country, input.city, effectiveTarget);
+    const effectiveCity = resolvedCity ?? "unknown";
     const effectiveProfile = {
       ...profile,
-      city: effectiveCity,
+      city: resolvedCity,
       genres: effectiveGenre === input.genre
         ? enrichedGenres
         : [effectiveGenre, ...enrichedGenres.filter((genre) => genre.toLowerCase() !== effectiveGenre.toLowerCase())]
@@ -341,6 +342,24 @@ export async function runOpportunitySearch(
     }
     throw error;
   }
+}
+
+function resolveEffectiveCity(
+  profileCity: string | null | undefined,
+  profileCountry: string | null | undefined,
+  requestedCity: string,
+  requestedTarget: string | null
+): string | null {
+  const nonCityValues = new Set(
+    [profileCountry, requestedTarget]
+      .map((value) => value?.trim().toLowerCase())
+      .filter((value): value is string => Boolean(value))
+  );
+  const candidates = [profileCity, requestedCity]
+    .map((value) => value?.trim())
+    .filter((value): value is string => typeof value === "string" && value.length > 0 && value.toLowerCase() !== "unknown");
+
+  return candidates.find((value) => !nonCityValues.has(value.toLowerCase())) ?? null;
 }
 
 function uniqueGenres(genres: string[]): string[] {

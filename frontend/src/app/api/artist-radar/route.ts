@@ -231,8 +231,8 @@ export async function POST(request: Request): Promise<Response> {
         pipelineExecuted: true,
         effectiveInput: {
           artist: input.artist,
-          city: input.city,
-          genre: input.genre,
+          city: result.artistProfile.city ?? "unknown",
+          genre: result.artistProfile.genres[0] ?? input.genre,
           target: input.target,
         },
         providers: (result.bookingSearch?.sourceMetadata ?? []).map((source) => {

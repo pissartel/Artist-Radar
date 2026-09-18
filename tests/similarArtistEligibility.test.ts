@@ -111,6 +111,19 @@ describe("similar artist booking eligibility", () => {
     expect(explainSimilarArtistVenueEligibility(artist).rejectedReason).toBeNull();
   });
 
+  it("allows verified small to_verify candidates with strong genre relevance", () => {
+    const artist = buildSimilarArtist({
+      name: "The Slugz",
+      genreRelevance: 95,
+      totalRelevance: 73,
+      sourceConfidence: 0.7,
+      verificationStatus: "verified"
+    });
+
+    expect(isEligibleSimilarArtistForBookingVenueDiscovery(artist)).toBe(true);
+    expect(explainSimilarArtistVenueEligibility(artist).rejectedReason).toBeNull();
+  });
+
   it("keeps weak Last.fm to_verify candidates out of booking venue discovery", () => {
     const artist = buildSimilarArtist({
       sourceConfidence: 0.72,

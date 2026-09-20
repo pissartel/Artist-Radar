@@ -203,6 +203,17 @@ export type {
   SimilarityGraphMetrics,
   SimilarityGraphStore
 } from "./services/artistSimilarityGraphService.js";
+export * from "./services/venueProgrammingProfileService.js";
+export {
+  findVenuesDbFirst,
+  ingestVenueEventHistory,
+  recomputeVenueProfiles
+} from "./services/venueHistoryService.js";
+export type { VenueHistoryStore } from "./services/venueHistoryService.js";
+export {
+  createSupabaseVenueHistoryStore,
+  SupabaseVenueHistoryStore
+} from "./services/supabaseVenueHistoryStore.js";
 export {
   createSupabaseArtistSimilarityGraphStore,
   SupabaseArtistSimilarityGraphStore

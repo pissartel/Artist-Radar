@@ -46,6 +46,8 @@ import {
 import type { ArtistScale } from "./schemas.js";
 import type { SimilarityGraphStore } from "./services/artistSimilarityGraphService.js";
 import { createSupabaseArtistSimilarityGraphStore } from "./services/supabaseArtistSimilarityGraphStore.js";
+import { createSupabaseVenueHistoryStore } from "./services/supabaseVenueHistoryStore.js";
+import { ingestVenueEventHistory, type VenueHistoryStore } from "./services/venueHistoryService.js";
 import {
   ingestEncounteredArtists,
   type EncounteredArtistIngestionInput
@@ -89,6 +91,8 @@ export interface RunOpportunitySearchOptions {
   // Shared global similarity graph. Undefined auto-configures Supabase from
   // server env; null explicitly disables persistence (useful in tests).
   similarityGraphStore?: SimilarityGraphStore | null;
+  /** Persistent venue/event history (#264). Defaults to Supabase when configured; null disables. */
+  venueHistoryStore?: VenueHistoryStore | null;
 }
 
 export interface OpportunitySearchRunResult {
@@ -148,6 +152,9 @@ export async function runOpportunitySearch(
     const similarityGraphStore = options.similarityGraphStore === undefined
       ? createSupabaseArtistSimilarityGraphStore()
       : options.similarityGraphStore;
+    const venueHistoryStore = options.venueHistoryStore === undefined
+      ? createSupabaseVenueHistoryStore()
+      : options.venueHistoryStore;
     debugLog("pipeline", "runOpportunitySearch start", {
       mode: input.mode,
       artistName: input.artist,
@@ -266,6 +273,12 @@ export async function runOpportunitySearch(
         store: similarityGraphStore,
         profile: effectiveProfile,
         similarArtists: similarArtistsForLiveSearch,
+        concertHistory: similarArtistConcerts,
+        bookingTargets: bookingSearch.targets
+      });
+      await ingestVenueHistorySafely({
+        venueStore: venueHistoryStore,
+        artistStore: similarityGraphStore,
         concertHistory: similarArtistConcerts,
         bookingTargets: bookingSearch.targets
       });
@@ -649,6 +662,21 @@ async function ingestEncounteredArtistsSafely(
     debugLog("similar-artists", "encountered artist ingestion completed", result);
   } catch (error) {
     warnLog("similar-artists", `Encountered artist ingestion failed and was skipped: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+async function ingestVenueHistorySafely(
+  input: Omit<Parameters<typeof ingestVenueEventHistory>[0], "venueStore" | "artistStore"> & {
+    venueStore: VenueHistoryStore | null;
+    artistStore: SimilarityGraphStore | null;
+  }
+): Promise<void> {
+  if (!input.venueStore || !input.artistStore) return;
+  try {
+    const result = await ingestVenueEventHistory({ ...input, venueStore: input.venueStore, artistStore: input.artistStore });
+    debugLog("venue-history", "venue event history ingestion completed", result);
+  } catch (error) {
+    warnLog("venue-history", `Venue event history ingestion failed and was skipped: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

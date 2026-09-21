@@ -108,6 +108,31 @@ describe("profileCollector", () => {
     expect(profile.imageConfidence).toBeNull();
   });
 
+  it("preserves manual country and skips platform discovery for a pre-release artist", async () => {
+    vi.stubEnv("SPOTIFY_CLIENT_ID", "configured");
+    vi.stubEnv("SPOTIFY_CLIENT_SECRET", "configured");
+    vi.stubEnv("ENABLE_DEEZER_ARTIST_SEARCH", "true");
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const profile = await collectArtistProfile({
+      ...baseInput,
+      city: "unknown",
+      country: "France",
+      streamingProfilesFound: false,
+      developmentStage: "pre_release"
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(profile).toMatchObject({
+      city: null,
+      country: "France",
+      streamingProfilesFound: false,
+      developmentStage: "pre_release",
+      spotify: null
+    });
+  });
+
   it("resolves the main artist Spotify profile by exact name when no Spotify URL is provided", async () => {
     vi.stubEnv("MOCK_AI", "false");
     vi.stubEnv("SPOTIFY_CLIENT_ID", "id");

@@ -40,6 +40,28 @@ describe("schemas", () => {
     expect(input.instagramUrl).toBeUndefined();
   });
 
+  it("accepts a country-only pre-release artist and requires its country", () => {
+    const input = ArtistInputSchema.parse({
+      mode: "booking",
+      artist: "New Project",
+      genre: "pop punk",
+      country: "France",
+      streamingProfilesFound: false,
+      developmentStage: "pre_release",
+      influences: ["Paramore"]
+    });
+
+    expect(input.city).toBe("unknown");
+    expect(input.country).toBe("France");
+    expect(input.influences).toEqual(["Paramore"]);
+    expect(() => ArtistInputSchema.parse({
+      mode: "booking",
+      artist: "New Project",
+      genre: "pop punk",
+      streamingProfilesFound: false
+    })).toThrow(/country/i);
+  });
+
   it("rejects invalid contacts instead of accepting empty uncertain values", () => {
     expect(() =>
       OpportunitySchema.parse({

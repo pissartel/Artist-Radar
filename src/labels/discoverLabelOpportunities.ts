@@ -73,6 +73,7 @@ export async function discoverLabelOpportunities(
   options: DiscoverLabelOpportunitiesOptions
 ): Promise<LabelDiscoveryResult> {
   const country = input.artistProfile?.country ?? input.target ?? "";
+  const geographicLocation = input.city !== "unknown" ? input.city : country;
   const maxQueriesPerStrategy = options.maxQueriesPerStrategy ?? 6;
   const similarArtists = (input.similarArtists ?? []).slice(0, options.maxSimilarArtists ?? 4);
 
@@ -94,7 +95,7 @@ export async function discoverLabelOpportunities(
         strategy: "similar_artist_release",
         queries: similarArtists.flatMap((artist) => buildSimilarArtistLabelQueries(artist.name)).slice(0, maxQueriesPerStrategy)
       },
-      { strategy: "geographic", queries: buildGeographicLabelQueries(input.genre, input.city, country).slice(0, maxQueriesPerStrategy) },
+      { strategy: "geographic", queries: buildGeographicLabelQueries(input.genre, geographicLocation, country).slice(0, maxQueriesPerStrategy) },
       { strategy: "directory", queries: buildLabelDirectoryQueries(input.genre, country).slice(0, maxQueriesPerStrategy) }
     ];
 

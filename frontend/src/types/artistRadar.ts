@@ -21,6 +21,9 @@ export interface ArtistRadarRequest {
   // the ecosystem map can always start at country level, even when providers
   // only resolve the artist's city or return no geographic metadata.
   referenceCountry?: string;
+  streamingProfilesFound?: boolean;
+  developmentStage?: "pre_release" | "emerging" | "developing" | "established";
+  influences?: string[];
   // Explicit, per-request feature toggles (issue #142). Currently only the
   // Chartmetric audience-enrichment preview toggle, only ever shown/settable
   // in preview and development (see lib/server/chartmetricToggle.ts) — the

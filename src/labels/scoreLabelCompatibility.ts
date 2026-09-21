@@ -1,6 +1,7 @@
 import { matchBookingGenres } from "../booking/genreMatching.js";
 import type { ArtistTier, EstimatedArtistLevel, SimilarArtist } from "../schemas.js";
 import type { LabelGeographicRelevance, LabelSearchInput } from "./types.js";
+import { calculateAvailableWeightedScore } from "../scoring/availableWeightedScore.js";
 
 // Weights follow the booking domain rule (CLAUDE.md): genre compatibility
 // outweighs audience size. Similar-artist connections are the strongest
@@ -47,20 +48,20 @@ export interface LabelCompatibilityResult {
 
 export function scoreLabelCompatibility(input: LabelSearchInput, signals: LabelCandidateSignals): LabelCompatibilityResult {
   const genreMatch = matchBookingGenres([input.genre, ...(input.artistProfile?.genres ?? [])], signals.genres, signals.text);
-  const similarArtistScore = scoreSimilarArtistFit(signals.matchedSimilarArtists, genreMatch.level);
+  const similarArtistScore = scoreSimilarArtistFit(signals.matchedSimilarArtists);
   const audienceScore = scoreAudienceFit(input.artistProfile?.estimatedLevel ?? "unknown", signals.audienceLevel);
   const geographicScore = GEOGRAPHIC_SCORE[signals.geographicScope];
   const demoScore = scoreDemoOpenness(signals.acceptsDemos);
   const activityScore = scoreActivity(signals.isActive);
 
-  const total = clampScore(Math.round(
-    genreMatch.score * WEIGHTS.genreFit +
-    similarArtistScore * WEIGHTS.similarArtistFit +
-    audienceScore * WEIGHTS.audienceFit +
-    geographicScore * WEIGHTS.geographicFit +
-    demoScore * WEIGHTS.demoOpennessFit +
-    activityScore * WEIGHTS.activityFit
-  ));
+  const total = calculateAvailableWeightedScore([
+    { score: genreMatch.score, weight: WEIGHTS.genreFit },
+    { score: similarArtistScore, weight: WEIGHTS.similarArtistFit },
+    { score: audienceScore, weight: WEIGHTS.audienceFit },
+    { score: geographicScore, weight: WEIGHTS.geographicFit },
+    { score: demoScore, weight: WEIGHTS.demoOpennessFit },
+    { score: activityScore, weight: WEIGHTS.activityFit }
+  ]);
 
   return {
     score: total,
@@ -77,19 +78,16 @@ export function scoreLabelCompatibility(input: LabelSearchInput, signals: LabelC
   };
 }
 
-function scoreSimilarArtistFit(matchedSimilarArtists: SimilarArtist[], genreLevel: string): number {
+function scoreSimilarArtistFit(matchedSimilarArtists: SimilarArtist[]): number | null {
   if (matchedSimilarArtists.length > 0) {
     return 92;
   }
-  if (genreLevel === "exact" || genreLevel === "related") {
-    return 45;
-  }
-  return 20;
+  return null;
 }
 
-function scoreAudienceFit(artistLevel: EstimatedArtistLevel, labelAudienceLevel: ArtistTier): number {
+function scoreAudienceFit(artistLevel: EstimatedArtistLevel, labelAudienceLevel: ArtistTier): number | null {
   if (labelAudienceLevel === "unknown" || artistLevel === "unknown") {
-    return 50;
+    return null;
   }
   const artistTier = mapEstimatedLevelToTier(artistLevel);
   const labelIndex = ARTIST_TIER_ORDER.indexOf(labelAudienceLevel);
@@ -107,16 +105,16 @@ function mapEstimatedLevelToTier(level: EstimatedArtistLevel): ArtistTier {
   return "small";
 }
 
-function scoreDemoOpenness(acceptsDemos: boolean | null): number {
+function scoreDemoOpenness(acceptsDemos: boolean | null): number | null {
   if (acceptsDemos === true) return 85;
   if (acceptsDemos === false) return 30;
-  return 55;
+  return null;
 }
 
-function scoreActivity(isActive: boolean | null): number {
+function scoreActivity(isActive: boolean | null): number | null {
   if (isActive === true) return 90;
   if (isActive === false) return 0;
-  return 55;
+  return null;
 }
 
 function buildExplanation(details: {
@@ -176,8 +174,4 @@ function describeGeographicScope(scope: LabelGeographicRelevance): string {
     case "international": return "international";
     default: return "unknown";
   }
-}
-
-function clampScore(value: number): number {
-  return Math.max(0, Math.min(value, 100));
 }

@@ -97,8 +97,8 @@ export function buildVenueDiscoveryBookingSourceProvider(
   return {
     providerName: `venue_discovery:${options.webSearchProvider.providerName}`,
     async search({ input, maxResults }) {
-      const city = input.city;
-      const country = input.artistProfile?.country ?? "France";
+      const country = input.artistProfile?.country ?? input.target ?? "";
+      const city = input.city !== "unknown" ? input.city : country;
       const organizationQueries = buildVenueDiscoveryQueries(input.genre, city, country)
         .slice(0, options.maxOrganizationQueries ?? 10);
       const similarArtists = (input.similarArtists ?? []).slice(0, 4);

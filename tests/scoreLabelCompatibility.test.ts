@@ -98,6 +98,32 @@ describe("scoreLabelCompatibility", () => {
 
     expect(result.explanation).toContain("Thru It All");
   });
+
+  it("renormalizes around genre and geography when audience and similar-artist signals are unavailable", () => {
+    const result = scoreLabelCompatibility({
+      ...baseInput,
+      city: "unknown",
+      artistProfile: {
+        ...baseInput.artistProfile!,
+        city: null,
+        estimatedLevel: "unknown",
+        developmentStage: "pre_release",
+        platformStats: {}
+      }
+    }, {
+      genres: ["pop punk"],
+      text: "French pop punk label for new independent artists.",
+      matchedSimilarArtists: [],
+      audienceLevel: "unknown",
+      geographicScope: "national",
+      acceptsDemos: null,
+      isActive: null,
+      distributor: null
+    });
+
+    expect(result.score).toBeGreaterThan(80);
+    expect(result.explanation).not.toMatch(/Spotify|audience/i);
+  });
 });
 
 function baseSimilarArtist(overrides: Partial<SimilarArtist> = {}): SimilarArtist {

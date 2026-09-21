@@ -2,6 +2,7 @@ import { matchBookingGenres } from "./genreMatching.js";
 import { pickBestContact } from "./contactExtraction.js";
 import { analyzeSupportSlotPotential, type SupportSlotStatus } from "./supportSlotPotential.js";
 import type { BookingScore, BookingSearchInput, BookingSuggestedAction, BookingTarget } from "./types.js";
+import { calculateAvailableWeightedScore } from "../scoring/availableWeightedScore.js";
 
 const SUPPORT_SLOT_PATTERN = /\b(guest|support tba|support à venir|support a venir|première partie à venir|premiere partie a venir|line-?up soon|lineup soon)\b/i;
 const CONFIRMED_SUPPORT_SLOT_PATTERN = /\b(support confirmed|confirmed support|première partie confirmée|premiere partie confirmee|support confirmé|support confirme)\b/i;
@@ -18,7 +19,8 @@ const SCORE_WEIGHTS = {
 export function scoreBookingCompatibility(input: BookingSearchInput, target: BookingTarget): BookingScore {
   const text = buildTargetEvidenceText(target);
   const genreMatch = matchBookingGenres([input.genre, ...(input.artistProfile?.genres ?? [])], target.genres, text);
-  const sizeFit = scoreSizeFit(input, target);
+  const sizeFitSignal = scoreSizeFit(input, target);
+  const sizeFit = sizeFitSignal ?? 50;
   const supportSlotPotential = scoreSupportSlotPotential(input, target, text);
   const locationFit = scoreLocationFit(input, target);
   const contactability = scoreContactability(target);
@@ -29,7 +31,7 @@ export function scoreBookingCompatibility(input: BookingSearchInput, target: Boo
 
   const total = calculateTotalScore({
     genreFit: genreMatch.score,
-    sizeFit,
+    sizeFit: sizeFitSignal,
     pastProgrammingFit,
     supportSlotPotential,
     locationFit,
@@ -93,13 +95,15 @@ export function recommendBookingAction(input: BookingSearchInput, target: Bookin
   return "research";
 }
 
-function scoreSizeFit(input: BookingSearchInput, target: BookingTarget): number {
+function scoreSizeFit(input: BookingSearchInput, target: BookingTarget): number | null {
   const capacity = target.estimatedCapacity ?? null;
   if (capacity === null) {
-    return 50;
+    return null;
   }
 
-  const artistTier = input.artistProfile?.estimatedLevel ?? "unknown";
+  const artistTier = input.artistProfile?.developmentStage === "pre_release"
+    ? "emerging"
+    : input.artistProfile?.estimatedLevel ?? "unknown";
   if (artistTier === "emerging") {
     if (capacity <= 250) return 90;
     if (capacity <= 600) return 65;
@@ -113,7 +117,7 @@ function scoreSizeFit(input: BookingSearchInput, target: BookingTarget): number 
   if (artistTier === "established") {
     return capacity >= 400 ? 80 : 55;
   }
-  return capacity <= 500 ? 70 : 50;
+  return null;
 }
 
 const SUPPORT_SLOT_STATUS_SCORE: Record<SupportSlotStatus, number> = {
@@ -244,22 +248,22 @@ function buildBookingWarnings(
 
 function calculateTotalScore(scores: {
   genreFit: number;
-  sizeFit: number;
+  sizeFit: number | null;
   pastProgrammingFit: number;
   supportSlotPotential: number;
   locationFit: number;
   contactability: number;
   sourceConfidence: number;
 }): number {
-  return clampScore(Math.round(
-    scores.genreFit * SCORE_WEIGHTS.genreFit +
-    scores.sizeFit * SCORE_WEIGHTS.sizeFit +
-    scores.pastProgrammingFit * SCORE_WEIGHTS.pastProgrammingFit +
-    scores.supportSlotPotential * SCORE_WEIGHTS.supportSlotPotential +
-    scores.locationFit * SCORE_WEIGHTS.locationFit +
-    scores.contactability * SCORE_WEIGHTS.contactability +
-    scores.sourceConfidence * SCORE_WEIGHTS.sourceConfidence
-  ));
+  return calculateAvailableWeightedScore([
+    { score: scores.genreFit, weight: SCORE_WEIGHTS.genreFit },
+    { score: scores.sizeFit, weight: SCORE_WEIGHTS.sizeFit },
+    { score: scores.pastProgrammingFit, weight: SCORE_WEIGHTS.pastProgrammingFit },
+    { score: scores.supportSlotPotential, weight: SCORE_WEIGHTS.supportSlotPotential },
+    { score: scores.locationFit, weight: SCORE_WEIGHTS.locationFit },
+    { score: scores.contactability, weight: SCORE_WEIGHTS.contactability },
+    { score: scores.sourceConfidence, weight: SCORE_WEIGHTS.sourceConfidence }
+  ]);
 }
 
 function calculateRecommendationConfidence(details: {

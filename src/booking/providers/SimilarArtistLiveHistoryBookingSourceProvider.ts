@@ -60,8 +60,8 @@ export function buildSimilarArtistLiveHistoryBookingSourceProvider(
       const searchedQueries: string[] = [];
       const extractQueue: Array<{ url: string; artist: SimilarArtist | null }> = [];
 
-      const city = input.city;
-      const country = input.artistProfile?.country ?? "France";
+      const country = input.artistProfile?.country ?? input.target ?? "";
+      const city = input.city !== "unknown" ? input.city : country;
       let cityQueriesGenerated = 0;
       let countryQueriesGenerated = 0;
       let rawSimilarArtistResultCount = 0;

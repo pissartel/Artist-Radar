@@ -43,6 +43,8 @@ export const SimilarArtistSourceSchema = z.enum([
   "seed",
   "web_local_scene"
 ]);
+export const SimilaritySourceSchema = z.enum(["user_seed", "algorithmic"]);
+export const ArtistDevelopmentStageSchema = z.enum(["pre_release", "emerging", "developing", "established"]);
 export const SimilarArtistPossibleUseSchema = z.enum([
   "co_bill",
   "local_networking",
@@ -279,7 +281,8 @@ export const PlatformStatsSchema = z.object({
 export const ArtistInputSchema = z.object({
   mode: ModeSchema,
   artist: z.string().trim().min(1, "artist is required"),
-  city: z.string().trim().min(1, "city is required"),
+  city: z.string().trim().min(1).default("unknown"),
+  country: z.string().trim().min(1).nullable().default(null),
   genre: z.string().trim().min(1, "genre is required"),
   target: z.string().trim().min(1).nullable().default(null),
   links: z.array(z.string().trim().url()).default([]),
@@ -288,13 +291,22 @@ export const ArtistInputSchema = z.object({
   youtubeUrl: OptionalUrlSchema,
   instagramUrl: OptionalUrlSchema,
   deezerUrl: OptionalUrlSchema,
+  streamingProfilesFound: z.boolean().optional(),
+  developmentStage: ArtistDevelopmentStageSchema.optional(),
+  influences: z.array(z.string().trim().min(1)).default([]),
   platformStats: PlatformStatsSchema.optional()
+}).superRefine((input, ctx) => {
+  if ((input.streamingProfilesFound === false || input.developmentStage === "pre_release") && !input.country) {
+    ctx.addIssue({ code: "custom", path: ["country"], message: "country is required for pre-release artists" });
+  }
 });
 
 export const ArtistProfileSchema = z.object({
   artistName: z.string().trim().min(1).nullable().optional(),
   city: z.string().trim().min(1).nullable().optional(),
   country: z.string().trim().min(1).nullable().optional(),
+  streamingProfilesFound: z.boolean().optional(),
+  developmentStage: ArtistDevelopmentStageSchema.optional(),
   genres: z.array(z.string().trim().min(1)).default([]),
   spotifyArtistName: z.string().trim().min(1).nullable().optional(),
   spotifyGenres: z.array(z.string().trim().min(1)).default([]),
@@ -443,6 +455,7 @@ export const SimilarArtistSchema = z.object({
   city: z.string().trim().min(1).nullable(),
   country: z.string().trim().min(1).nullable(),
   source: SimilarArtistSourceSchema,
+  similaritySource: SimilaritySourceSchema.optional(),
   sources: z.array(z.string().trim().min(1)).default([]),
   reason: z.string().trim().min(1),
   confidence: ConfidenceScoreSchema,

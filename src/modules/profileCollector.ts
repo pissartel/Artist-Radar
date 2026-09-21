@@ -57,11 +57,16 @@ export async function collectArtistProfile(
     instagramUrlPresent: Boolean(socialLinks.instagramUrl),
     deezerUrlPresent: Boolean(socialLinks.deezerUrl)
   });
-  const spotifyProfile = await resolveSpotifyProfile(input.artist, socialLinks.spotifyUrl);
+  const isManualProfile = input.streamingProfilesFound === false || input.developmentStage === "pre_release";
+  const spotifyProfile = isManualProfile && !socialLinks.spotifyUrl
+    ? null
+    : await resolveSpotifyProfile(input.artist, socialLinks.spotifyUrl);
   const youtubeStats = await getYouTubeChannelStats(socialLinks.youtubeUrl);
-  const deezerProfile = await resolveDeezerProfile(input.artist, socialLinks.deezerUrl);
+  const deezerProfile = isManualProfile && !socialLinks.deezerUrl
+    ? null
+    : await resolveDeezerProfile(input.artist, socialLinks.deezerUrl);
   const needsGenreEnrichment = isGenericGenre(input.genre) && (spotifyProfile?.genres.length ?? 0) === 0;
-  const needsLocationEnrichment = isGenericLocation(input.city);
+  const needsLocationEnrichment = isGenericLocation(input.city) && !input.country;
   const lastFmInfo = needsGenreEnrichment
     ? await (options.lastFmArtistInfo ?? getLastFmArtistInfo)(input.artist)
     : null;
@@ -112,7 +117,9 @@ export async function collectArtistProfile(
   return ArtistProfileSchema.parse({
     artistName: input.artist,
     city: resolvedCity,
-    country: musicBrainzInfo?.country ?? null,
+    country: input.country ?? musicBrainzInfo?.country ?? null,
+    streamingProfilesFound: input.streamingProfilesFound ?? Boolean(spotifyProfile || deezerProfile),
+    developmentStage: input.developmentStage,
     genres,
     spotifyArtistName: spotifyProfile?.name ?? null,
     spotifyGenres,

@@ -15,6 +15,9 @@ interface RawRequestBody {
   deezerUrl?: unknown;
   executionId?: unknown;
   features?: unknown;
+  streamingProfilesFound?: unknown;
+  developmentStage?: unknown;
+  influences?: unknown;
 }
 
 const MAX_EXECUTION_ID_LENGTH = 200;
@@ -34,15 +37,16 @@ function errorResponse(status: number, code: ErrorCode, message: string): Respon
 }
 
 function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | null {
-  const { artistName, genre, location, referenceCountry, enableBooking, spotifyUrl, deezerUrl, executionId, features } = body;
+  const { artistName, genre, location, referenceCountry, enableBooking, spotifyUrl, deezerUrl, executionId, features, streamingProfilesFound, developmentStage, influences } = body;
 
   if (
     typeof artistName !== "string" || !artistName.trim() ||
-    typeof genre !== "string" || !genre.trim() ||
-    typeof location !== "string" || !location.trim()
+    typeof genre !== "string" || !genre.trim()
   ) {
     return null;
   }
+  if (location !== undefined && (typeof location !== "string" || !location.trim())) return null;
+  if (!location && (typeof referenceCountry !== "string" || !referenceCountry.trim())) return null;
 
   if (enableBooking !== undefined && typeof enableBooking !== "boolean") {
     return null;
@@ -59,6 +63,9 @@ function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | nul
   if (referenceCountry !== undefined && (typeof referenceCountry !== "string" || !referenceCountry.trim())) {
     return null;
   }
+  if (streamingProfilesFound !== undefined && typeof streamingProfilesFound !== "boolean") return null;
+  if (developmentStage !== undefined && !["pre_release", "emerging", "developing", "established"].includes(String(developmentStage))) return null;
+  if (influences !== undefined && (!Array.isArray(influences) || influences.some((value) => typeof value !== "string" || !value.trim()))) return null;
 
   if (
     executionId !== undefined &&
@@ -75,13 +82,16 @@ function parseArtistRadarRequest(body: RawRequestBody): ArtistRadarRequest | nul
   return {
     artistName: artistName.trim(),
     genre: genre.trim(),
-    location: location.trim(),
+    location: typeof location === "string" ? location.trim() : "unknown",
     ...(typeof referenceCountry === "string" ? { referenceCountry: referenceCountry.trim() } : {}),
     enableBooking,
     ...(spotifyUrl?.trim() ? { spotifyUrl: spotifyUrl.trim() } : {}),
     ...(typeof deezerUrl === "string" && deezerUrl.trim() ? { deezerUrl: deezerUrl.trim() } : {}),
     ...(executionId?.trim() ? { executionId: executionId.trim() } : {}),
     ...(chartmetricArtistEnrichment !== undefined ? { features: { chartmetricArtistEnrichment } } : {}),
+    ...(typeof streamingProfilesFound === "boolean" ? { streamingProfilesFound } : {}),
+    ...(typeof developmentStage === "string" ? { developmentStage: developmentStage as ArtistRadarRequest["developmentStage"] } : {}),
+    ...(Array.isArray(influences) ? { influences: influences.map((value) => (value as string).trim()) } : {}),
   };
 }
 
@@ -158,7 +168,7 @@ export async function POST(request: Request): Promise<Response> {
     return errorResponse(
       400,
       "INVALID_REQUEST",
-      "artistName, genre and location are required strings."
+      "artistName and genre are required; provide at least a country or city."
     );
   }
 
@@ -188,6 +198,7 @@ export async function POST(request: Request): Promise<Response> {
       mode: "booking",
       artist: artistRadarRequest.artistName,
       city: artistRadarRequest.location,
+      country: artistRadarRequest.referenceCountry ?? null,
       genre: artistRadarRequest.genre,
       target: artistRadarRequest.referenceCountry ?? null,
       spotifyUrl: isValidHttpUrl(artistRadarRequest.spotifyUrl)
@@ -196,6 +207,9 @@ export async function POST(request: Request): Promise<Response> {
       deezerUrl: isValidHttpUrl(artistRadarRequest.deezerUrl)
         ? artistRadarRequest.deezerUrl
         : undefined,
+      streamingProfilesFound: artistRadarRequest.streamingProfilesFound,
+      developmentStage: artistRadarRequest.developmentStage,
+      influences: artistRadarRequest.influences ?? [],
     });
     warnLog("artist-radar-api", "Effective booking input", {
       artist: input.artist,

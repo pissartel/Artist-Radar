@@ -218,6 +218,20 @@ export {
   createSupabaseArtistSimilarityGraphStore,
   SupabaseArtistSimilarityGraphStore
 } from "./services/supabaseArtistSimilarityGraphStore.js";
+export {
+  createGlobalKnowledgeRepository,
+  GlobalKnowledgeRepository
+} from "./services/globalKnowledgeRepository.js";
+export type {
+  AttachProvenanceInput,
+  GlobalKnowledgeRepositoryConfig,
+  KnowledgeDataClass,
+  KnowledgeEntityType,
+  PersistRelationshipInput,
+  ResolveArtistInput,
+  ResolveEventInput,
+  ResolveVenueInput
+} from "./services/globalKnowledgeRepository.js";
 export type {
   BookingOpportunity,
   BookingScore,

@@ -63,6 +63,24 @@ describe("findSimilarArtists", () => {
     });
   });
 
+  it("keeps manually supplied influences explicitly marked as user seeds", async () => {
+    const artists = await findSimilarArtists({
+      profile: { ...profile, city: null, spotify: null, streamingProfilesFound: false, developmentStage: "pre_release" },
+      target: "France",
+      genre: "pop punk",
+      city: null,
+      userProvidedSimilarArtists: ["  Paramore  "],
+      seedCandidates: [],
+      env: { MOCK_AI: "true" }
+    });
+
+    expect(artists[0]).toMatchObject({
+      name: "Paramore",
+      source: "user",
+      similaritySource: "user_seed"
+    });
+  });
+
   it("uses Spotify related artists before search", async () => {
     let searchCalls = 0;
     const artists = await findSimilarArtists({

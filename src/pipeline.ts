@@ -204,6 +204,7 @@ export async function runOpportunitySearch(
       lastfmSimilarArtists: options.lastfmSimilarArtists,
       musicBrainzSearch: options.musicBrainzSearch,
       seedCandidates: options.seedCandidates,
+      userProvidedSimilarArtists: input.influences,
       similarityGraphStore
     });
     // Chartmetric enrichment (issue #201) must never change which similar

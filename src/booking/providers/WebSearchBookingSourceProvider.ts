@@ -33,7 +33,10 @@ export function buildWebSearchBookingSourceProvider(
   return {
     providerName: `web_search_booking:${options.webSearchProvider.providerName}`,
     async search({ input, maxResults }) {
-      const queries = buildBookingSearchQueries(input.genre, input.city, input.target ?? null)
+      const discoveryLocation = input.city !== "unknown"
+        ? input.city
+        : input.target ?? input.artistProfile?.country ?? input.city;
+      const queries = buildBookingSearchQueries(input.genre, discoveryLocation, input.target ?? input.artistProfile?.country ?? null)
         .slice(0, options.maxQueries ?? 4);
       const rawSources: RawBookingSource[] = [];
       const extractUrls = new Set<string>();

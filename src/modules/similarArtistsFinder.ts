@@ -2845,6 +2845,7 @@ function normalizeUserProvidedArtists(input: SimilarArtistsFinderInput): Similar
         city: input.city ?? input.profile.city ?? null,
         country: input.profile.country ?? null,
         source: "user",
+        similaritySource: "user_seed" as const,
         sources: ["user"],
         reason: `User-provided similar artist for comparison in ${input.target ?? input.city ?? input.profile.city ?? "the requested market"}.`,
         confidence: 0.9,

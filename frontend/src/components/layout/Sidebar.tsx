@@ -26,10 +26,10 @@ export default function Sidebar() {
   }, []);
 
   return (
-    <aside className="hidden md:flex w-[248px] min-h-screen flex-col py-7 px-5 border-r border-border flex-shrink-0">
-      <div className="mb-7"><Logo /></div>
+    <aside className="sticky top-0 hidden h-screen w-[234px] flex-shrink-0 flex-col gap-[26px] border-r border-border px-[18px] py-6 min-[1081px]:flex">
+      <div><Logo /></div>
       {artistName && (
-        <div className={`mb-7 flex items-center gap-2.5 rounded-xl border p-3 ${user ? "border-primary/30" : "border-border"}`}>
+        <div className={`flex items-center gap-2.5 rounded-xl border p-[11px] ${user ? "border-primary/30" : "border-border"}`}>
           <span className="flex h-[34px] w-[34px] items-center justify-center rounded-full border border-primary/40 bg-surface-elevated text-xs font-bold text-accent-text">{artistName[0]}</span>
           <span className="min-w-0 flex-1"><strong className="block truncate text-[13px]">{artistName}</strong><small className={`text-[11px] font-semibold ${user ? "text-accent-text" : "text-muted"}`}>{user ? "Primary artist" : "Not saved yet"}</small></span>
           <span className="text-[11px] text-foreground-disabled">▾</span>
@@ -44,7 +44,7 @@ export default function Sidebar() {
               key={item.href}
               href={item.href}
               aria-current={isActive ? "page" : undefined}
-              className={`px-3 py-2.5 rounded-lg text-sm transition-all duration-150 group flex items-center gap-2.5 focus-visible:outline-none focus-visible:shadow-focus ${
+              className={`group flex items-center gap-2.5 rounded-[10px] px-[13px] py-[11px] text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:shadow-focus ${
                 isActive
                   ? "text-foreground bg-surface-elevated font-bold"
                   : "text-foreground-muted font-semibold hover:text-foreground hover:bg-white/[0.03]"

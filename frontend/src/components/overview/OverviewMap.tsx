@@ -5,6 +5,7 @@ import L from "leaflet";
 import "leaflet.markercluster";
 import { feature } from "topojson-client";
 import countries from "world-atlas/countries-110m.json";
+import { getMatchScoreColor } from "@/lib/scoreStyles";
 import type { OverviewEntity } from "./OverviewExperience";
 
 const COLORS = { venue: "#60A5FA", festival: "#FB923C", slot: "#4ADE80", artist: "#C084FC" } as const;
@@ -79,7 +80,7 @@ export default function OverviewMap({ entities, home, selectedId, hoveredId, sel
         const artist = entity.kind === "artist";
         const size = artist ? 25 : 29;
         const active = entity.id === latestRef.current.selectedId ? " is-selected" : entity.id === latestRef.current.hoveredId ? " is-hovered" : "";
-        const faceStyle = artist ? `background:transparent;border-color:${COLORS.artist};color:${COLORS.artist}` : `background:${COLORS[entity.kind]}`;
+        const faceStyle = artist ? `background:transparent;border-color:${COLORS.artist};color:${COLORS.artist}` : `background:${getMatchScoreColor(entity.score)}`;
         const html = `<div class="ns-map-pin${active}" data-id="${entity.id}"><div class="ns-map-pin-dot" style="${faceStyle}">${artist ? entity.initials : entity.score}</div><div class="ns-map-label">${entity.label}</div></div>`;
         const marker = L.marker([entity.latitude!, entity.longitude!], { riseOnHover: true, zIndexOffset: artist ? 0 : 200, icon: L.divIcon({ className: "", html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }) })
           .on("click", () => latestRef.current.onSelect(entity.id, "map"));

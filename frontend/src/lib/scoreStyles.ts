@@ -7,3 +7,9 @@ export function getMatchScoreBadgeClass(score: number): string {
   }
   return "text-warning-text bg-warning-tint border-warning-tint";
 }
+
+export function getMatchScoreColor(score: number): string {
+  if (score >= 85) return "#4ADE80";
+  if (score >= 70) return "#C084FC";
+  return "#FB923C";
+}
